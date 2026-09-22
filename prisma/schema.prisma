@@ -1,0 +1,271 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum GlobalRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum RestaurantRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum OrderType {
+  DINE_IN      // SUR PLACE
+  TAKEAWAY     // À EMPORTER
+  DELIVERY     // LIVRAISON
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  SENT_TO_TPAPI
+  FAILED_TPAPI
+  COMPLETED
+  CANCELLED
+}
+
+// -------------------------------------------------------------
+// 1. PLATFORM LEVEL (SUPER ADMIN)
+// -------------------------------------------------------------
+model PlatformAdmin {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         GlobalRole  @default(SUPER_ADMIN)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  auditLogs    AuditLog[]
+}
+
+// -------------------------------------------------------------
+// 2. TENANT ANCHOR (RESTAURANT)
+// -------------------------------------------------------------
+model Restaurant {
+  id              String       @id @default(uuid())
+  slug            String       @unique
+  name            String
+  legalName       String?
+  phone           String?
+  email           String?
+  address         String?
+  currency        String       @default("EUR")
+  timezone        String       @default("Europe/Paris")
+  isActive        Boolean      @default(false)
+  logoUrl         String?
+  coverUrl        String?
+  allowDineIn     Boolean      @default(true)
+  allowTakeaway   Boolean      @default(true)
+  allowDelivery   Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Tenant-scoped relations
+  tpapiConfig     TpapiConfig?
+  users           RestaurantUser[]
+  categories      Category[]
+  articles        Article[]
+  images          ProductImage[]
+  orders          Order[]
+  auditLogs       AuditLog[]
+
+  @@index([slug])
+}
+
+// -------------------------------------------------------------
+// 3. RESTAURANT USERS (ADMINS & MANAGERS)
+// -------------------------------------------------------------
+model RestaurantUser {
+  id           String          @id @default(uuid())
+  restaurantId String
+  email        String          @unique
+  passwordHash String
+  name         String
+  role         RestaurantRole  @default(OWNER)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  restaurant   Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+}
+
+// -------------------------------------------------------------
+// 4. TPAPI CREDENTIALS (ISOLATED PER RESTAURANT)
+// -------------------------------------------------------------
+model TpapiConfig {
+  id                String     @id @default(uuid())
+  restaurantId      String     @unique
+  endpointUrl       String     // e.g. https://pos.restaurant.com:3064
+  databaseName      String?
+  username          String
+  encryptedPassword String     // Encrypted with AES-256-GCM
+  appToken          String?    // Encrypted if applicable
+  lastSyncAt        DateTime?
+  lastConnectionOk  Boolean?
+  lastErrorMessage  String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 5. CATALOG: CATEGORIES
+// -------------------------------------------------------------
+model Category {
+  id              String      @id @default(uuid())
+  restaurantId    String
+  tpapiDepartmentId String?   // unTill department identifier if applicable
+  name            String
+  description     String?
+  imageUrl        String?
+  displayOrder    Int         @default(0)
+  isVisibleOnline Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  articles        Article[]
+
+  @@index([restaurantId])
+  @@index([restaurantId, displayOrder])
+}
+
+// -------------------------------------------------------------
+// 6. CATALOG: ARTICLES (LOCAL CONFIG OVER TPAPI BASE)
+// -------------------------------------------------------------
+model Article {
+  id              String         @id @default(uuid())
+  restaurantId    String
+  tpapiArticleId  String         // Original unTill Article ID (preserved)
+  categoryId      String?
+  
+  // unTill Baseline Data
+  tpapiName       String
+  tpapiPrice      Decimal        @db.Decimal(10, 2)
+  
+  // Online Configuration Overrides
+  displayName     String?        // Custom customer-facing name
+  description     String?
+  priceOverride   Decimal?       @db.Decimal(10, 2)
+  isOnline        Boolean        @default(true)
+  isFeatured      Boolean        @default(false)
+  badge           String?        // e.g., "POPULAR", "NEW", "PROMOTION"
+  displayOrder    Int            @default(0)
+  imageUrl        String?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category        Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  images          ProductImage[]
+  orderItems      OrderItem[]
+
+  @@unique([restaurantId, tpapiArticleId])
+  @@index([restaurantId])
+  @@index([restaurantId, isOnline])
+}
+
+// -------------------------------------------------------------
+// 7. PRODUCT IMAGES (CLOUD STORAGE REFERENCE)
+// -------------------------------------------------------------
+model ProductImage {
+  id           String      @id @default(uuid())
+  restaurantId String
+  articleId    String
+  storageKey   String      // S3/R2 path (e.g. restaurants/{uuid}/articles/{id}.webp)
+  publicUrl    String
+  isPrimary    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  article      Article     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([articleId])
+}
+
+// -------------------------------------------------------------
+// 8. ORDERS & ITEMS
+// -------------------------------------------------------------
+model Order {
+  id              String       @id @default(uuid())
+  restaurantId    String
+  orderNumber     String       // Readable daily incremental or sequence (e.g. #0042)
+  orderType       OrderType
+  status          OrderStatus  @default(PENDING)
+  
+  // Table / Dine-in specifics
+  zoneName        String?
+  tableName       String?
+  
+  // Customer details if provided
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  deliveryAddress String?
+
+  totalAmount     Decimal      @db.Decimal(10, 2)
+  
+  // unTill submission tracking
+  tpapiOrderRef   String?      // Reference returned by unTill POS
+  tpapiSentAt     DateTime?
+  tpapiError      String?
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+  @@index([restaurantId, createdAt])
+}
+
+model OrderItem {
+  id              String      @id @default(uuid())
+  orderId         String
+  articleId       String
+  quantity        Int         @default(1)
+  unitPrice       Decimal     @db.Decimal(10, 2)
+  totalPrice      Decimal     @db.Decimal(10, 2)
+  optionsSnapshot Json?       // Captures chosen options/modifiers at purchase time
+
+  order           Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  article         Article     @relation(fields: [articleId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+}
+
+// -------------------------------------------------------------
+// 9. AUDIT LOGS
+// -------------------------------------------------------------
+model AuditLog {
+  id              String         @id @default(uuid())
+  restaurantId    String?
+  platformAdminId String?
+  action          String         // e.g., "TPAPI_SYNC", "CREATE_RESTAURANT"
+  details         Json?
+  ipAddress       String?
+  createdAt       DateTime       @default(now())
+
+  restaurant      Restaurant?    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  platformAdmin   PlatformAdmin? @relation(fields: [platformAdminId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([platformAdminId])
+}
