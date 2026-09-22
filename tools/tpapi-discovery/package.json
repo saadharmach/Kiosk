@@ -1,0 +1,19 @@
+{
+  "name": "@kiosk/tpapi-discovery",
+  "private": true,
+  "type": "module",
+   "scripts": {
+    "wsdl": "tsx src/inspect-wsdl.ts",
+    "generate": "tsx src/generate.ts",
+    "call": "tsx src/call.ts"
+  },
+  "dependencies": {
+    "@kiosk/tpapi": "workspace:*",
+    "fast-xml-parser": "^5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
