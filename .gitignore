@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.next/
+coverage/
+*.log
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# TPAPI discovery output (can contain server details)
+tools/tpapi-discovery/output/
+
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
