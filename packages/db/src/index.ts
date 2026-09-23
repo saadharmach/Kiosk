@@ -1,3 +1,10 @@
+// unTill IDs are BigInt. Without this, any JSON response containing one throws.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
+
 import { PrismaClient } from "@prisma/client";
 
 declare global {

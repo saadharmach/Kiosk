@@ -167,3 +167,414 @@ model TpapiConnection {
 
   @@map("tpapi_connections")
 }
+
+
+// ============================================================ enums
+
+enum PresentationScope {
+  GROUP
+  DEPARTMENT
+}
+
+enum OrderType {
+  EAT_IN
+  TAKE_AWAY
+  DELIVERY
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum SyncTrigger {
+  MANUAL
+  SCHEDULED
+  STARTUP
+}
+
+// ======================================== TPAPI MIRROR (overwritten by sync)
+// Rows reference each other by unTill ID, never by database FK.
+
+model TpapiSalesArea {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  number       Int
+  name         String
+  priceLevelId BigInt?
+  /// TTableRange[]: [{ fromTable, toTable }]
+  tableRanges  Json     @default("[]")
+  isActive     Boolean  @default(true)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_sales_areas")
+}
+
+model TpapiPriceLevel {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  name         String
+  hqId         String?
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_price_levels")
+}
+
+model TpapiCategory {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  name         String
+  hqId         String?
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_categories")
+}
+
+model TpapiGroup {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  name         String
+  categoryId   BigInt?
+  hqId         String?
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_groups")
+}
+
+model TpapiDepartment {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId          String   @db.Uuid
+  untillId              BigInt
+  number                Int
+  name                  String
+  groupId               BigInt?
+  /// Option group applied to every article of this department.
+  supplementOptionId    BigInt?
+  condimentOptionId     BigInt?
+  availableSalesAreaIds BigInt[]
+  hqId                  String?
+  syncedAt              DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_departments")
+}
+
+model TpapiArticle {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId          String   @db.Uuid
+  untillId              BigInt
+  number                Int
+  name                  String
+  departmentId          BigInt?
+  availableSalesAreaIds BigInt[]
+
+  /// No price rows at all = menu; price comes from the chosen option items.
+  isMenu                Boolean  @default(false)
+  isManualPrice         Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  promo                 Boolean  @default(false)
+
+  /// From Extra
+  plu                   String?
+  courseId              BigInt?
+  sizeModifierId        BigInt?
+  externalId            String?
+  hqId                  String?
+  /// Whole Extra array, for keys we have not decoded yet.
+  rawExtra              Json     @default("[]")
+
+  /// Set to false when a sync no longer returns this article.
+  isPresent             Boolean  @default(true)
+  syncedAt              DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId, departmentId])
+  @@index([restaurantId, isPresent])
+  @@map("tpapi_articles")
+}
+
+model TpapiArticlePrice {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  articleId    BigInt
+  priceLevelId BigInt
+  amount       Decimal  @db.Decimal(12, 4)
+  vat          Decimal  @db.Decimal(6, 3)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, articleId, priceLevelId])
+  @@index([restaurantId, articleId])
+  @@map("tpapi_article_prices")
+}
+
+/// Price per size, read from Prices[].Extra["size_modifiers"].
+model TpapiArticleSizePrice {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  articleId    BigInt
+  priceLevelId BigInt
+  sizeItemId   BigInt
+  amount       Decimal  @db.Decimal(12, 4)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, articleId, priceLevelId, sizeItemId])
+  @@index([restaurantId, articleId])
+  @@map("tpapi_article_size_prices")
+}
+
+/// article → option group, with the "choose N" rule from composed_options.
+model TpapiArticleOption {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId    String   @db.Uuid
+  articleId       BigInt
+  optionGroupId   BigInt
+  /// From composed_options "<optionGroupId>:<n>". Null = free choice.
+  requiredChoices Int?
+  /// True when this group is the article's FreeOption.
+  isFreeOption    Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  syncedAt        DateTime @default(now())
+
+  @@unique([restaurantId, articleId, optionGroupId])
+  @@index([restaurantId, articleId])
+  @@map("tpapi_article_options")
+}
+
+model TpapiOptionGroup {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId          String   @db.Uuid
+  untillId              BigInt
+  name                  String
+  availableSalesAreaIds BigInt[]
+  /// Groups with no items are skipped by the kiosk.
+  itemCount             Int      @default(0)
+  syncedAt              DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_option_groups")
+}
+
+/// One choice inside an option group. It is itself an article.
+model TpapiOptionItem {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId  String   @db.Uuid
+  optionGroupId BigInt
+  articleId     BigInt
+  priceLevelId  BigInt
+  amount        Decimal  @db.Decimal(12, 4)
+  vat           Decimal  @db.Decimal(6, 3)
+  syncedAt      DateTime @default(now())
+
+  @@unique([restaurantId, optionGroupId, articleId, priceLevelId])
+  @@index([restaurantId, optionGroupId])
+  @@map("tpapi_option_items")
+}
+
+model TpapiSizeModifier {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  number       Int
+  name         String
+  isActive     Boolean  @default(true)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_size_modifiers")
+}
+
+model TpapiSizeModifierItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId    String   @db.Uuid
+  untillId        BigInt
+  sizeModifierId  BigInt
+  number          Int
+  name            String
+  isActive        Boolean  @default(true)
+  syncedAt        DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId, sizeModifierId])
+  @@map("tpapi_size_modifier_items")
+}
+
+model TpapiCourse {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  number       Int
+  name         String
+  separate     Boolean  @default(false)
+  autoFire     Boolean  @default(false)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_courses")
+}
+
+model TpapiPayment {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  number       Int
+  name         String
+  kind         Int
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_payments")
+}
+
+model TpapiPrinter {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  name         String
+  guid         String?
+  nullPrinter  Boolean  @default(false)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_printers")
+}
+
+model TpapiAllergen {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  untillId     BigInt
+  number       Int
+  name         String
+  description  String?
+  isActive     Boolean  @default(true)
+  syncedAt     DateTime @default(now())
+
+  @@unique([restaurantId, untillId])
+  @@index([restaurantId])
+  @@map("tpapi_allergens")
+}
+
+// ============================ LOCAL PRESENTATION (never written by sync)
+
+/// Commercial layer over a TPAPI article.
+model ProductPresentation {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  /// unTill ArticleId. No FK: the article may be re-created by a later sync.
+  articleId    BigInt
+
+  displayName  String?
+  description  String?
+  /// Path in Supabase Storage, not a public URL.
+  imagePath    String?
+  isVisible    Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  isFeatured   Boolean  @default(false)
+  badgeText    String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([restaurantId, articleId])
+  @@index([restaurantId, isVisible])
+  @@map("product_presentations")
+}
+
+/// Commercial layer over a group or a department.
+model CategoryPresentation {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String            @db.Uuid
+  scope        PresentationScope
+  /// unTill GroupId or DepartmentId, depending on scope.
+  untillId     BigInt
+
+  displayName  String?
+  description  String?
+  imagePath    String?
+  color        String?           @db.VarChar(9)
+  isVisible    Boolean           @default(true)
+  sortOrder    Int               @default(0)
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([restaurantId, scope, untillId])
+  @@index([restaurantId, scope])
+  @@map("category_presentations")
+}
+
+/// TPAPI has no article→allergen link, so it is declared here.
+model ProductAllergen {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  articleId    BigInt
+  allergenId   BigInt
+  createdAt    DateTime @default(now())
+
+  @@unique([restaurantId, articleId, allergenId])
+  @@index([restaurantId, articleId])
+  @@map("product_allergens")
+}
+
+// ==================================================== ordering configuration
+
+/// Maps an order type to a sales area and its table strategy,
+/// because CreateOrder has no order-type field.
+model OrderTypeMapping {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId   String    @db.Uuid
+  orderType      OrderType
+  salesAreaId    BigInt
+  /// EAT_IN: customer picks a table inside the area's ranges.
+  /// TAKE_AWAY / DELIVERY: a fixed table, or a range we allocate from.
+  fixedTableNumber Int?
+  tableRangeFrom   Int?
+  tableRangeTo     Int?
+  tablePart        String?
+  isEnabled        Boolean @default(true)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([restaurantId, orderType])
+  @@index([restaurantId])
+  @@map("order_type_mappings")
+}
+
+// ================================================================ sync runs
+
+model SyncRun {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId  String      @db.Uuid
+  status        SyncStatus  @default(RUNNING)
+  trigger       SyncTrigger @default(MANUAL)
+  correlationId String
+  startedAt     DateTime    @default(now())
+  finishedAt    DateTime?
+  durationMs    Int?
+  /// Row counts per entity, plus anomalies.
+  stats         Json        @default("{}")
+  errorMessage  String?
+
+  @@index([restaurantId, startedAt])
+  @@map("sync_runs")
+}

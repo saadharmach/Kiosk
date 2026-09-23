@@ -15,7 +15,7 @@ async function main() {
         create: {
           host: "testapi.untill.com",
           port: 3063,
-          appName: "KioskPlatform",
+          appName: "TPAPIn39Ez7L",
         },
       },
     },

@@ -5,7 +5,8 @@
    "scripts": {
     "wsdl": "tsx src/inspect-wsdl.ts",
     "generate": "tsx src/generate.ts",
-    "call": "tsx src/call.ts"
+    "call": "tsx src/call.ts",
+    "dump": "tsx src/dump.ts"
   },
   "dependencies": {
     "@kiosk/tpapi": "workspace:*",
