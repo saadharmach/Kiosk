@@ -1,0 +1,169 @@
+// Kiosk Platform — core schema
+// Multi-tenant: every tenant row carries restaurantId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooled, port 6543
+  directUrl = env("DIRECT_URL")     // session pooler, port 5432 — migrations
+}
+
+// ---------------------------------------------------------------- enums
+
+enum PlatformUserRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum RestaurantUserRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+// ------------------------------------------------------- platform admin
+
+/// Staff of the SaaS platform. Not tied to any restaurant.
+model PlatformUser {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String           @unique
+  passwordHash String
+  fullName     String?
+  role         PlatformUserRole @default(SUPPORT)
+  isActive     Boolean          @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("platform_users")
+}
+
+// ----------------------------------------------------------- tenant root
+
+/// One tenant. Everything else hangs off this row.
+model Restaurant {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Public URL segment: /r/<slug>
+  slug         String           @unique
+  name         String
+  status       RestaurantStatus @default(ACTIVE)
+
+  timezone     String           @default("Africa/Casablanca")
+  currency     String           @default("MAD") @db.Char(3)
+  locale       String           @default("fr")
+
+  contactEmail String?
+  contactPhone String?
+  addressLine  String?
+  city         String?
+  country      String?
+
+  /// Storage path of the logo in Supabase Storage (not a public URL).
+  logoPath     String?
+  primaryColor String?          @db.VarChar(9)
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  archivedAt   DateTime?
+
+  users        RestaurantUser[]
+  settings     RestaurantSettings?
+  tpapi        TpapiConnection?
+
+  @@index([status])
+  @@map("restaurants")
+}
+
+/// A user of one restaurant's back office. Scoped to that restaurant.
+model RestaurantUser {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String             @db.Uuid
+  email        String
+  passwordHash String
+  fullName     String?
+  role         RestaurantUserRole @default(MANAGER)
+  isActive     Boolean            @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  restaurant   Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  /// The same person can manage several restaurants with the same address.
+  @@unique([restaurantId, email])
+  @@index([restaurantId])
+  @@map("restaurant_users")
+}
+
+/// Ordering and kiosk behaviour, per restaurant.
+model RestaurantSettings {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId        String     @unique @db.Uuid
+
+  eatInEnabled        Boolean    @default(true)
+  takeAwayEnabled     Boolean    @default(false)
+  deliveryEnabled     Boolean    @default(false)
+  /// Ask zone + table for eat-in orders.
+  askTableForEatIn    Boolean    @default(true)
+
+  kioskIdleTimeoutSec Int        @default(90)
+  kioskResetDelaySec  Int        @default(15)
+
+  showAllergens       Boolean    @default(false)
+  showProductImages   Boolean    @default(true)
+  ticketFooterText    String?
+
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  restaurant          Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_settings")
+}
+
+// ------------------------------------------------------ unTill connection
+
+/// TPAPI endpoint and credentials for one restaurant.
+/// Credentials are AES-256-GCM encrypted and never leave the server.
+model TpapiConnection {
+  id                    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId          String     @unique @db.Uuid
+
+  host                  String
+  port                  Int        @default(3063)
+  useTls                Boolean    @default(false)
+  wsdlPath              String     @default("/wsdl/ITPAPIPOS")
+  soapPath              String     @default("/soap/ITPAPIPOS")
+  /// Sent as AppName in every TPAPI request.
+  appName               String     @default("KioskPlatform")
+
+  /// Encrypted JSON: { userName, password, appToken }
+  credentialsCiphertext String?
+  credentialsIv         String?
+  credentialsAuthTag    String?
+
+  timeoutMs             Int        @default(15000)
+  isEnabled             Boolean    @default(true)
+
+  lastSuccessAt         DateTime?
+  lastFailureAt         DateTime?
+  lastErrorMessage      String?
+  lastLatencyMs         Int?
+  lastSyncAt            DateTime?
+
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  restaurant            Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("tpapi_connections")
+}
