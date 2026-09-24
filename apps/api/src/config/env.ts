@@ -7,6 +7,7 @@ const schema = z.object({
   DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+  ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, "ENCRYPTION_KEY must be 64 hex characters"),
   ACCESS_TOKEN_TTL_MIN: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
 });

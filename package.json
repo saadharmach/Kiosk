@@ -9,6 +9,12 @@
   "pnpm": {
     "overrides": {
       "typescript": "^6"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

@@ -167,4 +167,22 @@ export class TpapiClient {
     }
     return data;
   }
+
+  /** Connection test: a real Ping call with timing. */
+  async ping(callOptions: TpapiCallOptions = {}): Promise<{
+    ok: boolean; durationMs: number; returnCode?: number; message?: string; error?: string;
+  }> {
+    const started = Date.now();
+    try {
+      const res = await this.call("Ping", {}, { ...callOptions, ignoreReturnCode: true });
+      return {
+        ok: this.successCodes.includes(Number(res.ReturnCode)),
+        durationMs: Date.now() - started,
+        returnCode: Number(res.ReturnCode),
+        message: String(res.ReturnMessage ?? ""),
+      };
+    } catch (e) {
+      return { ok: false, durationMs: Date.now() - started, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
 }
