@@ -41,6 +41,9 @@ model PlatformUser {
   role         PlatformUserRole @default(SUPPORT)
   isActive     Boolean          @default(true)
   lastLoginAt  DateTime?
+  failedLoginCount Int             @default(0)
+  lockedUntil      DateTime?
+  sessions         PlatformSession[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -1028,4 +1031,24 @@ model Subscription {
 
   @@index([status])
   @@map("subscriptions")
+}
+/// One refresh-token session for a platform user. The token itself is never stored.
+model PlatformSession {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String       @db.Uuid
+  /// SHA-256 of the refresh token.
+  tokenHash    String       @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  /// Set when this session was rotated into a new one.
+  replacedById String?      @db.Uuid
+  lastUsedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  user         PlatformUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("platform_sessions")
 }
