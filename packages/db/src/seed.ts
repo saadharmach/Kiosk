@@ -1,5 +1,5 @@
 /** Creates one demo restaurant so we can verify tenancy. Safe to re-run. */
-import { prisma } from "./index.js";
+import { prisma } from "./index";
 
 async function main() {
   const restaurant = await prisma.restaurant.upsert({

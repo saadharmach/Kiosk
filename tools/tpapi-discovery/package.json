@@ -2,7 +2,7 @@
   "name": "@kiosk/tpapi-discovery",
   "private": true,
   "type": "module",
-   "scripts": {
+  "scripts": {
     "wsdl": "tsx src/inspect-wsdl.ts",
     "generate": "tsx src/generate.ts",
     "call": "tsx src/call.ts",
@@ -15,6 +15,6 @@
   "devDependencies": {
     "@types/node": "^26.6.2",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^6"
   }
 }

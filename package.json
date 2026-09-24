@@ -5,5 +5,10 @@
     "node": ">=24"
   },
   "scripts": {},
-  "packageManager": "pnpm@10.34.5"
+  "packageManager": "pnpm@10.34.5",
+  "pnpm": {
+    "overrides": {
+      "typescript": "^6"
+    }
+  }
 }

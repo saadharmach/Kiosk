@@ -78,6 +78,11 @@ model Restaurant {
   users        RestaurantUser[]
   settings     RestaurantSettings?
   tpapi        TpapiConnection?
+  orders       Order[]
+  kiosks       Kiosk[]
+  printers     Printer[]
+  terminals    PaymentTerminal[]
+  subscription Subscription?
 
   @@index([status])
   @@map("restaurants")
@@ -577,4 +582,450 @@ model SyncRun {
 
   @@index([restaurantId, startedAt])
   @@map("sync_runs")
+}
+// ================================================================== orders
+
+enum OrderStatus {
+  /// Being built, not yet submitted. Cleaned up automatically.
+  DRAFT
+  /// Validated and priced by the backend, queued for TPAPI.
+  PENDING
+  /// CreateOrder returned ReturnCode 0.
+  SENT
+  /// Found in GetActiveOrders by OrderName — genuinely open in unTill.
+  CONFIRMED
+  /// No longer in GetActiveOrders: the till closed it. Inferred, not reported.
+  PAID
+  /// CreateOrder failed, or verification never succeeded.
+  FAILED
+  /// Abandoned at the kiosk, or cancelled by staff.
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAY_AT_CASHIER
+  PAYMENT_TERMINAL
+}
+
+/// What a line represents for us. Mapped to unTill's OrderItemType at send time.
+enum OrderItemKind {
+  PRODUCT
+  SIZE
+  OPTION
+  SUPPLEMENT
+  MENU_CHOICE
+  REMOVAL
+  TEXT
+}
+
+enum OrderActor {
+  KIOSK
+  SYSTEM
+  RESTAURANT_USER
+  PLATFORM_USER
+}
+
+model Order {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId   String        @db.Uuid
+  kioskId        String?       @db.Uuid
+
+  /// Sent to unTill as OrderName and printed on the ticket. Max 20 chars.
+  reference      String        @db.VarChar(20)
+  /// Trading day, for daily numbering and reporting (not always the calendar day).
+  businessDate   DateTime      @db.Date
+  dailySequence  Int
+
+  orderType      OrderType
+  status         OrderStatus   @default(DRAFT)
+  paymentMethod  PaymentMethod @default(PAY_AT_CASHIER)
+
+  /// Resolved unTill targets at order time.
+  salesAreaId    BigInt
+  tableNumber    Int
+  tablePart      String        @default("")
+  priceLevelId   BigInt
+  covers         Int           @default(1)
+
+  currency       String        @db.Char(3)
+  subtotal       Decimal       @db.Decimal(12, 4)
+  taxTotal       Decimal       @db.Decimal(12, 4)
+  total          Decimal       @db.Decimal(12, 4)
+  itemCount      Int           @default(0)
+
+  /// Optional, for takeaway call-out. Keep empty unless the restaurant needs it.
+  customerName   String?
+  customerNote   String?
+
+  // --- TPAPI submission ---
+  tpapiAttempts       Int       @default(0)
+  tpapiCorrelationId  String?
+  tpapiReturnCode     Int?
+  tpapiLastError      String?
+  /// Exactly what we sent, for support and replay. No credentials.
+  tpapiRequestSnapshot Json?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  sentAt         DateTime?
+  confirmedAt    DateTime?
+  paidDetectedAt DateTime?
+  failedAt       DateTime?
+  cancelledAt    DateTime?
+
+  restaurant     Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  kiosk          Kiosk?               @relation(fields: [kioskId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  history        OrderStatusHistory[]
+
+  @@unique([restaurantId, reference])
+  @@unique([restaurantId, businessDate, dailySequence])
+  @@index([restaurantId, createdAt])
+  @@index([restaurantId, status])
+  @@index([restaurantId, businessDate])
+  @@map("orders")
+}
+
+/// Flat line list, shaped like TPAPI's Items[]. Modifiers point at their parent.
+model OrderItem {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId             String        @db.Uuid
+  /// Denormalised so tenant-scoped queries never need a join.
+  restaurantId        String        @db.Uuid
+
+  /// Sent as ItemNumber. Sequential from 1 within the order.
+  lineNumber          Int
+  /// Line number of the product this modifier belongs to. Null for products.
+  parentLineNumber    Int?
+  kind                OrderItemKind @default(PRODUCT)
+
+  articleId           BigInt?
+  /// Snapshots — a later sync must never rewrite history.
+  articleName         String
+  displayName         String?
+
+  quantity            Int           @default(1)
+  unitPrice           Decimal       @db.Decimal(12, 4)
+  lineTotal           Decimal       @db.Decimal(12, 4)
+  vatRate             Decimal?      @db.Decimal(6, 3)
+
+  /// Set when the price came from a size.
+  sizeItemId          BigInt?
+  sizeName            String?
+  /// Set for OPTION, SUPPLEMENT and MENU_CHOICE lines.
+  optionGroupId       BigInt?
+  optionGroupName     String?
+
+  /// Sent as Text (free text, removals).
+  text                String?
+  /// unTill's OrderItemType. Filled in once unTill gives us the values.
+  untillOrderItemType Int?
+
+  createdAt           DateTime      @default(now())
+
+  order               Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, lineNumber])
+  @@index([orderId])
+  @@index([restaurantId, articleId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId      String      @db.Uuid
+  restaurantId String      @db.Uuid
+
+  fromStatus   OrderStatus?
+  toStatus     OrderStatus
+  actor        OrderActor  @default(SYSTEM)
+  /// Restaurant user or platform user id, when a person did it.
+  actorId      String?     @db.Uuid
+  reason       String?
+  meta         Json        @default("{}")
+  createdAt    DateTime    @default(now())
+
+  order        Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@index([restaurantId, createdAt])
+  @@map("order_status_history")
+}
+
+/// Atomic daily counter, so two kiosks never produce the same reference.
+model OrderCounter {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId  String   @db.Uuid
+  businessDate  DateTime @db.Date
+  lastSequence  Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([restaurantId, businessDate])
+  @@map("order_counters")
+}
+
+// ================================================================= devices
+
+enum DeviceKind {
+  KIOSK
+  PRINTER
+  PAYMENT_TERMINAL
+}
+
+enum DeviceStatus {
+  PROVISIONING
+  ONLINE
+  OFFLINE
+  DISABLED
+}
+
+enum PrinterKind {
+  RECEIPT
+  KITCHEN
+  LABEL
+}
+
+enum PrinterConnection {
+  NETWORK
+  USB
+  SERIAL
+  BLUETOOTH
+  UNTILL
+}
+
+enum DeviceEventType {
+  CREATED
+  CONNECTED
+  DISCONNECTED
+  HEARTBEAT_MISSED
+  CONFIG_CHANGED
+  SOFTWARE_UPDATED
+  ERROR
+  RECOVERED
+}
+
+model Kiosk {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId     String       @db.Uuid
+
+  /// Short code used in order references, e.g. "K1" in K1-0923-042.
+  code             String       @db.VarChar(4)
+  name             String
+  status           DeviceStatus @default(PROVISIONING)
+  isEnabled        Boolean      @default(true)
+
+  /// SHA-256 of the device token. The plaintext is shown once, at provisioning.
+  tokenHash        String?      @unique
+  tokenIssuedAt    DateTime?
+  tokenRevokedAt   DateTime?
+
+  /// Optional override of the restaurant's default sales area.
+  salesAreaId      BigInt?
+  defaultOrderType OrderType?
+
+  appVersion       String?
+  lastHeartbeatAt  DateTime?
+  lastActivityAt   DateTime?
+  lastIpAddress    String?
+  /// Screen settings, language, idle timeout overrides.
+  config           Json         @default("{}")
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  restaurant       Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  printers         Printer[]
+  terminals        PaymentTerminal[]
+  orders           Order[]
+
+  @@unique([restaurantId, code])
+  @@index([restaurantId, status])
+  @@map("kiosks")
+}
+
+model Printer {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId     String            @db.Uuid
+  kioskId          String?           @db.Uuid
+
+  name             String
+  kind             PrinterKind       @default(RECEIPT)
+  connection       PrinterConnection @default(NETWORK)
+  /// IP, hostname or device path, depending on connection.
+  address          String?
+  port             Int?
+  /// Set when this is an unTill printer from GetPrintersInfo.
+  untillPrinterId  BigInt?
+
+  status           DeviceStatus      @default(PROVISIONING)
+  isEnabled        Boolean           @default(true)
+  lastSeenAt       DateTime?
+  lastErrorAt      DateTime?
+  lastErrorMessage String?
+  config           Json              @default("{}")
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  kiosk            Kiosk?            @relation(fields: [kioskId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId, status])
+  @@index([kioskId])
+  @@map("printers")
+}
+
+model PaymentTerminal {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId     String       @db.Uuid
+  kioskId          String?      @db.Uuid
+
+  name             String
+  /// Free text until a real terminal API is chosen. Nothing invented here.
+  provider         String?
+  serialNumber     String?
+  status           DeviceStatus @default(PROVISIONING)
+  isEnabled        Boolean      @default(false)
+  lastSeenAt       DateTime?
+  lastErrorAt      DateTime?
+  lastErrorMessage String?
+  config           Json         @default("{}")
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  restaurant       Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  kiosk            Kiosk?       @relation(fields: [kioskId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId, status])
+  @@map("payment_terminals")
+}
+
+/// One timeline for every device type. No FK: deviceId points at whichever table deviceKind names.
+model DeviceEvent {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String          @db.Uuid
+  deviceKind   DeviceKind
+  deviceId     String          @db.Uuid
+  type         DeviceEventType
+  message      String?
+  meta         Json            @default("{}")
+  createdAt    DateTime        @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([deviceKind, deviceId, createdAt])
+  @@map("device_events")
+}
+
+// ==================================================================== logs
+
+enum IntegrationKind {
+  TPAPI
+  PRINTER
+  PAYMENT_TERMINAL
+  KIOSK
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+/// One row per external call. Never contains credentials.
+model IntegrationLog {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId    String          @db.Uuid
+  kind            IntegrationKind @default(TPAPI)
+  /// TPAPI operation name, or the action for other kinds.
+  operation       String?
+  correlationId   String
+  level           LogLevel        @default(INFO)
+  ok              Boolean         @default(true)
+
+  httpStatus      Int?
+  returnCode      Int?
+  message         String?
+  durationMs      Int?
+
+  /// Summaries, not full payloads. Passwords are redacted before writing.
+  requestSummary  Json?
+  responseSummary Json?
+
+  orderId         String?         @db.Uuid
+  kioskId         String?         @db.Uuid
+  createdAt       DateTime        @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([restaurantId, ok, createdAt])
+  @@index([correlationId])
+  @@index([orderId])
+  @@map("integration_logs")
+}
+
+enum AuditActorType {
+  PLATFORM_USER
+  RESTAURANT_USER
+  SYSTEM
+  KIOSK
+}
+
+/// Who changed what. restaurantId is null for platform-wide actions.
+model AuditLog {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String?        @db.Uuid
+  actorType    AuditActorType @default(SYSTEM)
+  actorId      String?        @db.Uuid
+  actorLabel   String?
+
+  /// e.g. "restaurant.update", "kiosk.token.rotate", "tpapi.credentials.update"
+  action       String
+  entityType   String
+  entityId     String?
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime       @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// =========================================================== subscriptions
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+model Subscription {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId       String             @unique @db.Uuid
+
+  plan               String             @default("standard")
+  status             SubscriptionStatus @default(TRIALING)
+  startedAt          DateTime           @default(now())
+  trialEndsAt        DateTime?
+  currentPeriodEnd   DateTime?
+  cancelledAt        DateTime?
+
+  /// Limits enforced by the API. Null = unlimited.
+  maxKiosks          Int?
+  maxOrdersPerMonth  Int?
+  /// Feature flags, e.g. { "delivery": true, "paymentTerminal": false }
+  features           Json               @default("{}")
+  notes              String?
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  restaurant         Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("subscriptions")
 }
