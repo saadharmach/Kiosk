@@ -101,6 +101,9 @@ model RestaurantUser {
   role         RestaurantUserRole @default(MANAGER)
   isActive     Boolean            @default(true)
   lastLoginAt  DateTime?
+  failedLoginCount Int                @default(0)
+  lockedUntil      DateTime?
+  sessions         RestaurantSession[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -1051,4 +1054,26 @@ model PlatformSession {
 
   @@index([userId, expiresAt])
   @@map("platform_sessions")
+}
+
+
+/// Refresh-token session for a restaurant back-office user.
+model RestaurantSession {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String         @db.Uuid
+  userId       String         @db.Uuid
+  tokenHash    String         @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?        @db.Uuid
+  lastUsedAt   DateTime?
+  createdAt    DateTime       @default(now())
+
+  user         RestaurantUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, userId])
+  @@index([userId, expiresAt])
+  @@map("restaurant_sessions")
 }

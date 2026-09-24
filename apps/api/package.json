@@ -6,7 +6,9 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "create-admin": "tsx src/cli/create-admin.ts"
+    "create-admin": "tsx src/cli/create-admin.ts",
+    "create-restaurant": "tsx src/cli/create-restaurant.ts",
+    "create-restaurant-user": "tsx src/cli/create-restaurant-user.ts"
   },
   "dependencies": {
     "@kiosk/db": "workspace:*",

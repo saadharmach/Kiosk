@@ -26,3 +26,6 @@ export const corsOrigins = env.CORS_ORIGINS.split(",").map((o) => o.trim()).filt
 export const cookieSecure = isProd;
 export const REFRESH_COOKIE = "kp_refresh";
 export const REFRESH_COOKIE_PATH = "/api/admin/auth";
+
+export const RESTAURANT_REFRESH_COOKIE = "kp_r_refresh";
+export const RESTAURANT_REFRESH_COOKIE_PATH = "/api/restaurant";
