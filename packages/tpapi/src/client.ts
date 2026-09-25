@@ -132,7 +132,12 @@ export class TpapiClient {
       }
     } catch (e) {
       if (e instanceof TpapiTransportError) throw e;
-      const err = new TpapiTransportError(e instanceof Error ? e.message : String(e), base);
+      const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
+      const detail = cause?.code ?? cause?.message;
+      const err = new TpapiTransportError(
+        `${e instanceof Error ? e.message : String(e)}${detail ? ` (${detail})` : ""}`,
+        base,
+      );
       log({ ok: false, error: err.message });
       throw err;
     }
