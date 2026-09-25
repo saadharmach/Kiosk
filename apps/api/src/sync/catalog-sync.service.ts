@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TpapiClientFactory } from "../common/tpapi-client.factory.js";
+import { TpapiClient, TpapiTransportError } from "@kiosk/tpapi";
 
 type Extra = { Key: string; Value: string; Extra?: Extra[] };
 type Row = Record<string, unknown>;
@@ -49,7 +50,7 @@ export class CatalogSyncService {
       const { client, endpoint } = await this.clients.forRestaurant(restaurantId);
       this.logger.log(`Sync ${restaurantId} via ${endpoint}`);
       const call = <T = Record<string, unknown>>(op: string, args: Row = {}) =>
-        client.call<T & { ReturnCode: number; ReturnMessage: string }>(op, args, { correlationId });
+        this.tracedCall<T>(client, restaurantId, correlationId, op, args);
 
       // ---------------------------------------------------------- global data
       const salesAreasRes = await call<{ SalesAreas: Row[] }>("GetSalesAreasInfo");
@@ -297,6 +298,62 @@ export class CatalogSyncService {
     });
   }
 
+
+    /** One TPAPI call with retries on network failures, timing and a log row. */
+  private async tracedCall<T>(
+    client: TpapiClient,
+    restaurantId: string,
+    correlationId: string,
+    operation: string,
+    args: Row,
+  ): Promise<T & { ReturnCode: number; ReturnMessage: string }> {
+    const attempts = 3;
+    const startedAt = Date.now();
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const res = await client.call<T & { ReturnCode: number; ReturnMessage: string }>(
+          operation, args, { correlationId },
+        );
+        await this.logCall(restaurantId, correlationId, operation, true, Date.now() - startedAt, null);
+        // Be polite to the POS: it is a live restaurant server, not a load-test target.
+        await sleep(150);
+        return res;
+      } catch (e) {
+        lastError = e;
+        const retriable = e instanceof TpapiTransportError && attempt < attempts;
+        const message = e instanceof Error ? e.message : String(e);
+        if (!retriable) {
+          await this.logCall(restaurantId, correlationId, operation, false, Date.now() - startedAt, message);
+          throw e;
+        }
+        const delay = 500 * 2 ** (attempt - 1);
+        this.logger.warn(`${operation} failed (${attempt}/${attempts}): ${message} — retrying in ${delay}ms`);
+        await sleep(delay);
+      }
+    }
+    throw lastError;
+  }
+
+  private async logCall(
+    restaurantId: string,
+    correlationId: string,
+    operation: string,
+    ok: boolean,
+    durationMs: number,
+    message: string | null,
+  ): Promise<void> {
+    await this.prisma.integrationLog.create({
+      data: {
+        restaurantId, kind: "TPAPI", operation, correlationId,
+        level: ok ? "INFO" : "ERROR", ok, durationMs, message,
+      },
+    }).catch(() => undefined);
+  }
+
+
+
   /**
    * Replace every row of one mirror table for this restaurant.
    * Safe because presentation data lives in separate tables with no FK.
@@ -312,4 +369,7 @@ export class CatalogSyncService {
       await delegate.createMany({ data: rows.slice(i, i + 500), skipDuplicates: true });
     }
   }
+}
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
