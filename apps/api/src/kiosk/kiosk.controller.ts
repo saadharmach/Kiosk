@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { CatalogService } from "./catalog.service.js";
 import { CreateOrderDto, PriceCartDto } from "./dto/cart.dto.js";
@@ -17,10 +17,14 @@ export class KioskController {
     return this.catalogService.bootstrap(slug);
   }
 
-  @Get("catalog")
+   @Get("catalog")
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  getCatalog(@Param("slug") slug: string, @Query("salesAreaId") salesAreaId?: string) {
-    return this.catalogService.catalog(slug, salesAreaId);
+  getCatalog(
+    @Param("slug") slug: string,
+    @Query("salesAreaId") salesAreaId?: string,
+    @Query("locale") locale?: string,
+  ) {
+    return this.catalogService.catalog(slug, salesAreaId, locale);
   }
 
   @Post("cart/price")
@@ -35,5 +39,14 @@ export class KioskController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   createOrder(@Param("slug") slug: string, @Body() dto: CreateOrderDto) {
     return this.ordersService.create(slug, dto);
+  }
+
+  @Get("orders/:clientOrderId")
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  getOrder(
+    @Param("slug") slug: string,
+    @Param("clientOrderId", new ParseUUIDPipe()) clientOrderId: string,
+  ) {
+    return this.ordersService.getByClientOrderId(slug, clientOrderId);
   }
 }

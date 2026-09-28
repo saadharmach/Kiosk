@@ -15,4 +15,13 @@ tools/tpapi-discovery/output/
 .DS_Store
 .idea/
 .vscode/*
-!.vscode/extensions.json
+!.vscode/extensions.json.testenv
+apps/kiosk/.next
+apps/kiosk/next-env.d.ts
+.logs/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+apps/backoffice/.next
+apps/backoffice/next-env.d.ts
+.testenv
+.logs/

@@ -493,8 +493,9 @@ model ProductPresentation {
   /// unTill ArticleId. No FK: the article may be re-created by a later sync.
   articleId    BigInt
 
-  displayName  String?
-  description  String?
+   /// { "fr": "…", "en": "…", "ar": "…" }. A new language is data, not a migration.
+  displayName  Json?
+  description  Json?
   /// Path in Supabase Storage, not a public URL.
   imagePath    String?
   isVisible    Boolean  @default(true)
@@ -518,8 +519,9 @@ model CategoryPresentation {
   /// unTill GroupId or DepartmentId, depending on scope.
   untillId     BigInt
 
-  displayName  String?
-  description  String?
+    /// { "fr": "…", "en": "…", "ar": "…" }
+  displayName  Json?
+  description  Json?
   imagePath    String?
   color        String?           @db.VarChar(9)
   isVisible    Boolean           @default(true)

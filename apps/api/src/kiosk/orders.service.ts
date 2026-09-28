@@ -143,6 +143,7 @@ export class OrdersService {
           unitPrice: m.unitPrice,
           lineTotal: m.unitPrice * line.quantity,
           optionGroupId: m.optionGroupId ? BigInt(m.optionGroupId) : null,
+          sizeItemId: m.sizeItemId ? BigInt(m.sizeItemId) : null,
           sizeName: m.kind === "SIZE" ? m.name : null,
         });
       }
@@ -155,15 +156,26 @@ export class OrdersService {
       where: { restaurantId, orderType: dto.orderType, isEnabled: true },
     });
 
-    if (dto.orderType === "EAT_IN") {
-      if (!dto.tableNumber) throw new BadRequestException("A table number is required for eat-in");
-      const area = await this.prisma.tpapiSalesArea.findFirst({
-        where: { restaurantId, untillId: BigInt(salesAreaId) },
+       if (dto.orderType === "EAT_IN") {
+      const settings = await this.prisma.restaurantSettings.findFirst({
+        where: { restaurantId },
+        select: { askTableForEatIn: true },
       });
-      const ranges = (area?.tableRanges ?? []) as { FromTable: number; ToTable: number }[];
-      const ok = ranges.some((r) => dto.tableNumber! >= r.FromTable && dto.tableNumber! <= r.ToTable);
-      if (!ok) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
-      return { tableNumber: dto.tableNumber, tablePart: mapping?.tablePart ?? "" };
+
+      // When the kiosk asks, the customer's table must be real. When it doesn't,
+      // they take a numbered stand and every order lands on one configured table;
+      // the cashier still finds the bill by OrderName.
+      if (settings?.askTableForEatIn ?? true) {
+        if (!dto.tableNumber) throw new BadRequestException("A table number is required for eat-in");
+        const area = await this.prisma.tpapiSalesArea.findFirst({
+          where: { restaurantId, untillId: BigInt(salesAreaId) },
+        });
+        const ranges = (area?.tableRanges ?? []) as { FromTable: number; ToTable: number }[];
+        const ok = ranges.some((r) => dto.tableNumber! >= r.FromTable && dto.tableNumber! <= r.ToTable);
+        if (!ok) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
+        return { tableNumber: dto.tableNumber, tablePart: mapping?.tablePart ?? "" };
+      }
+      // Otherwise fall through to fixedTableNumber, then range allocation.
     }
 
     if (mapping?.fixedTableNumber) {
@@ -211,5 +223,28 @@ export class OrdersService {
           total: Number(i.lineTotal),
         })),
     };
+  }
+
+  /**
+   * Ticket read-back for the kiosk. Looked up by the unguessable clientOrderId,
+   * never by reference: K0-0925-003 is trivial to enumerate and this route is
+   * unauthenticated. Returns exactly the same shape as create().
+   */
+  async getByClientOrderId(slug: string, clientOrderId: string) {
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { slug },
+      select: { id: true, status: true },
+    });
+    if (!restaurant || restaurant.status !== "ACTIVE") {
+      throw new NotFoundException("Restaurant not available");
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: { restaurantId: restaurant.id, clientRequestId: clientOrderId },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException("Order not found");
+
+    return this.present(order);
   }
 }

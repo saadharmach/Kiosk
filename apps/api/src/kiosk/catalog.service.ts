@@ -1,12 +1,34 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { StorageService } from "../common/storage.service.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
   v === null || v === undefined ? null : v.toNumber();
+export type Locale = "fr" | "en" | "ar";
+const LOCALES: Locale[] = ["fr", "en", "ar"];
 
+/**
+ * Resolves one language out of a { fr, en, ar } column. Falls through the other
+ * languages before the fallback, so a half-translated menu still renders real
+ * text instead of blanks — a missing Arabic name shows French, not nothing.
+ */
+function pick(value: unknown, locale: Locale, fallback: string | null): string | null {
+  if (value == null) return fallback;
+  if (typeof value === "string") return value || fallback;
+  if (typeof value !== "object" || Array.isArray(value)) return fallback;
+  const map = value as Record<string, unknown>;
+  for (const l of [locale, ...LOCALES.filter((x) => x !== locale)]) {
+    const v = map[l];
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return fallback;
+}
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   /** Branding, settings and the zones a customer can choose from. */
   async bootstrap(slug: string) {
@@ -21,6 +43,37 @@ export class CatalogService {
       orderBy: { number: "asc" },
       select: { untillId: true, name: true, tableRanges: true, priceLevelId: true },
     });
+
+    const mappings = await this.prisma.orderTypeMapping.findMany({
+      where: { restaurantId: restaurant.id, isEnabled: true },
+    });
+
+    const typeEnabled: Record<string, boolean> = {
+      EAT_IN: restaurant.settings?.eatInEnabled ?? true,
+      TAKE_AWAY: restaurant.settings?.takeAwayEnabled ?? false,
+      DELIVERY: restaurant.settings?.deliveryEnabled ?? false,
+    };
+
+    // The kiosk needs the resolved sales area per order type so it can reject a
+    // bad table number the moment it is typed, instead of at checkout. The server
+    // still re-validates everything at order time: this is speed, not trust.
+    const orderTypes = (["EAT_IN", "TAKE_AWAY", "DELIVERY"] as const)
+      .filter((t) => typeEnabled[t])
+      .map((t) => {
+        const mapping = mappings.find((m) => m.orderType === t);
+        const area = mapping
+          ? salesAreas.find((a) => a.untillId === mapping.salesAreaId)
+          : undefined;
+        return {
+          orderType: t,
+          configured: Boolean(mapping && area),
+          salesAreaId: area ? String(area.untillId) : null,
+          salesAreaName: area?.name ?? null,
+          askTable: t === "EAT_IN" ? (restaurant.settings?.askTableForEatIn ?? true) : false,
+          tableRanges: t === "EAT_IN" ? (area?.tableRanges ?? []) : [],
+          fixedTableNumber: mapping?.fixedTableNumber ?? null,
+        };
+      });
 
     return {
       restaurant: {
@@ -42,6 +95,7 @@ export class CatalogService {
         showProductImages: restaurant.settings?.showProductImages ?? true,
       },
       salesAreas,
+      orderTypes,
       pos: {
         connected: Boolean(restaurant.tpapi?.isEnabled),
         lastSuccessAt: restaurant.tpapi?.lastSuccessAt ?? null,
@@ -55,14 +109,19 @@ export class CatalogService {
    * The full menu for one sales area, priced at that area's price level,
    * with the local presentation layer merged on top.
    */
-  async catalog(slug: string, salesAreaIdParam?: string) {
+  async catalog(slug: string, salesAreaIdParam?: string, localeParam?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, currency: true, status: true },
+      select: { id: true, currency: true, status: true, locale: true },
     });
     if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
     const restaurantId = restaurant.id;
-
+        // The server resolves the language. The browser never receives three of everything.
+    const locale = (LOCALES.includes(localeParam as Locale)
+      ? (localeParam as Locale)
+      : LOCALES.includes(restaurant.locale as Locale)
+        ? (restaurant.locale as Locale)
+        : "fr") as Locale;
     const salesArea = salesAreaIdParam
       ? await this.prisma.tpapiSalesArea.findFirst({
           where: { restaurantId, untillId: BigInt(salesAreaIdParam) },
@@ -129,9 +188,10 @@ export class CatalogService {
           id: d.untillId.toString(),
           groupId: d.groupId?.toString() ?? null,
           groupName: d.groupId ? groupName.get(d.groupId.toString()) ?? null : null,
-          name: pres?.displayName ?? d.name,
-          description: pres?.description ?? null,
+          name: pick(pres?.displayName, locale, d.name) ?? d.name,
+          description: pick(pres?.description, locale, null),
           imagePath: pres?.imagePath ?? null,
+          imageUrl: this.storage.publicUrl(pres?.imagePath ?? null),
           sortOrder: pres?.sortOrder ?? d.number,
           visible: pres?.isVisible ?? true,
         };
@@ -181,10 +241,11 @@ export class CatalogService {
         return {
           id: key,
           categoryId: a.departmentId?.toString() ?? null,
-          name: pres?.displayName ?? a.name,
+          name: pick(pres?.displayName, locale, a.name) ?? a.name,
           posName: a.name,
-          description: pres?.description ?? null,
+          description: pick(pres?.description, locale, null),
           imagePath: pres?.imagePath ?? null,
+          imageUrl: this.storage.publicUrl(pres?.imagePath ?? null),
           badgeText: pres?.badgeText ?? null,
           isFeatured: pres?.isFeatured ?? false,
           sortOrder: pres?.sortOrder ?? a.number,

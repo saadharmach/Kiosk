@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: oklch(0.55 0.13 175);
+  --color-brand-ink: oklch(0.98 0.01 175);
+  --color-surface: oklch(0.99 0.004 260);
+  --color-surface-2: oklch(0.96 0.006 260);
+  --color-ink: oklch(0.22 0.02 260);
+  --color-ink-muted: oklch(0.52 0.02 260);
+  --color-line: oklch(0.90 0.008 260);
+  --color-danger: oklch(0.58 0.19 25);
+
+  --radius-card: 1.25rem;
+  --text-kiosk-lg: 2.25rem;
+  --text-kiosk-xl: 3rem;
+}
+
+html, body { height: 100%; }
+
+body {
+  min-height: 100dvh;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Removes the 300ms delay and kills double-tap zoom without a meta hack. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A kiosk has no cursor. Hover styles only ever mislead. */
+@media (hover: none) {
+  *:hover { all: revert-layer; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

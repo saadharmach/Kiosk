@@ -9,6 +9,7 @@ export type PricedModifier = {
   kind: "SIZE" | "OPTION";
   articleId: string | null;
   optionGroupId: string | null;
+  sizeItemId: string | null;
   name: string;
   unitPrice: number;
 };
@@ -154,6 +155,7 @@ export class PricingService {
         kind: "SIZE",
         articleId: null,
         optionGroupId: null,
+        sizeItemId: line.sizeItemId,
         name: ctx.sizeName.get(line.sizeItemId) ?? line.sizeItemId,
         unitPrice: 0,
       });
@@ -184,6 +186,7 @@ export class PricingService {
         kind: "OPTION",
         articleId: opt.articleId,
         optionGroupId: opt.optionGroupId,
+        sizeItemId: null,
         name: ctx.allArticleNames.get(opt.articleId) ?? opt.articleId,
         unitPrice: dec(item.amount),
       });
