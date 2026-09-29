@@ -6,6 +6,7 @@ import ProductsPage from "./ProductsPage";
 import CategoriesPage from "./CategoriesPage";
 import AllergensPage from "./AllergensPage";
 import SettingsPage from "./SettingsPage";
+import OrdersPage from "./OrdersPage";
 const SECTIONS = ["Products", "Categories", "Allergens", "Orders", "Settings"] as const;
 
 export default function Shell() {
@@ -90,6 +91,7 @@ export default function Shell() {
           {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />
           : section === "Allergens" && slug ? <AllergensPage slug={slug} />
+          : section === "Orders" && slug ? <OrdersPage slug={slug} />
           : section === "Settings" && slug ? <SettingsPage slug={slug} />
           : <p className="text-(--color-ink-muted)">Coming in the next step.</p>}
         </main>
