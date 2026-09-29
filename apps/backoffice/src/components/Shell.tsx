@@ -5,7 +5,8 @@ import { useAuth } from "@/state/auth";
 import ProductsPage from "./ProductsPage";
 import CategoriesPage from "./CategoriesPage";
 import AllergensPage from "./AllergensPage";
-const SECTIONS = ["Products", "Categories", "Allergens", "Orders"] as const;
+import SettingsPage from "./SettingsPage";
+const SECTIONS = ["Products", "Categories", "Allergens", "Orders", "Settings"] as const;
 
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
@@ -85,12 +86,13 @@ export default function Shell() {
       </aside>
 
         <main className="flex-1 overflow-x-auto p-8">
-        <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
-               {section === "Products" && slug ? <ProductsPage slug={slug} />
+          <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
+          {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />
           : section === "Allergens" && slug ? <AllergensPage slug={slug} />
+          : section === "Settings" && slug ? <SettingsPage slug={slug} />
           : <p className="text-(--color-ink-muted)">Coming in the next step.</p>}
-           </main>
+        </main>
     </div>
   );
 }
