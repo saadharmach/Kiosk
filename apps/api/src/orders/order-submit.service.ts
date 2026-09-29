@@ -148,10 +148,10 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Sends one PENDING order to unTill as CreateOrder.
-   * ManualPrice is always 0: unTill prices each line from the article and the
-   * price level of the sales area the table belongs to, so the kiosk and the
-   * till can never disagree about the bill.
+   * ManualPrice is 0 for ordinary articles: unTill prices each line from the
+   * article and the price level of the sales area the table belongs to. For
+   * articles flagged isManualPrice, the till expects a price from us instead,
+   * and we send the one we read from its own price rows.
    */
   async submit(restaurantId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
@@ -183,7 +183,36 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
     const freeLinks = new Set(
       links.filter((l) => l.isFreeOption).map((l) => `${l.articleId}:${l.optionGroupId}`),
     );
+    // unTill expects the CLIENT to supply the price for articles flagged manual
+    // (Article.manualPrice in the API docs). Sending 0 for one of those books the
+    // line at nothing. Every other article is still priced by the till from the
+    // sales area's price level, which is why the fallback stays 0.
+    const allArticleIds = order.items
+      .filter((i) => i.articleId !== null)
+      .map((i) => i.articleId as bigint);
 
+    const manualArticles = allArticleIds.length
+      ? await this.prisma.tpapiArticle.findMany({
+          where: { restaurantId, untillId: { in: allArticleIds }, isManualPrice: true },
+          select: { untillId: true },
+        })
+      : [];
+    const manualIds = new Set(manualArticles.map((a) => a.untillId.toString()));
+
+    /**
+     * The figure we send came from unTill's own price rows via the pricing
+     * service, so the kiosk and the till still cannot disagree about the bill.
+     */
+    const priceFor = (item: {
+      articleId: bigint | null;
+      unitPrice: { toString(): string };
+    }): number =>
+      item.articleId !== null && manualIds.has(item.articleId.toString())
+        ? Number(item.unitPrice.toString())
+        : 0;
+
+
+        
     const typeOf = (kind: string, parentArticleId: bigint, optionGroupId: bigint | null): number => {
       switch (kind) {
         case "MENU_CHOICE":
@@ -221,7 +250,7 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
         ArticleId: Number(parent.articleId),
         OrderItemType: ORDER_ITEM_TYPE.NORMAL,
         Text: parent.text ?? "",
-        ManualPrice: 0,
+        ManualPrice: priceFor(parent),
         Quantity: parent.quantity,
         Extra: size
           ? [{ Key: "size_modifier_item_id", Value: String(size.sizeItemId), Extra: [] }]
@@ -236,7 +265,7 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
           ArticleId: type === ORDER_ITEM_TYPE.FREE_TEXT ? 0 : Number(child.articleId ?? 0),
           OrderItemType: type,
           Text: child.text ?? child.articleName ?? "",
-          ManualPrice: 0,
+          ManualPrice: priceFor(child),
           // Never the parent's quantity: unTill counts one modifier per parent line.
           Quantity: 1,
           Extra: [],
