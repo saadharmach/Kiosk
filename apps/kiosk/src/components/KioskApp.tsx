@@ -165,6 +165,7 @@ function KioskFlow({ slug }: { slug: string }) {
         order={order}
         locale={locale}
         resetDelaySec={boot.ordering.resetDelaySec}
+        standNumber={choice?.askTable ? null : (order.tableNumber ?? null)}
         onDone={reset}
       />
     );

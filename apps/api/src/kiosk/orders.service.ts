@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { PrismaService } from "../prisma/prisma.service.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
+import type { Prisma } from "@prisma/client";
 
 @Injectable()
 export class OrdersService {
@@ -50,11 +51,20 @@ export class OrdersService {
     }
 
     // ---- table
-    const { tableNumber, tablePart } = await this.resolveTable(restaurantId, dto, priced.salesAreaId);
-
-    // ---- reference + persistence
-    const businessDate = new Date(new Date().toISOString().slice(0, 10));
+     const businessDate = new Date(new Date().toISOString().slice(0, 10));
     const order = await this.prisma.$transaction(async (tx) => {
+      // Serialise table allocation per restaurant. Two kiosks finishing in the
+      // same instant would otherwise both take the lowest free number, and unTill
+      // merges same-table orders onto one bill. The lock releases on commit, so
+      // allocation and insert are atomic together.
+      await tx.$executeRaw`select pg_advisory_xact_lock(hashtext(${restaurantId}))`;
+
+      const { tableNumber, tablePart } = await this.resolveTable(
+        restaurantId,
+        dto,
+        priced.salesAreaId,
+        tx,
+      );
       const counter = await tx.orderCounter.upsert({
         where: { restaurantId_businessDate: { restaurantId, businessDate } },
         create: { restaurantId, businessDate, lastSequence: 1 },
@@ -151,7 +161,12 @@ export class OrdersService {
     return rows as never;
   }
 
-  private async resolveTable(restaurantId: string, dto: CreateOrderDto, salesAreaId: string) {
+    private async resolveTable(
+    restaurantId: string,
+    dto: CreateOrderDto,
+    salesAreaId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     const mapping = await this.prisma.orderTypeMapping.findFirst({
       where: { restaurantId, orderType: dto.orderType, isEnabled: true },
     });

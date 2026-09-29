@@ -4,6 +4,22 @@ import type { CartLineDto, PriceCartDto } from "./dto/cart.dto.js";
 
 const dec = (v: { toNumber(): number }): number => v.toNumber();
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+/**
+ * Presentation names are { fr, en, ar } JSON; the order record stores one
+ * string. Stopgap until the kiosk sends its locale with the order — then this
+ * resolves in the language the customer actually saw.
+ */
+const textOf = (v: unknown, fallback: string): string => {
+  if (typeof v === "string") return v || fallback;
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const m = v as Record<string, unknown>;
+    for (const l of ["fr", "en", "ar"]) {
+      const s = m[l];
+      if (typeof s === "string" && s.trim()) return s;
+    }
+  }
+  return fallback;
+};
 
 export type PricedModifier = {
   kind: "SIZE" | "OPTION";
@@ -211,7 +227,7 @@ export class PricingService {
     return {
       articleId: line.articleId,
       name: article.name,
-      displayName: pres?.displayName ?? article.name,
+      displayName: textOf(pres?.displayName, article.name),
       quantity: line.quantity,
       basePrice,
       modifiers,

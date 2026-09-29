@@ -35,7 +35,7 @@ type Dict = {
   empty: string; quantity: string;
   yourOrder: string; remove: string; confirmOrder: string; sending: string;
   orderNumber: string; payAtCashier: string; priceChanged: string;
-  newOrder: string; thanks: string,other: string;
+  newOrder: string; thanks: string,other: string,standNumber: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -54,6 +54,7 @@ export const STRINGS: Record<Locale, Dict> = {
     payAtCashier: "Présentez ce numéro en caisse pour payer",
     priceChanged: "Les prix ont changé. Veuillez vérifier votre commande.",
     newOrder: "Nouvelle commande", thanks: "Merci !",other: "Autres",
+     standNumber: "Posez ce numéro sur votre table",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -69,8 +70,8 @@ export const STRINGS: Record<Locale, Dict> = {
     sending: "Sending…", orderNumber: "Your number",
     payAtCashier: "Show this number at the cashier to pay",
     priceChanged: "Prices have changed. Please check your order.",
-    newOrder: "New order", thanks: "Thank you!",other: "Other",
-  },
+    newOrder: "New order", thanks: "Thank you!",other: "Other", standNumber: "Place this number on your table",
+  },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
     errorTitle: "الخدمة غير متاحة", retry: "إعادة المحاولة",
@@ -85,7 +86,7 @@ export const STRINGS: Record<Locale, Dict> = {
     sending: "جارٍ الإرسال…", orderNumber: "رقمك",
     payAtCashier: "أظهر هذا الرقم عند الصندوق للدفع",
     priceChanged: "تغيرت الأسعار. يرجى مراجعة طلبك.",
-    newOrder: "طلب جديد", thanks: "شكراً لك!",other: "أخرى",
+    newOrder: "طلب جديد", thanks: "شكراً لك!",other: "أخرى",    standNumber: "ضع هذا الرقم على طاولتك",
   },
 };
 

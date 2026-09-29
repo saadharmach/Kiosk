@@ -6,11 +6,12 @@ import type { PlacedOrder } from "@/lib/api";
 
 
 export default function TicketScreen({
-  order, locale, resetDelaySec, onDone,
+  order, locale, resetDelaySec, standNumber, onDone,
 }: {
   order: PlacedOrder;
   locale: Locale;
   resetDelaySec: number;
+  standNumber: number | null;
   onDone: () => void;
 }) {
   const t = STRINGS[locale];
@@ -27,6 +28,12 @@ export default function TicketScreen({
       <p className="text-3xl text-(--color-ink-muted)">{t.orderNumber}</p>
       <p className="text-9xl font-bold tabular-nums tracking-tight">{order.reference}</p>
       <p className="max-w-xl text-3xl">{t.payAtCashier}</p>
+      {standNumber !== null ? (
+        <div className="mt-4 rounded-(--radius-card) border-4 border-(--color-brand) px-16 py-8">
+          <p className="text-2xl text-(--color-ink-muted)">{t.standNumber}</p>
+          <p className="text-8xl font-bold tabular-nums">{standNumber}</p>
+        </div>
+      ) : null}
       <p className="text-3xl tabular-nums text-(--color-ink-muted)">
         {money(order.total, order.currency, locale)}
       </p>

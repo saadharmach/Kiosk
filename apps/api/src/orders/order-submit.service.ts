@@ -77,7 +77,9 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn("Auto-submit sweep disabled: orders will only be sent manually");
       return;
     }
-    this.sweepTimer = setInterval(() => void this.sweep(), ms);
+    this.sweepTimer = setInterval(() => {
+    this.sweep().catch((e) => this.logger.error(`Sweep crashed: ${String(e)}`));
+    }, ms);
     this.sweepTimer.unref?.();
     this.logger.log(`Auto-submit sweep every ${ms}ms`);
   }
@@ -137,6 +139,9 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Sweep verify: ${o.reference} — ${(e as Error).message}`);
         }
       }
+       } catch (e) {
+      // The database or the till being unreachable must never take the API down.
+      this.logger.error(`Sweep failed: ${(e as Error).message}`);
     } finally {
       this.sweeping = false;
     }
