@@ -23,9 +23,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type OrderTypeName = "EAT_IN" | "TAKE_AWAY" | "DELIVERY";
 
+/** The sync stores TPAPI's shape; accept either casing rather than guess. */
 export interface TableRange {
-  FromTable: number;
-  ToTable: number;
+  FromTable?: number;
+  ToTable?: number;
+  fromTable?: number;
+  toTable?: number;
 }
 
 export interface OrderTypeOption {
@@ -68,7 +71,11 @@ export const api = {
 };
 
 export function tableInRanges(n: number, ranges: TableRange[]): boolean {
-  return ranges.some((r) => n >= r.FromTable && n <= r.ToTable);
+  return ranges.some((r) => {
+    const from = Number(r.FromTable ?? r.fromTable);
+    const to = Number(r.ToTable ?? r.toTable);
+    return Number.isFinite(from) && Number.isFinite(to) && n >= from && n <= to;
+  });
 }
 
 export type Pricing = "BASE" | "SIZE" | "MENU" | "UNPRICED";
@@ -89,6 +96,7 @@ export interface CatalogProduct {
   name: string;
   description: string | null;
   imagePath: string | null;
+  imageUrl: string | null;
   badgeText: string | null;
   sortOrder: number;
   visible: boolean;

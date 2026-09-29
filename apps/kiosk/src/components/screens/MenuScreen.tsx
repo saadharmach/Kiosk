@@ -7,11 +7,12 @@ import { useCart } from "@/state/cart";
 import ProductSheet from "../ProductSheet";
 
 export default function MenuScreen({
-  catalog, locale, tableNumber, onViewOrder, onBack,
+  catalog, locale, tableNumber, showImages = true, onViewOrder, onBack,
 }: {
   catalog: Catalog;
   locale: Locale;
   tableNumber: number | null;
+  showImages?: boolean;
   onViewOrder: () => void;
   onBack: () => void;
 }) {
@@ -61,7 +62,9 @@ export default function MenuScreen({
     () => sellable.filter((p) => p.categoryId === categoryId).sort((a, b) => a.sortOrder - b.sortOrder),
     [sellable, categoryId],
   );
-
+  // All-or-nothing per department: a grid where half the tiles have a photo and
+  // half don't reads as broken rather than sparse.
+  const showImageSlot = showImages && products.some((p) => p.imageUrl);
   const open = (p: CatalogProduct) => {
     if (p.sizes.length > 0) return setSheet(p);
     cart.add({ articleId: p.id, name: p.name, options: [], unitPrice: p.price ?? 0 });
@@ -107,15 +110,29 @@ export default function MenuScreen({
       </nav>
 
       <div className="grid flex-1 grid-cols-2 content-start gap-4 overflow-y-auto p-4 pb-40">
-        {products.map((p) => (
-          <button key={p.id} onClick={() => open(p)}
-            className="flex min-h-44 flex-col justify-between rounded-(--radius-card) bg-(--color-surface-2) p-5 text-start">
-            <span className="text-2xl font-medium">{p.name}</span>
-            <span className="text-2xl tabular-nums text-(--color-ink-muted)">
-              {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, catalog.currency, locale)}
-            </span>
-          </button>
-        ))}
+          {products.map((p) => (
+            <button key={p.id} onClick={() => open(p)}
+              className="flex min-h-44 flex-col overflow-hidden rounded-(--radius-card) bg-(--color-surface-2) text-start">
+              {showImageSlot ? (
+                p.imageUrl ? (
+                  // Decorative: the name below carries the meaning, so alt stays empty.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.imageUrl} alt="" loading="lazy"
+                    className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  // A flat gap, not a placeholder illustration: keeps rows aligned
+                  // when only some products in a department have a photo.
+                  <div className="aspect-[4/3] w-full bg-(--color-surface)" />
+                )
+              ) : null}
+              <span className="flex flex-1 flex-col justify-between gap-2 p-5">
+                <span className="text-2xl font-medium">{p.name}</span>
+                <span className="text-2xl tabular-nums text-(--color-ink-muted)">
+                  {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, catalog.currency, locale)}
+                </span>
+              </span>
+            </button>
+          ))}
       </div>
 
       {cart.count > 0 ? (

@@ -139,6 +139,7 @@ function KioskFlow({ slug }: { slug: string }) {
     }
     return (
       <MenuScreen catalog={catalog} locale={locale} tableNumber={table}
+        showImages={boot.ordering.showProductImages}
         onViewOrder={() => setScreen("CART")}
         onBack={() => setScreen(choice?.askTable ? "TABLE" : "WELCOME")} />
     );

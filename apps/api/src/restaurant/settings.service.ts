@@ -78,8 +78,10 @@ function readRanges(value: unknown): TableRange[] {
   for (const raw of value) {
     if (!raw || typeof raw !== "object") continue;
     const o = raw as Record<string, unknown>;
-    const from = Number(o.fromTable);
-    const to = Number(o.toTable);
+    // The sync stores TPAPI's own shape. Delphi sends PascalCase on the wire;
+    // the schema comment says camelCase. Accept either rather than guess.
+    const from = Number(o.fromTable ?? o.FromTable);
+    const to = Number(o.toTable ?? o.ToTable);
     if (Number.isFinite(from) && Number.isFinite(to)) out.push({ fromTable: from, toTable: to });
   }
   return out;

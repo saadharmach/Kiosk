@@ -185,8 +185,15 @@ export class OrdersService {
         const area = await this.prisma.tpapiSalesArea.findFirst({
           where: { restaurantId, untillId: BigInt(salesAreaId) },
         });
-        const ranges = (area?.tableRanges ?? []) as { FromTable: number; ToTable: number }[];
-        const ok = ranges.some((r) => dto.tableNumber! >= r.FromTable && dto.tableNumber! <= r.ToTable);
+        // Stored as TPAPI sent it; accept either casing. NaN comparisons fail closed.
+        const ranges = (area?.tableRanges ?? []) as {
+          FromTable?: number; ToTable?: number; fromTable?: number; toTable?: number;
+        }[];
+        const ok = ranges.some((r) => {
+          const from = Number(r.FromTable ?? r.fromTable);
+          const to = Number(r.ToTable ?? r.toTable);
+          return dto.tableNumber! >= from && dto.tableNumber! <= to;
+        });
         if (!ok) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
         return { tableNumber: dto.tableNumber, tablePart: mapping?.tablePart ?? "" };
       }
