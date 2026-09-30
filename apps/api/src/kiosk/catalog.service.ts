@@ -252,10 +252,14 @@ export class CatalogService {
           .filter((g): g is NonNullable<typeof g> => g !== null);
 
         /** Three pricing shapes, as proven by the data. */
+        // A base price of zero is only sellable when a paid option makes the line cost
+        // something: the order path refuses a zero-priced line, so such a product
+        // would be a tile that always fails at checkout.
+        const paidByOptions = optionGroups.some((g) => g.items.some((i) => i.price > 0));
         const pricing =
           a.isMenu && !price ? "MENU"
           : a.sizeModifierId && sizes.length > 0 ? "SIZE"
-          : price ? "BASE"
+          : price && ((dec(price.amount) ?? 0) > 0 || paidByOptions) ? "BASE"
           : "UNPRICED";
 
         return {
