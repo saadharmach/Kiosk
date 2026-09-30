@@ -5,6 +5,7 @@ import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
 import { api, getCatalog, isConnectionError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
 import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
+import { BrandContext } from "@/state/brand";
 import { CartProvider, useCart } from "@/state/cart";
 import IdleWarning from "./IdleWarning";
 import { LogoTile } from "./icons";
@@ -135,23 +136,26 @@ function KioskFlow({ slug }: { slug: string }) {
 
   const t = STRINGS[locale];
 
+  const brand = { logoUrl: boot?.restaurant.logoUrl ?? null };
+  const withBrand = (node: React.ReactNode) => <BrandContext.Provider value={brand}>{node}</BrandContext.Provider>;
+
   const retry = () => { setError(null); setAttempt((n) => n + 1); };
   const startOver = () => { setError(null); reset(); setAttempt((n) => n + 1); };
   const header = boot ? { name: boot.restaurant.name, locale, onLocale: setLocale } : undefined;
 
   if (error?.connection) {
-    return (
+    return withBrand(
       <StatusScreen header={header} icon="warning" title={t.connectionTitle} text={t.connectionText}
         action={{ label: t.retry, icon: "refresh", onClick: retry }}
-        secondary={{ label: t.startOver, onClick: startOver }} />
+        secondary={{ label: t.startOver, onClick: startOver }} />,
     );
   }
   // Nothing the customer could order: better a clear message than an empty choice screen.
   const nothingOrderable = Boolean(boot) && !boot!.orderTypes.some((o) => o.configured);
   if (error || (boot && !boot.catalogReady) || nothingOrderable) {
-    return (
+    return withBrand(
       <StatusScreen header={header} icon="warning" title={t.errorTitle} text={error?.message ?? t.menuUnavailable}
-        action={{ label: t.retry, icon: "refresh", onClick: retry }} />
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} />,
     );
   }
 
@@ -231,14 +235,14 @@ function KioskFlow({ slug }: { slug: string }) {
   );
   };
 
-  return (
+  return withBrand(
     <>
       {renderScreen()}
       {idleLeft !== null ? (
         <IdleWarning locale={locale} secondsLeft={idleLeft} totalSeconds={warnSec}
           onContinue={() => keepAlive.current()} onDiscard={reset} />
       ) : null}
-    </>
+    </>,
   );
 }
 

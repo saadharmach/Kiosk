@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { useBrand } from "@/state/brand";
 
 /** Stroke icons (24 grid). One place, so screens never inline SVG paths. */
 const PATHS = {
@@ -38,14 +41,25 @@ export function Icon({ name, className = "size-8", strokeWidth = 2 }: {
   );
 }
 
-/** The restaurant's mark. A chef's hat until the logo image is served to the kiosk. */
+/** The restaurant's mark: its uploaded logo, or a chef's hat until it has one (or if it will not load). */
 export function LogoTile({ className = "size-15 rounded-2xl", iconClass = "size-8" }: {
   className?: string;
   iconClass?: string;
 }) {
+  const { logoUrl } = useBrand();
+  const [failed, setFailed] = useState<string | null>(null);
+  const logo = logoUrl && failed !== logoUrl ? logoUrl : null;
   return (
-    <span className={`flex shrink-0 items-center justify-center bg-(--color-brand) text-(--color-brand-ink) ${className}`}>
-      <Icon name="chef" className={iconClass} strokeWidth={1.7} />
+    <span className={`flex shrink-0 items-center justify-center overflow-hidden ${
+      logo ? "bg-white" : "bg-(--color-brand) text-(--color-brand-ink)"
+    } ${className}`}>
+      {logo ? (
+        // The restaurant name sits beside it, so the image itself is decorative.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt="" onError={() => setFailed(logo)} className="size-full object-contain p-[8%]" />
+      ) : (
+        <Icon name="chef" className={iconClass} strokeWidth={1.7} />
+      )}
     </span>
   );
 }

@@ -61,6 +61,11 @@ export interface Bootstrap {
     currency: string;
     locale: string;
     logoPath: string | null;
+    /** Public URLs; null until the restaurant uploads them. */
+    logoUrl: string | null;
+    heroImageUrl: string | null;
+    /** Only the languages that have text. */
+    tagline: Partial<Record<"fr" | "en" | "ar", string>>;
     primaryColor: string | null;
   };
   ordering: {

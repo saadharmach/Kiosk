@@ -1,6 +1,7 @@
 "use client";
 
-import { LOCALES, LOCALE_NAMES, STRINGS, type Locale } from "@/i18n";
+import { useState } from "react";
+import { LOCALES, LOCALE_NAMES, STRINGS, localized, type Locale } from "@/i18n";
 import type { Bootstrap } from "@/lib/api";
 import { Icon, LogoTile } from "../icons";
 
@@ -13,6 +14,11 @@ export default function WelcomeScreen({
   onStart: () => void;
 }) {
   const t = STRINGS[locale];
+  const tagline = localized(boot.restaurant.tagline, locale);
+  // A hero that will not load is dropped, not shown as a broken image.
+  const [failedHero, setFailedHero] = useState<string | null>(null);
+  const heroUrl = boot.restaurant.heroImageUrl;
+  const hero = heroUrl && failedHero !== heroUrl ? heroUrl : null;
   // The prompt in the two other languages, so a foreign visitor still sees it.
   const otherPrompts = LOCALES.filter((l) => l !== locale).map((l) => STRINGS[l].tapToStart).join(" • ");
 
@@ -35,8 +41,16 @@ export default function WelcomeScreen({
       <button onClick={onStart} className="flex flex-1 flex-col items-center justify-center gap-10 p-10 text-center">
         <LogoTile className="size-52 rounded-[3.25rem]" iconClass="size-28" />
         <h1 className="font-display text-8xl leading-none font-bold">{boot.restaurant.name}</h1>
+        {tagline ? <p className="-mt-4 max-w-4xl text-4xl leading-snug text-slate-400">{tagline}</p> : null}
 
-        <span className="mt-12 flex flex-col items-center gap-6">
+        {hero ? (
+          // Decorative: the name and prompt carry the meaning.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={hero} alt="" onError={() => setFailedHero(hero)}
+            className="h-104 w-4xl max-w-full rounded-[2.75rem] object-cover shadow-2xl" />
+        ) : null}
+
+        <span className={`flex flex-col items-center gap-6 ${hero ? "mt-6" : "mt-12"}`}>
           <span className="flex size-40 items-center justify-center rounded-full bg-(--color-navy-2)">
             <span className="flex size-28 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
               <Icon name="hand" className="size-14" strokeWidth={1.8} />

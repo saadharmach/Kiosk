@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
-import { pickLocalized, resolveLocale } from "../common/locale.js";
+import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
 import { readTableRanges } from "../common/table-ranges.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
@@ -73,6 +73,9 @@ export class CatalogService {
         currency: restaurant.currency,
         locale: restaurant.locale,
         logoPath: restaurant.logoPath,
+        logoUrl: this.storage.publicUrl(restaurant.logoPath),
+        heroImageUrl: this.storage.publicUrl(restaurant.heroImagePath),
+        tagline: readLocalizedMap(restaurant.tagline),
         primaryColor: restaurant.primaryColor,
       },
       ordering: {

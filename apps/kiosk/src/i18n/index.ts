@@ -1,6 +1,16 @@
 export const LOCALES = ["fr", "en", "ar"] as const;
 export type Locale = (typeof LOCALES)[number];
 
+/** A { fr, en, ar } value in the customer's language, falling back to any language that has text. */
+export function localized(map: Partial<Record<Locale, string>> | undefined, locale: Locale): string | null {
+  if (!map) return null;
+  for (const l of [locale, ...LOCALES.filter((x) => x !== locale)]) {
+    const v = map[l];
+    if (v && v.trim()) return v;
+  }
+  return null;
+}
+
 export const dirOf = (l: Locale): "ltr" | "rtl" => (l === "ar" ? "rtl" : "ltr");
 export const isLocale = (v: string): v is Locale => (LOCALES as readonly string[]).includes(v);
 

@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { OrderStatusModule } from "../orders/order-status.module.js";
 import { OrderSubmitModule } from "../orders/order-submit.module.js";
+import { BrandingController } from "../restaurant/branding.controller.js";
+import { BrandingService } from "../restaurant/branding.service.js";
 import { CatalogAdminController } from "../restaurant/catalog-admin.controller.js";
 import { CatalogAdminService } from "../restaurant/catalog-admin.service.js";
 import { RestaurantController } from "../restaurant/restaurant.controller.js";
@@ -22,6 +24,7 @@ import { StorageService } from "../common/storage.service.js";
     RestaurantController,
     RestaurantOrdersController,
     CatalogAdminController,
+    BrandingController,
     SettingsController,
   ],
   providers: [
@@ -30,6 +33,7 @@ import { StorageService } from "../common/storage.service.js";
     TenantGuard,
     RestaurantOrdersService,
     CatalogAdminService,
+    BrandingService,
     SettingsService,
     StorageService,
   ],

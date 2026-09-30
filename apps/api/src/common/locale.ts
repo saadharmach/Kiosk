@@ -24,3 +24,15 @@ export function pickLocalized(value: unknown, locale: Locale, fallback: string |
   }
   return fallback;
 }
+
+/** A stored { fr, en, ar } value reduced to the languages that actually have text. */
+export function readLocalizedMap(value: unknown): Partial<Record<Locale, string>> {
+  const out: Partial<Record<Locale, string>> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  const map = value as Record<string, unknown>;
+  for (const l of LOCALES) {
+    const v = map[l];
+    if (typeof v === "string" && v.trim()) out[l] = v.trim();
+  }
+  return out;
+}

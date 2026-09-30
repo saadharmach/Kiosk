@@ -74,6 +74,11 @@ model Restaurant {
   logoPath     String?
   primaryColor String?          @db.VarChar(9)
 
+  /// Welcome-screen hero photo: a path in Supabase Storage, like logoPath.
+  heroImagePath String?
+  /// { fr, en, ar } line under the restaurant name on the welcome screen.
+  tagline       Json?
+
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   archivedAt   DateTime?

@@ -39,7 +39,7 @@ export class StorageService {
     return `${this.base}/storage/v1/object/public/${this.bucket}/${path}`;
   }
 
-  async signUpload(params: { restaurantId: string; kind: "products" | "categories"; ownerId: string; contentType: string }) {
+  async signUpload(params: { restaurantId: string; kind: "products" | "categories" | "branding"; ownerId: string; contentType: string }) {
     const ext = ALLOWED[params.contentType];
     if (!ext) {
       throw new BadRequestException(
@@ -71,6 +71,14 @@ export class StorageService {
       publicUrl: this.publicUrl(path),
       expiresInSec: 300,
     };
+  }
+
+  /** Size in bytes of a stored object, or null if it is missing. A HEAD on the public URL. */
+  async objectSize(path: string): Promise<number | null> {
+    const res = await fetch(this.publicUrl(path)!, { method: "HEAD" }).catch(() => null);
+    if (!res || !res.ok) return null;
+    const n = Number(res.headers.get("content-length"));
+    return Number.isFinite(n) ? n : null;
   }
 
   /** Best effort: a failed delete leaves an orphan file, never a broken record. */
