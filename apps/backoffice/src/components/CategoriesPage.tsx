@@ -86,17 +86,9 @@ export default function CategoriesPage({ slug }: { slug: string }) {
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h2 className="mb-1 text-lg font-medium">Groups</h2>
-        <p className="mb-3 text-sm text-(--color-ink-muted)">The top row of tabs on the kiosk.</p>
-        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
-          {data.groups.map((g) => <Row key={g.untillId} slug={slug} row={g} onSaved={load} />)}
-        </ul>
-      </section>
-
-      <section>
         <h2 className="mb-1 text-lg font-medium">Departments</h2>
         <p className="mb-3 text-sm text-(--color-ink-muted)">
-          The second row, inside the selected group. Which group a department belongs to is set in unTill and cannot be changed here.
+          The categories listed on the left of the kiosk menu. Switch one off to hide it and all its products.
         </p>
         <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
           {data.departments.map((d) => <Row key={d.untillId} slug={slug} row={d} onSaved={load} />)}

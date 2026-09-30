@@ -292,13 +292,16 @@ export class CatalogService {
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
     const usedCategories = new Set(products.map((p) => p.categoryId));
+    const shownCategories = categories.filter((c) => usedCategories.has(c.id));
+    // A hidden department takes its products with it, so none are sent that nobody can reach.
+    const shownProducts = products.filter((p) => shownCategories.some((c) => c.id === p.categoryId));
 
     return {
       currency: restaurant.currency,
       salesArea: { id: areaId.toString(), name: salesArea.name, priceLevelId: priceLevelId.toString() },
-      categories: categories.filter((c) => usedCategories.has(c.id)),
-      products,
-      counts: { categories: categories.length, products: products.length },
+      categories: shownCategories,
+      products: shownProducts,
+      counts: { categories: shownCategories.length, products: shownProducts.length },
     };
   }
 }
