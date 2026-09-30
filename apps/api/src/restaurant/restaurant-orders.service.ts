@@ -150,6 +150,19 @@ export class RestaurantOrdersService {
   }
 
   async cancel(restaurantId: string, orderId: string, actorId: string | null, reason?: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, restaurantId },
+      select: { status: true, reference: true },
+    });
+    if (!order) throw new NotFoundException("Order not found");
+    // Cancelling here does not reach unTill, so a SENT/CONFIRMED order would still be made.
+    if (order.status !== "PENDING" && order.status !== "FAILED") {
+      throw new BadRequestException(
+        order.status === "SENT" || order.status === "CONFIRMED"
+          ? `${order.reference} is ${order.status}: it is already in unTill. Cancel it in unTill, otherwise the kitchen will still make it.`
+          : `Only a PENDING or FAILED order can be cancelled. ${order.reference} is ${order.status}.`,
+      );
+    }
     return this.status.transition({
       restaurantId,
       orderId,
