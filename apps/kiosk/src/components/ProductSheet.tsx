@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { STRINGS, money, type Locale } from "@/i18n";
-import type { CatalogProduct } from "@/lib/api";
+import type { CatalogOptionGroup, CatalogProduct } from "@/lib/api";
 import { useCart } from "@/state/cart";
+
+/** How many items a group needs. Only an explicit count allows more than one pick. */
+const minPicks = (g: CatalogOptionGroup) => g.requiredChoices ?? (g.isFree ? 0 : 1);
+const maxPicks = (g: CatalogOptionGroup) => g.requiredChoices ?? 1;
 
 export default function ProductSheet({
   product, currency, locale, onClose,
@@ -17,10 +21,41 @@ export default function ProductSheet({
   const cart = useCart();
   const [sizeId, setSizeId] = useState<string | null>(product.sizes[0]?.sizeItemId ?? null);
   const [qty, setQty] = useState(1);
+  // groupId -> chosen option article ids. A required group with one item is
+  // pre-chosen, so it never blocks the Add button.
+  const [picked, setPicked] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(
+      product.optionGroups
+        .filter((g) => minPicks(g) > 0 && g.items.length === 1)
+        .map((g) => [g.id, [g.items[0].articleId]]),
+    ),
+  );
 
   const size = product.sizes.find((s) => s.sizeItemId === sizeId);
-  const unitPrice = size ? size.price : (product.price ?? 0);
-  const canAdd = unitPrice > 0 && (product.sizes.length === 0 || Boolean(size));
+  const chosen = product.optionGroups.flatMap((g) =>
+    g.items
+      .filter((i) => (picked[g.id] ?? []).includes(i.articleId))
+      .map((i) => ({ optionGroupId: g.id, articleId: i.articleId, name: i.name, price: i.price })),
+  );
+  const unitPrice =
+    (size ? size.price : (product.price ?? 0)) + chosen.reduce((sum, o) => sum + o.price, 0);
+  const groupsDone = product.optionGroups.every((g) => {
+    const n = (picked[g.id] ?? []).length;
+    return g.requiredChoices !== null ? n === g.requiredChoices : n >= minPicks(g);
+  });
+  const canAdd =
+    unitPrice > 0 && (product.sizes.length === 0 || Boolean(size)) && groupsDone;
+
+  const toggle = (g: CatalogOptionGroup, articleId: string) =>
+    setPicked((prev) => {
+      const cur = prev[g.id] ?? [];
+      if (cur.includes(articleId)) {
+        // A required single pick is replaced, never cleared.
+        return minPicks(g) > 0 && maxPicks(g) === 1 ? prev : { ...prev, [g.id]: cur.filter((x) => x !== articleId) };
+      }
+      if (maxPicks(g) === 1) return { ...prev, [g.id]: [articleId] };
+      return cur.length >= maxPicks(g) ? prev : { ...prev, [g.id]: [...cur, articleId] };
+    });
 
   const addToCart = () => {
     cart.add(
@@ -29,7 +64,7 @@ export default function ProductSheet({
         name: product.name,
         sizeItemId: size?.sizeItemId,
         sizeName: size?.name,
-        options: [],
+        options: chosen,
         unitPrice,
       },
       qty,
@@ -72,6 +107,35 @@ export default function ProductSheet({
             ))}
           </div>
         ) : null}
+
+        {product.optionGroups.map((g) => (
+          <div key={g.id} className="flex flex-col gap-3">
+            <div className="flex items-baseline justify-between gap-4">
+              <p className="text-2xl font-medium">{g.name}</p>
+              <p className="text-xl text-(--color-ink-muted)">
+                {g.requiredChoices !== null
+                  ? t.chooseCount.replace("{n}", String(g.requiredChoices))
+                  : minPicks(g) > 0 ? t.required : t.optional}
+              </p>
+            </div>
+            {g.items.map((i) => {
+              const on = (picked[g.id] ?? []).includes(i.articleId);
+              return (
+                <button key={i.articleId} onClick={() => toggle(g, i.articleId)} aria-pressed={on}
+                  className={`flex min-h-20 items-center justify-between rounded-(--radius-card) border px-6 text-2xl ${
+                    on
+                      ? "border-transparent bg-(--color-brand) text-(--color-brand-ink)"
+                      : "border-(--color-line) bg-(--color-surface-2)"
+                  }`}>
+                  <span>{i.name}</span>
+                  {i.price > 0 ? (
+                    <span className="tabular-nums">+{money(i.price, currency, locale)}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ))}
 
         <div className="flex items-center justify-between">
           <span className="text-2xl">{t.quantity}</span>

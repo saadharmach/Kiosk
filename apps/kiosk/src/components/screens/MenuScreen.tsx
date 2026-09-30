@@ -66,8 +66,8 @@ export default function MenuScreen({
   // half don't reads as broken rather than sparse.
   const showImageSlot = showImages && products.some((p) => p.imageUrl);
   const open = (p: CatalogProduct) => {
-    // Allergens live on the sheet, so a product that has any must open it.
-    if (p.sizes.length > 0 || p.allergens.length > 0) return setSheet(p);
+    // Sizes, option groups and allergens all live on the sheet.
+    if (p.sizes.length > 0 || p.optionGroups.length > 0 || p.allergens.length > 0) return setSheet(p);
     cart.add({ articleId: p.id, name: p.name, options: [], unitPrice: p.price ?? 0 });
   };
 

@@ -100,6 +100,9 @@ export default function CartScreen({
                   <div>
                     <p className="text-2xl font-medium">{l.name}</p>
                     {l.sizeName ? <p className="text-xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
+                    {l.options.length > 0 ? (
+                      <p className="text-xl text-(--color-ink-muted)">{l.options.map((o) => o.name).join(", ")}</p>
+                    ) : null}
                   </div>
                   <p className="text-2xl tabular-nums">{money(l.unitPrice * l.quantity, currency, locale)}</p>
                 </div>

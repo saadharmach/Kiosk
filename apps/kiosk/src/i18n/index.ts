@@ -33,6 +33,7 @@ type Dict = {
   back: string; confirm: string; clear: string; close: string;
   table: string; chooseSize: string; add: string; viewOrder: string;
   empty: string; quantity: string; allergens: string;
+  required: string; optional: string; chooseCount: string;
   yourOrder: string; remove: string; confirmOrder: string; sending: string;
   orderNumber: string; payAtCashier: string; priceChanged: string;
   newOrder: string; thanks: string,other: string,standNumber: string;
@@ -48,7 +49,8 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "Numéro de table", tableHint: "Saisissez le numéro inscrit sur votre table",
     tableInvalid: "Ce numéro de table n'existe pas",
     back: "Retour", confirm: "Confirmer", clear: "Effacer", close: "Fermer",
-    table: "Table", chooseSize: "Choisissez une taille", allergens: "Allergènes", add: "Ajouter",
+    table: "Table", chooseSize: "Choisissez une taille", allergens: "Allergènes",
+    required: "Obligatoire", optional: "Facultatif", chooseCount: "Choisissez {n}", add: "Ajouter",
     viewOrder: "Voir ma commande", empty: "Votre commande est vide", quantity: "Quantité",    yourOrder: "Votre commande", remove: "Retirer", confirmOrder: "Confirmer la commande",
     sending: "Envoi en cours…", orderNumber: "Votre numéro", 
     payAtCashier: "Présentez ce numéro en caisse pour payer",
@@ -65,7 +67,8 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "Table number", tableHint: "Enter the number shown on your table",
     tableInvalid: "That table number does not exist",
     back: "Back", confirm: "Confirm", clear: "Clear", close: "Close",
-    table: "Table", chooseSize: "Choose a size", allergens: "Allergens", add: "Add",
+    table: "Table", chooseSize: "Choose a size", allergens: "Allergens",
+    required: "Required", optional: "Optional", chooseCount: "Choose {n}", add: "Add",
     viewOrder: "View my order", empty: "Your order is empty", quantity: "Quantity",    yourOrder: "Your order", remove: "Remove", confirmOrder: "Confirm order",
     sending: "Sending…", orderNumber: "Your number",
     payAtCashier: "Show this number at the cashier to pay",
@@ -81,7 +84,8 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "رقم الطاولة", tableHint: "أدخل الرقم الموجود على طاولتك",
     tableInvalid: "رقم الطاولة غير موجود",
     back: "رجوع", confirm: "تأكيد", clear: "مسح", close: "إغلاق",
-    table: "طاولة", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية", add: "إضافة",
+    table: "طاولة", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية",
+    required: "إلزامي", optional: "اختياري", chooseCount: "اختر {n}", add: "إضافة",
     viewOrder: "عرض طلبي", empty: "طلبك فارغ", quantity: "الكمية",    yourOrder: "طلبك", remove: "إزالة", confirmOrder: "تأكيد الطلب",
     sending: "جارٍ الإرسال…", orderNumber: "رقمك",
     payAtCashier: "أظهر هذا الرقم عند الصندوق للدفع",
