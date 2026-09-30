@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { reprintOrder } from "@/lib/printer";
 import {
   ORDER_STATUSES, cancelOrder, getOrder, listOrders, money, retryOrder,
   submitOrder, verifyOrder, when,
@@ -173,6 +174,7 @@ function OrderDetailView({
   const [o, setO] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [printNote, setPrintNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -196,6 +198,14 @@ function OrderDetailView({
     } finally {
       setBusy(false);
     }
+  };
+
+  const printTicket = () => {
+    setPrintNote(null);
+    return act(async () => {
+      await reprintOrder(slug, id);
+      setPrintNote("Ticket queued. It prints as soon as the print helper picks it up.");
+    });
   };
 
   const cancel = () => {
@@ -229,6 +239,10 @@ function OrderDetailView({
           <p className={`text-sm ${statusClass(o.status)}`}>{o.status}</p>
         </div>
         <div className="flex gap-2">
+          <button type="button" disabled={busy} onClick={printTicket}
+            className="h-10 rounded-lg border border-(--color-line) px-4 disabled:opacity-50">
+            Print ticket
+          </button>
           {canSend ? (
             <button type="button" disabled={busy} onClick={() => act(() => submitOrder(slug, id))}
               className="h-10 rounded-lg bg-(--color-brand) px-4 font-medium text-(--color-brand-ink) disabled:opacity-50">
@@ -257,6 +271,7 @@ function OrderDetailView({
       </div>
 
       {error ? <p className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
+      {printNote ? <p className="mb-4 text-sm text-green-700" role="status">{printNote}</p> : null}
 
       <div className={`mb-6 ${card}`}>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
