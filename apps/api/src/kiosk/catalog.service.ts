@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
 
@@ -110,6 +110,10 @@ export class CatalogService {
    * with the local presentation layer merged on top.
    */
   async catalog(slug: string, salesAreaIdParam?: string, localeParam?: string) {
+    // Sales area ids are unTill numbers; reject anything else before BigInt() throws a 500.
+    if (salesAreaIdParam && !/^\d{1,20}$/.test(salesAreaIdParam)) {
+      throw new BadRequestException("salesAreaId must be a number");
+    }
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       select: {

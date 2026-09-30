@@ -28,13 +28,7 @@ export class OrdersService {
     });
     if (existing) return this.present(existing);
 
-    // ---- order type must be enabled
-    const s = restaurant.settings;
-    const enabled =
-      (dto.orderType === "EAT_IN" && (s?.eatInEnabled ?? true)) ||
-      (dto.orderType === "TAKE_AWAY" && (s?.takeAwayEnabled ?? false)) ||
-      (dto.orderType === "DELIVERY" && (s?.deliveryEnabled ?? false));
-    if (!enabled) throw new BadRequestException(`${dto.orderType} is not enabled for this restaurant`);
+    this.assertOrderTypeEnabled(restaurant.settings, dto.orderType);
 
     const priced = await this.pricing.price(restaurantId, restaurant.currency, dto);
 
@@ -111,11 +105,24 @@ export class OrdersService {
 
   preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
     return this.prisma.restaurant
-      .findUnique({ where: { slug }, select: { id: true, currency: true, status: true } })
+      .findUnique({ where: { slug }, select: { id: true, currency: true, status: true, settings: true } })
       .then((r) => {
         if (!r || r.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
+        // Same rule as create(): no point quoting a price for an order that would be refused.
+        this.assertOrderTypeEnabled(r.settings, dto.orderType);
         return this.pricing.price(r.id, r.currency, dto as never);
       });
+  }
+
+  private assertOrderTypeEnabled(
+    s: { eatInEnabled: boolean; takeAwayEnabled: boolean; deliveryEnabled: boolean } | null,
+    orderType: string,
+  ) {
+    const enabled =
+      (orderType === "EAT_IN" && (s?.eatInEnabled ?? true)) ||
+      (orderType === "TAKE_AWAY" && (s?.takeAwayEnabled ?? false)) ||
+      (orderType === "DELIVERY" && (s?.deliveryEnabled ?? false));
+    if (!enabled) throw new BadRequestException(`${orderType} is not enabled for this restaurant`);
   }
 
   /** Flat TPAPI-shaped lines: product first, its modifiers after, pointing back at it. */
