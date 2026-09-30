@@ -39,6 +39,8 @@ type Dict = {
   newOrder: string; thanks: string,other: string,standNumber: string;
   eatInSub: string; takeAwaySub: string; deliverySub: string; helpNotice: string;
   itemsCount: string; addMore: string; seeMenu: string; resetNote: string; total: string;
+  connectionTitle: string; connectionText: string; connectionInline: string; startOver: string;
+  idleTitle: string; idleText: string; keepOrdering: string; discard: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -63,6 +65,11 @@ export const STRINGS: Record<Locale, Dict> = {
     helpNotice: "Besoin d’aide ? Demandez à un membre de notre équipe.",
     itemsCount: "{n} articles", addMore: "Ajouter des articles", seeMenu: "Voir le menu",
     resetNote: "Cet écran se réinitialise dans {s} secondes", total: "Total",
+    connectionTitle: "Connexion perdue", startOver: "Recommencer",
+    connectionText: "Impossible de joindre le restaurant pour le moment. Votre commande est conservée, réessayez.",
+    connectionInline: "Connexion perdue. Votre commande est conservée : touchez à nouveau pour réessayer.",
+    idleTitle: "Êtes-vous toujours là ?", keepOrdering: "Continuer ma commande", discard: "Abandonner et recommencer",
+    idleText: "Votre session va se terminer. Touchez ci-dessous pour garder votre commande.",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -84,6 +91,11 @@ export const STRINGS: Record<Locale, Dict> = {
     helpNotice: "Need help? Ask a member of our staff.",
     itemsCount: "{n} items", addMore: "Add more items", seeMenu: "See the menu",
     resetNote: "This screen resets in {s} seconds", total: "Total",
+    connectionTitle: "Connection lost", startOver: "Start over",
+    connectionText: "We can't reach the restaurant right now. Your order is kept, so you can try again.",
+    connectionInline: "Connection lost. Your order is kept: tap again to retry.",
+    idleTitle: "Are you still there?", keepOrdering: "Continue ordering", discard: "Discard and start over",
+    idleText: "Your session is about to end. Tap below to keep your order.",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -105,6 +117,11 @@ export const STRINGS: Record<Locale, Dict> = {
     helpNotice: "تحتاج مساعدة؟ اسأل أحد موظفينا.",
     itemsCount: "{n} منتجات", addMore: "إضافة منتجات", seeMenu: "عرض القائمة",
     resetNote: "ستُعاد هذه الشاشة خلال {s} ثانية", total: "المجموع",
+    connectionTitle: "انقطع الاتصال", startOver: "البدء من جديد",
+    connectionText: "تعذّر الوصول إلى المطعم حاليًا. طلبك محفوظ ويمكنك المحاولة مجددًا.",
+    connectionInline: "انقطع الاتصال. طلبك محفوظ: اضغط مرة أخرى للمحاولة.",
+    idleTitle: "هل ما زلت هنا؟", keepOrdering: "متابعة الطلب", discard: "إلغاء والبدء من جديد",
+    idleText: "ستنتهي جلستك قريبًا. اضغط أدناه للاحتفاظ بطلبك.",
   },
 };
 

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
-import { api, getCatalog, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { api, getCatalog, isConnectionError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
 import { CartProvider, useCart } from "@/state/cart";
-import { Icon, LogoTile } from "./icons";
+import IdleWarning from "./IdleWarning";
+import { LogoTile } from "./icons";
+import StatusScreen from "./screens/StatusScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
 import OrderTypeScreen from "./screens/OrderTypeScreen";
 import TableScreen from "./screens/TableScreen";
@@ -29,7 +31,9 @@ function KioskFlow({ slug }: { slug: string }) {
   const cart = useCart();
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // `connection` marks a request that never got an answer, as opposed to the server refusing it.
+  const [error, setError] = useState<{ message: string; connection: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [locale, setLocale] = useState<Locale>("fr");
   const [screen, setScreen] = useState<Screen>("WELCOME");
   const [choice, setChoice] = useState<OrderTypeOption | null>(null);
@@ -58,10 +62,10 @@ function KioskFlow({ slug }: { slug: string }) {
         setBoot(d);
         if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
       },
-      (e) => !cancelled && setError(e.message),
+      (e) => !cancelled && setError({ message: e.message, connection: isConnectionError(e) }),
     );
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [slug, attempt]);
 
   // Load the menu as soon as the order type resolves the sales area, so the
   // customer never waits on a spinner after choosing their table.
@@ -70,10 +74,10 @@ function KioskFlow({ slug }: { slug: string }) {
     let cancelled = false;
     getCatalog(slug, choice.salesAreaId, locale).then(
       (c) => !cancelled && setCatalog(c),
-      (e) => !cancelled && setError(e.message),
+      (e) => !cancelled && setError({ message: e.message, connection: isConnectionError(e) }),
     );
     return () => { cancelled = true; };
-  }, [slug, choice, locale]);
+  }, [slug, choice, locale, attempt]);
 
   const reset = useCallback(() => {
     setScreen("WELCOME");
@@ -83,47 +87,75 @@ function KioskFlow({ slug }: { slug: string }) {
     if (boot && isLocale(boot.restaurant.locale)) setLocale(boot.restaurant.locale);
   }, [boot, cart]);
 
-  const timer = useRef<number | null>(null);
+  // Idle handling: after `idleTimeoutSec` without a touch the kiosk resets itself for
+  // the next customer. The last seconds are a visible warning, so nobody loses a
+  // half-built order without a chance to keep it.
+  const [idleLeft, setIdleLeft] = useState<number | null>(null);
+  const idleTotal = boot ? Math.max(15, boot.ordering.idleTimeoutSec) : 90;
+  const warnSec = Math.min(30, Math.floor(idleTotal / 2));
+  const keepAlive = useRef<() => void>(() => undefined);
+
   useEffect(() => {
-    if (!boot) return;
-    const ms = Math.max(15, boot.ordering.idleTimeoutSec) * 1000;
-    const bump = () => {
-      if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => { if (screen !== "WELCOME") reset(); }, ms);
+    // Nothing to protect on the welcome screen, and the ticket resets itself.
+    if (!boot || screen === "WELCOME" || screen === "TICKET") return;
+    let warnTimer: number | undefined;
+    let tick: number | undefined;
+    let warning = false;
+
+    const stop = () => { window.clearTimeout(warnTimer); window.clearInterval(tick); };
+    const arm = () => {
+      stop();
+      warning = false;
+      setIdleLeft(null);
+      warnTimer = window.setTimeout(() => {
+        warning = true;
+        let left = warnSec;
+        setIdleLeft(left);
+        tick = window.setInterval(() => {
+          left -= 1;
+          if (left <= 0) { stop(); setIdleLeft(null); reset(); } else setIdleLeft(left);
+        }, 1000);
+      }, (idleTotal - warnSec) * 1000);
     };
-    bump();
+    // While the warning is up, only its own buttons count as an answer.
+    const onActivity = () => { if (!warning) arm(); };
+
+    keepAlive.current = arm;
+    arm();
     const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "wheel"];
-    events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
     return () => {
-      events.forEach((e) => window.removeEventListener(e, bump));
-      if (timer.current) window.clearTimeout(timer.current);
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      stop();
+      setIdleLeft(null);
     };
-  }, [boot, screen, reset]);
+  }, [boot, screen, reset, idleTotal, warnSec]);
 
   const t = STRINGS[locale];
 
+  const retry = () => { setError(null); setAttempt((n) => n + 1); };
+  const startOver = () => { setError(null); reset(); setAttempt((n) => n + 1); };
+  const header = boot ? { name: boot.restaurant.name, locale, onLocale: setLocale } : undefined;
+
+  if (error?.connection) {
+    return (
+      <StatusScreen header={header} icon="warning" title={t.connectionTitle} text={t.connectionText}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }}
+        secondary={{ label: t.startOver, onClick: startOver }} />
+    );
+  }
   if (error || (boot && !boot.catalogReady)) {
     return (
-      <main role="alert" className="flex min-h-dvh flex-col items-center justify-center gap-8 px-16 text-center">
-        <span className="flex size-60 items-center justify-center rounded-full bg-(--color-brand-soft) text-(--color-brand-deep)">
-          <Icon name="warning" className="size-28" strokeWidth={1.5} />
-        </span>
-        <h1 className="font-display text-7xl leading-tight font-bold">{t.errorTitle}</h1>
-        <p className="text-3xl leading-snug text-(--color-ink-muted)">{error ?? t.menuUnavailable}</p>
-        <button onClick={() => location.reload()}
-          className="mt-6 flex min-h-30 items-center gap-4 rounded-full bg-(--color-brand) px-16 font-display text-4xl font-bold text-(--color-brand-ink)">
-          <Icon name="refresh" className="size-9" strokeWidth={2.2} />
-          {t.retry}
-        </button>
-      </main>
+      <StatusScreen header={header} icon="warning" title={t.errorTitle} text={error?.message ?? t.menuUnavailable}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} />
     );
   }
 
   if (!boot) {
-    return (
-      <LoadingScreen label={t.loading} />
-    );
+    return <LoadingScreen label={t.loading} />;
   }
+
+  const renderScreen = () => {
 
   const usable = boot.orderTypes.filter((o) => o.configured);
   const pick = (o: OrderTypeOption) => { setChoice(o); setScreen(o.askTable ? "TABLE" : "MENU"); };
@@ -192,6 +224,17 @@ function KioskFlow({ slug }: { slug: string }) {
 
   return (
     <LoadingScreen label={t.loading} />
+  );
+  };
+
+  return (
+    <>
+      {renderScreen()}
+      {idleLeft !== null ? (
+        <IdleWarning locale={locale} secondsLeft={idleLeft} totalSeconds={warnSec}
+          onContinue={() => keepAlive.current()} onDiscard={reset} />
+      ) : null}
+    </>
   );
 }
 

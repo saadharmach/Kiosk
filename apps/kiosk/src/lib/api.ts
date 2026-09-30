@@ -5,13 +5,26 @@ export class ApiError extends Error {
   }
 }
 
+/** The request never reached the API, or an intermediary answered instead of it. */
+export const isConnectionError = (e: unknown): boolean => e instanceof ApiError && e.code === "NETWORK";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError("The server cannot be reached", 0, "NETWORK");
+  }
   const body = await res.json().catch(() => null);
+  // Our API always answers with JSON, even for errors. A non-JSON 5xx is a proxy or
+  // gateway speaking, which means the API itself is down.
+  if (!res.ok && res.status >= 500 && body === null) {
+    throw new ApiError("The server cannot be reached", res.status, "NETWORK");
+  }
   if (!res.ok) {
     const message =
       (Array.isArray(body?.message) ? body.message.join(", ") : body?.message) ??

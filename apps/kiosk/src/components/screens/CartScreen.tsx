@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { STRINGS, money, type Locale } from "@/i18n";
-import { ApiError, createOrder, priceCart, type PlacedOrder, type WireCartLine } from "@/lib/api";
+import { ApiError, createOrder, isConnectionError, priceCart, type PlacedOrder, type WireCartLine } from "@/lib/api";
 import { useCart } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
@@ -58,7 +58,7 @@ export default function CartScreen({
     setError(null);
     priceCart(slug, { orderType, salesAreaId, lines: wire() }).then(
       (p) => !cancelled && setServerTotal(p.total),
-      (e) => !cancelled && setError(e.message),
+      (e) => !cancelled && setError(isConnectionError(e) ? t.connectionInline : e.message),
     );
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +80,9 @@ export default function CartScreen({
       onPlaced(order);
     } catch (e) {
       const err = e as ApiError;
-      setError(err.code === "PRICES_CHANGED" ? t.priceChanged : err.message);
+      setError(
+        err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message,
+      );
       // A price change invalidates what the customer agreed to, so re-price.
       if (err.code === "PRICES_CHANGED") {
         priceCart(slug, { orderType, salesAreaId, lines: wire() })
