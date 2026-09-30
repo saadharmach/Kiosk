@@ -1,29 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
+import { pickLocalized, resolveLocale } from "../common/locale.js";
 import { readTableRanges } from "../common/table-ranges.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
   v === null || v === undefined ? null : v.toNumber();
-export type Locale = "fr" | "en" | "ar";
-const LOCALES: Locale[] = ["fr", "en", "ar"];
+const pick = pickLocalized;
 
-/**
- * Resolves one language out of a { fr, en, ar } column. Falls through the other
- * languages before the fallback, so a half-translated menu still renders real
- * text instead of blanks — a missing Arabic name shows French, not nothing.
- */
-function pick(value: unknown, locale: Locale, fallback: string | null): string | null {
-  if (value == null) return fallback;
-  if (typeof value === "string") return value || fallback;
-  if (typeof value !== "object" || Array.isArray(value)) return fallback;
-  const map = value as Record<string, unknown>;
-  for (const l of [locale, ...LOCALES.filter((x) => x !== locale)]) {
-    const v = map[l];
-    if (typeof v === "string" && v.trim()) return v;
-  }
-  return fallback;
-}
 @Injectable()
 export class CatalogService {
   constructor(
@@ -135,11 +119,7 @@ export class CatalogService {
     const restaurantId = restaurant.id;
     const showAllergens = restaurant.settings?.showAllergens ?? false;
         // The server resolves the language. The browser never receives three of everything.
-    const locale = (LOCALES.includes(localeParam as Locale)
-      ? (localeParam as Locale)
-      : LOCALES.includes(restaurant.locale as Locale)
-        ? (restaurant.locale as Locale)
-        : "fr") as Locale;
+    const locale = resolveLocale(localeParam, restaurant.locale);
     const salesArea = salesAreaIdParam
       ? await this.prisma.tpapiSalesArea.findFirst({
           where: { restaurantId, untillId: BigInt(salesAreaIdParam) },

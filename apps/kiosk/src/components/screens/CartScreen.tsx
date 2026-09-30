@@ -56,7 +56,7 @@ export default function CartScreen({
     if (cart.lines.length === 0) { setServerTotal(null); return; }
     let cancelled = false;
     setError(null);
-    priceCart(slug, { orderType, salesAreaId, lines: wire() }).then(
+    priceCart(slug, { orderType, salesAreaId, locale, lines: wire() }).then(
       (p) => !cancelled && setServerTotal(p.total),
       (e) => !cancelled && setError(isConnectionError(e) ? t.connectionInline : e.message),
     );
@@ -73,6 +73,7 @@ export default function CartScreen({
         clientOrderId: clientOrderId.current,
         orderType,
         salesAreaId,
+        locale,
         ...(tableNumber !== null ? { tableNumber } : {}),
         displayedTotalCents: Math.round(serverTotal * 100),
         lines: wire(),
@@ -85,7 +86,7 @@ export default function CartScreen({
       );
       // A price change invalidates what the customer agreed to, so re-price.
       if (err.code === "PRICES_CHANGED") {
-        priceCart(slug, { orderType, salesAreaId, lines: wire() })
+        priceCart(slug, { orderType, salesAreaId, locale, lines: wire() })
           .then((p) => setServerTotal(p.total))
           .catch(() => undefined);
       }

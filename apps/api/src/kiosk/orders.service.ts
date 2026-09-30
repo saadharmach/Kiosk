@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
+import { resolveLocale } from "../common/locale.js";
 import { readTableRanges, tableInRanges } from "../common/table-ranges.js";
 
 @Injectable()
@@ -17,7 +18,7 @@ export class OrdersService {
   async create(slug: string, dto: CreateOrderDto) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, currency: true, status: true, settings: true },
+      select: { id: true, currency: true, status: true, settings: true, locale: true },
     });
     if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
     const restaurantId = restaurant.id;
@@ -31,7 +32,10 @@ export class OrdersService {
 
     this.assertOrderTypeEnabled(restaurant.settings, dto.orderType);
 
-    const priced = await this.pricing.price(restaurantId, restaurant.currency, dto);
+    const priced = await this.pricing.price(restaurantId, restaurant.currency, {
+      ...dto,
+      locale: resolveLocale(dto.locale, restaurant.locale),
+    });
 
     // ---- the price the customer saw must match what we just computed
     if (dto.displayedTotalCents !== undefined) {
@@ -106,12 +110,15 @@ export class OrdersService {
 
   preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
     return this.prisma.restaurant
-      .findUnique({ where: { slug }, select: { id: true, currency: true, status: true, settings: true } })
+      .findUnique({ where: { slug }, select: { id: true, currency: true, status: true, settings: true, locale: true } })
       .then((r) => {
         if (!r || r.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
         // Same rule as create(): no point quoting a price for an order that would be refused.
         this.assertOrderTypeEnabled(r.settings, dto.orderType);
-        return this.pricing.price(r.id, r.currency, dto as never);
+        return this.pricing.price(r.id, r.currency, {
+          ...(dto as never as Parameters<PricingService["price"]>[2]),
+          locale: resolveLocale(dto.locale, r.locale),
+        });
       });
   }
 

@@ -1,26 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { pickLocalized, resolveLocale, type Locale } from "../common/locale.js";
 import type { CartLineDto, PriceCartDto } from "./dto/cart.dto.js";
 
 const dec = (v: { toNumber(): number }): number => v.toNumber();
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-/**
- * Presentation names are { fr, en, ar } JSON; the order record stores one
- * string. Stopgap until the kiosk sends its locale with the order — then this
- * resolves in the language the customer actually saw.
- */
-const textOf = (v: unknown, fallback: string): string => {
-  if (typeof v === "string") return v || fallback;
-  if (v && typeof v === "object" && !Array.isArray(v)) {
-    const m = v as Record<string, unknown>;
-    for (const l of ["fr", "en", "ar"]) {
-      const s = m[l];
-      if (typeof s === "string" && s.trim()) return s;
-    }
-  }
-  return fallback;
-};
-
 export type PricedModifier = {
   kind: "SIZE" | "OPTION";
   articleId: string | null;
@@ -70,6 +54,8 @@ export class PricingService {
       : await this.prisma.tpapiSalesArea.findFirst({ where: { restaurantId }, orderBy: { number: "asc" } });
     if (!salesArea) throw new NotFoundException("Sales area not found");
 
+    // The names on the order are the ones the customer read, in their language.
+    const locale: Locale = resolveLocale(dto.locale);
     const areaId = salesArea.untillId;
     const priceLevelId = salesArea.priceLevelId ?? 0n;
     const wanted = [...new Set(dto.lines.map((l) => BigInt(l.articleId)))];
@@ -121,7 +107,7 @@ export class PricingService {
 
     const pricedLines: PricedLine[] = dto.lines.map((line) =>
       this.priceLine(line, {
-        areaId, articleById, priceById, presById, sizePriceBy, sizeName,
+        locale, areaId, articleById, priceById, presById, sizePriceBy, sizeName,
         optItemBy, groupName, linksOf, allArticleNames, sizeKey, optItemKey,
       }),
     );
@@ -227,7 +213,7 @@ export class PricingService {
     return {
       articleId: line.articleId,
       name: article.name,
-      displayName: textOf(pres?.displayName, article.name),
+      displayName: pickLocalized(pres?.displayName, ctx.locale, article.name) ?? article.name,
       quantity: line.quantity,
       basePrice,
       modifiers,

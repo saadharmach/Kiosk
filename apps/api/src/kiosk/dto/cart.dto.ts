@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import {
-  ArrayMaxSize, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID,
+  ArrayMaxSize, IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID,
   Matches, Max, MaxLength, Min, ValidateNested,
 } from "class-validator";
 
@@ -34,6 +34,10 @@ export class PriceCartDto {
 
   @IsOptional() @Matches(ID)
   salesAreaId?: string;
+
+  /** The language the customer was reading, so the order records the names they saw. */
+  @IsOptional() @IsIn(["fr", "en", "ar"])
+  locale?: "fr" | "en" | "ar";
 
   @IsArray() @ArrayMaxSize(60)
   @ValidateNested({ each: true }) @Type(() => CartLineDto)

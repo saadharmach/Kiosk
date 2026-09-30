@@ -179,7 +179,7 @@ export interface PlacedOrder {
 
 export const priceCart = (
   slug: string,
-  body: { orderType: string; salesAreaId: string; lines: WireCartLine[] },
+  body: { orderType: string; salesAreaId: string; locale?: string; lines: WireCartLine[] },
 ) => request<PricedCart>(`/kiosk/${slug}/cart/price`, { method: "POST", body: JSON.stringify(body) });
 
 export const createOrder = (
@@ -188,6 +188,8 @@ export const createOrder = (
     clientOrderId: string;
     orderType: string;
     salesAreaId: string;
+    /** The language the customer was reading; the order records the names in it. */
+    locale?: string;
     tableNumber?: number;
     displayedTotalCents?: number;
     lines: WireCartLine[];
