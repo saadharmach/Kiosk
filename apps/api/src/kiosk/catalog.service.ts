@@ -112,10 +112,17 @@ export class CatalogService {
   async catalog(slug: string, salesAreaIdParam?: string, localeParam?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, currency: true, status: true, locale: true },
+      select: {
+        id: true,
+        currency: true,
+        status: true,
+        locale: true,
+        settings: { select: { showAllergens: true } },
+      },
     });
     if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
     const restaurantId = restaurant.id;
+    const showAllergens = restaurant.settings?.showAllergens ?? false;
         // The server resolves the language. The browser never receives three of everything.
     const locale = (LOCALES.includes(localeParam as Locale)
       ? (localeParam as Locale)
@@ -132,7 +139,7 @@ export class CatalogService {
     const areaId = salesArea.untillId;
     const priceLevelId = salesArea.priceLevelId ?? 0n;
 
-    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres] =
+    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, allergenLinks, allergenRows] =
       await Promise.all([
         this.prisma.tpapiGroup.findMany({ where: { restaurantId } }),
         this.prisma.tpapiDepartment.findMany({
@@ -153,6 +160,19 @@ export class CatalogService {
         this.prisma.tpapiOptionItem.findMany({ where: { restaurantId, priceLevelId } }),
         this.prisma.productPresentation.findMany({ where: { restaurantId } }),
         this.prisma.categoryPresentation.findMany({ where: { restaurantId } }),
+        // Nothing leaves the database when the switch is off.
+        showAllergens
+          ? this.prisma.productAllergen.findMany({ where: { restaurantId } })
+          : Promise.resolve([]),
+        // Deliberately not filtered on isActive: an allergen already linked to a
+        // product must stay visible to the customer even if unTill later retires it.
+        showAllergens
+          ? this.prisma.tpapiAllergen.findMany({
+              where: { restaurantId },
+              orderBy: { number: "asc" },
+              select: { untillId: true, number: true, name: true },
+            })
+          : Promise.resolve([]),
       ]);
 
     // ---- indexes
@@ -167,6 +187,12 @@ export class CatalogService {
     const presOf = new Map(prodPres.map((p) => [p.articleId.toString(), p]));
     const catPresOf = new Map(catPres.map((c) => [`${c.scope}:${c.untillId.toString()}`, c]));
     const groupName = new Map(groups.map((g) => [g.untillId.toString(), g.name]));
+    const allergenById = new Map(allergenRows.map((a) => [a.untillId.toString(), a]));
+    const allergenIdsOf = new Map<string, string[]>();
+    for (const l of allergenLinks) {
+      const k = l.articleId.toString();
+      allergenIdsOf.set(k, [...(allergenIdsOf.get(k) ?? []), l.allergenId.toString()]);
+    }
     const optGroupById = new Map(optGroups.map((g) => [g.untillId.toString(), g]));
 
     const itemsOfGroup = new Map<string, typeof optItems>();
@@ -257,6 +283,11 @@ export class CatalogService {
           optionGroups,
           isMenu: a.isMenu,
           promo: a.promo,
+          allergens: (allergenIdsOf.get(key) ?? [])
+            .map((id) => allergenById.get(id))
+            .filter((x): x is NonNullable<typeof x> => x !== undefined)
+            .sort((x, y) => x.number - y.number)
+            .map((x) => ({ id: x.untillId.toString(), number: x.number, name: x.name })),
         };
       })
       .filter((p) => p.visible && p.pricing !== "UNPRICED" && p.categoryId !== null)
