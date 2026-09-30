@@ -3,14 +3,18 @@
 import { useState } from "react";
 import { STRINGS, type Locale } from "@/i18n";
 import { tableInRanges, type TableRange } from "@/lib/api";
+import KioskHeader from "../KioskHeader";
+import { Icon } from "../icons";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"] as const;
 
 export default function TableScreen({
-  locale, ranges, onConfirm, onBack,
+  locale, name, ranges, onLocale, onConfirm, onBack,
 }: {
   locale: Locale;
+  name: string;
   ranges: TableRange[];
+  onLocale: (l: Locale) => void;
   onConfirm: (n: number) => void;
   onBack: () => void;
 }) {
@@ -30,35 +34,49 @@ export default function TableScreen({
   };
 
   return (
-    <main className="flex min-h-dvh flex-col gap-6 p-10">
-      <h1 className="mt-8 text-center text-5xl font-semibold">{t.tableTitle}</h1>
-      <p className="text-center text-2xl text-(--color-ink-muted)">{t.tableHint}</p>
+    <main className="flex min-h-dvh flex-col">
+      <KioskHeader name={name} locale={locale} onLocale={onLocale} onBack={onBack} backLabel={t.back} />
 
-      <div className="my-4 flex min-h-28 items-center justify-center rounded-(--radius-card) bg-(--color-surface-2) text-7xl font-semibold tabular-nums">
-        {value || "—"}
-      </div>
+      <div className="flex flex-1 flex-col items-center px-12 pt-16 pb-12">
+        <h1 className="text-center font-display text-6xl leading-tight font-bold">{t.tableTitle}</h1>
+        <p className="mt-4 text-center text-3xl text-(--color-ink-muted)">{t.tableHint}</p>
 
-      <p className={`min-h-8 text-center text-2xl ${showError ? "text-(--color-danger)" : "text-transparent"}`}>
-        {t.tableInvalid}
-      </p>
+        <div dir="ltr"
+          className={`mt-12 flex min-h-36 w-160 max-w-full items-center justify-center rounded-4xl border-4 bg-(--color-surface) font-display text-8xl font-bold tabular-nums ${
+            showError ? "border-red-500 text-(--color-danger)" : "border-(--color-navy)"
+          }`}>
+          {value || "—"}
+        </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {KEYS.map((k) => (
-          <button key={k} onClick={() => press(k)}
-            className="min-h-24 rounded-(--radius-card) bg-(--color-surface-2) text-4xl font-medium tabular-nums">
-            {k === "clear" ? t.clear : k === "back" ? "⌫" : k}
-          </button>
-        ))}
-      </div>
+        <p role="alert" className={`mt-4 flex min-h-14 items-center gap-3 text-3xl font-semibold ${showError ? "text-(--color-danger)" : "invisible"}`}>
+          <Icon name="warning" className="size-8" />
+          {t.tableInvalid}
+        </p>
 
-      <div className="mt-4 flex gap-4">
-        <button onClick={onBack} className="min-h-24 flex-1 rounded-(--radius-card) border border-(--color-line) text-2xl">
-          {t.back}
-        </button>
-        <button onClick={() => valid && onConfirm(n)} disabled={!valid}
-          className="min-h-24 flex-2 rounded-(--radius-card) bg-(--color-brand) text-3xl font-medium text-(--color-brand-ink) disabled:opacity-40">
-          {t.confirm}
-        </button>
+        <div dir="ltr" className="mt-6 flex items-start gap-12">
+          <div className="grid w-160 grid-cols-3 gap-5">
+            {KEYS.map((k) => (
+              <button key={k} onClick={() => press(k)}
+                aria-label={k === "clear" ? t.clear : k === "back" ? "⌫" : undefined}
+                className={`flex min-h-32 items-center justify-center rounded-3xl border-2 font-display text-6xl font-bold tabular-nums shadow-sm ${
+                  k === "clear"
+                    ? "border-transparent bg-(--color-danger-soft) text-2xl text-(--color-danger)"
+                    : k === "back"
+                      ? "border-transparent bg-(--color-line)"
+                      : "border-(--color-line) bg-(--color-surface)"
+                }`}>
+                {k === "clear" ? t.clear : k === "back" ? <Icon name="backspace" className="size-14" /> : k}
+              </button>
+            ))}
+          </div>
+
+          <div dir={locale === "ar" ? "rtl" : "ltr"} className="w-72">
+            <button onClick={() => valid && onConfirm(n)} disabled={!valid}
+              className="min-h-32 w-full rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
+              {t.confirm}
+            </button>
+          </div>
+        </div>
       </div>
     </main>
   );

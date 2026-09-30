@@ -37,6 +37,8 @@ type Dict = {
   yourOrder: string; remove: string; confirmOrder: string; sending: string;
   orderNumber: string; payAtCashier: string; priceChanged: string;
   newOrder: string; thanks: string,other: string,standNumber: string;
+  eatInSub: string; takeAwaySub: string; deliverySub: string; helpNotice: string;
+  itemsCount: string; addMore: string; seeMenu: string; resetNote: string; total: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -57,6 +59,10 @@ export const STRINGS: Record<Locale, Dict> = {
     priceChanged: "Les prix ont changé. Veuillez vérifier votre commande.",
     newOrder: "Nouvelle commande", thanks: "Merci !",other: "Autres",
      standNumber: "Posez ce numéro sur votre table",
+    eatInSub: "Nous vous l’apportons à table", takeAwaySub: "Préparé pour partir", deliverySub: "Livré à votre adresse",
+    helpNotice: "Besoin d’aide ? Demandez à un membre de notre équipe.",
+    itemsCount: "{n} articles", addMore: "Ajouter des articles", seeMenu: "Voir le menu",
+    resetNote: "Cet écran se réinitialise dans {s} secondes", total: "Total",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -74,6 +80,10 @@ export const STRINGS: Record<Locale, Dict> = {
     payAtCashier: "Show this number at the cashier to pay",
     priceChanged: "Prices have changed. Please check your order.",
     newOrder: "New order", thanks: "Thank you!",other: "Other", standNumber: "Place this number on your table",
+    eatInSub: "We'll bring it to your table", takeAwaySub: "Packed to go", deliverySub: "Delivered to your address",
+    helpNotice: "Need help? Ask a member of our staff.",
+    itemsCount: "{n} items", addMore: "Add more items", seeMenu: "See the menu",
+    resetNote: "This screen resets in {s} seconds", total: "Total",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -91,6 +101,10 @@ export const STRINGS: Record<Locale, Dict> = {
     payAtCashier: "أظهر هذا الرقم عند الصندوق للدفع",
     priceChanged: "تغيرت الأسعار. يرجى مراجعة طلبك.",
     newOrder: "طلب جديد", thanks: "شكراً لك!",other: "أخرى",    standNumber: "ضع هذا الرقم على طاولتك",
+    eatInSub: "سنحضره إلى طاولتك", takeAwaySub: "مُعبّأ للأخذ", deliverySub: "يصلك إلى عنوانك",
+    helpNotice: "تحتاج مساعدة؟ اسأل أحد موظفينا.",
+    itemsCount: "{n} منتجات", addMore: "إضافة منتجات", seeMenu: "عرض القائمة",
+    resetNote: "ستُعاد هذه الشاشة خلال {s} ثانية", total: "المجموع",
   },
 };
 

@@ -13,6 +13,8 @@ export interface CartLine {
   key: string;
   articleId: string;
   name: string;
+  /** Display only: thumbnail shown in the cart. */
+  imageUrl?: string | null;
   quantity: number;
   sizeItemId?: string;
   sizeName?: string;

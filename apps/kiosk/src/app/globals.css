@@ -1,25 +1,42 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand: oklch(0.55 0.13 175);
-  --color-brand-ink: oklch(0.98 0.01 175);
-  --color-surface: oklch(0.99 0.004 260);
-  --color-surface-2: oklch(0.96 0.006 260);
-  --color-ink: oklch(0.22 0.02 260);
-  --color-ink-muted: oklch(0.52 0.02 260);
-  --color-line: oklch(0.90 0.008 260);
-  --color-danger: oklch(0.58 0.19 25);
+@theme static {
+  /* Accent. Overridden per restaurant from Restaurant.primaryColor (see lib/theme.ts). */
+  --color-brand: #f59e0b;
+  --color-brand-ink: #0f172a;
 
-  --radius-card: 1.25rem;
-  --text-kiosk-lg: 2.25rem;
-  --text-kiosk-xl: 3rem;
+  --color-navy: #0f172a;
+  --color-navy-2: #1e293b;
+  --color-page: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef2f7;
+  --color-ink: #0f172a;
+  --color-ink-muted: #475569;
+  --color-line: #e2e8f0;
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fee2e2;
+  --color-success: #059669;
+
+  --radius-card: 1.75rem;
+}
+
+@theme inline {
+  --font-sans: var(--font-figtree), var(--font-cairo), system-ui, sans-serif;
+  --font-display: var(--font-outfit), var(--font-cairo), system-ui, sans-serif;
+}
+
+/* Shades derived from the accent, so a tenant colour only has to be set once.
+   Declared on :root so they resolve against an inline --color-brand override. */
+:root {
+  --color-brand-soft: color-mix(in srgb, var(--color-brand) 16%, white);
+  --color-brand-deep: color-mix(in srgb, var(--color-brand) 62%, black);
 }
 
 html, body { height: 100%; }
 
 body {
   min-height: 100dvh;
-  background: var(--color-surface);
+  background: var(--color-page);
   color: var(--color-ink);
   overscroll-behavior: none;
   -webkit-user-select: none;

@@ -2,6 +2,7 @@
 
 import { LOCALES, LOCALE_NAMES, STRINGS, type Locale } from "@/i18n";
 import type { Bootstrap } from "@/lib/api";
+import { Icon, LogoTile } from "../icons";
 
 export default function WelcomeScreen({
   boot, locale, onLocale, onStart,
@@ -12,28 +13,39 @@ export default function WelcomeScreen({
   onStart: () => void;
 }) {
   const t = STRINGS[locale];
-  return (
-    <main className="flex min-h-dvh flex-col">
-      {/* The whole screen is the start button: a kiosk should never hide the way in. */}
-      <button onClick={onStart} className="flex flex-1 flex-col items-center justify-center gap-8 p-10 text-center">
-        <p className="text-3xl text-(--color-ink-muted)">{boot.restaurant.name}</p>
-        <h1 className="text-8xl font-semibold">{t.welcome}</h1>
-        <p className="mt-6 animate-pulse text-3xl">{t.tapToStart}</p>
-      </button>
+  // The prompt in the two other languages, so a foreign visitor still sees it.
+  const otherPrompts = LOCALES.filter((l) => l !== locale).map((l) => STRINGS[l].tapToStart).join(" • ");
 
-      <div className="flex justify-center gap-4 p-8">
+  return (
+    <main className="flex min-h-dvh flex-col bg-(--color-navy) text-white">
+      <div role="group" aria-label="Language" className="flex justify-center gap-3 px-8 pt-14">
         {LOCALES.map((l) => (
-          <button key={l} onClick={(e) => { e.stopPropagation(); onLocale(l); }}
-            aria-pressed={l === locale}
-            className={`min-h-20 min-w-44 rounded-(--radius-card) border px-6 text-2xl ${
+          <button key={l} onClick={() => onLocale(l)} aria-pressed={l === locale}
+            className={`h-16 rounded-full border-2 px-7 font-display text-2xl font-semibold ${
               l === locale
-                ? "border-transparent bg-(--color-brand) text-(--color-brand-ink)"
-                : "border-(--color-line) bg-(--color-surface-2)"
+                ? "border-(--color-brand) bg-(--color-brand) text-(--color-brand-ink)"
+                : "border-slate-600 bg-(--color-navy-2)"
             }`}>
             {LOCALE_NAMES[l]}
           </button>
         ))}
       </div>
+
+      {/* The whole area is the start button: a kiosk should never hide the way in. */}
+      <button onClick={onStart} className="flex flex-1 flex-col items-center justify-center gap-10 p-10 text-center">
+        <LogoTile className="size-52 rounded-[3.25rem]" iconClass="size-28" />
+        <h1 className="font-display text-8xl leading-none font-bold">{boot.restaurant.name}</h1>
+
+        <span className="mt-12 flex flex-col items-center gap-6">
+          <span className="flex size-40 items-center justify-center rounded-full bg-(--color-navy-2)">
+            <span className="flex size-28 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
+              <Icon name="hand" className="size-14" strokeWidth={1.8} />
+            </span>
+          </span>
+          <span className="font-display text-7xl font-bold">{t.tapToStart}</span>
+          <span className="text-3xl text-(--color-brand)">{otherPrompts}</span>
+        </span>
+      </button>
     </main>
   );
 }

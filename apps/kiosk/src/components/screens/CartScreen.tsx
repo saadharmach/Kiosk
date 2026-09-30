@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { STRINGS, money, type Locale } from "@/i18n";
 import { ApiError, createOrder, priceCart, type PlacedOrder, type WireCartLine } from "@/lib/api";
 import { useCart } from "@/state/cart";
+import KioskHeader from "../KioskHeader";
+import { Icon } from "../icons";
 
 export default function CartScreen({
-  slug, locale, currency, orderType, salesAreaId, tableNumber, onBack, onPlaced,
+  slug, locale, name, currency, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced,
 }: {
   slug: string;
   locale: Locale;
+  name: string;
+  onLocale: (l: Locale) => void;
   currency: string;
   orderType: string;
   salesAreaId: string;
@@ -81,60 +85,85 @@ export default function CartScreen({
 
   return (
     <main className="flex min-h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-(--color-line) p-6">
-        <button onClick={onBack} className="min-h-16 rounded-(--radius-card) px-6 text-xl text-(--color-ink-muted)">
-          {t.back}
-        </button>
-        <h1 className="text-3xl font-semibold">{t.yourOrder}</h1>
-        <span className="w-24" />
-      </header>
+      <KioskHeader name={name} locale={locale} onLocale={onLocale} onBack={onBack} backLabel={t.back} />
 
-      <div className="flex-1 overflow-y-auto p-5 pb-56">
-        {cart.lines.length === 0 ? (
-          <p className="mt-20 text-center text-2xl text-(--color-ink-muted)">{t.empty}</p>
-        ) : (
-          <ul className="flex flex-col gap-4">
-            {cart.lines.map((l) => (
-              <li key={l.key} className="rounded-(--radius-card) bg-(--color-surface-2) p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-2xl font-medium">{l.name}</p>
-                    {l.sizeName ? <p className="text-xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
-                    {l.options.length > 0 ? (
-                      <p className="text-xl text-(--color-ink-muted)">{l.options.map((o) => o.name).join(", ")}</p>
-                    ) : null}
-                  </div>
-                  <p className="text-2xl tabular-nums">{money(l.unitPrice * l.quantity, currency, locale)}</p>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => cart.setQty(l.key, l.quantity - 1)}
-                      className="size-16 rounded-full bg-(--color-surface) text-3xl">−</button>
-                    <span className="min-w-12 text-center text-3xl tabular-nums">{l.quantity}</span>
-                    <button onClick={() => cart.setQty(l.key, l.quantity + 1)}
-                      className="size-16 rounded-full bg-(--color-surface) text-3xl">+</button>
-                  </div>
-                  <button onClick={() => cart.remove(l.key)}
-                    className="min-h-16 px-4 text-xl text-(--color-danger)">{t.remove}</button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {cart.lines.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 flex flex-col gap-3 border-t border-(--color-line) bg-(--color-surface) p-5">
-          {error ? <p className="text-center text-xl text-(--color-danger)">{error}</p> : null}
-          <button onClick={confirm} disabled={busy || serverTotal === null}
-            className="flex min-h-28 w-full items-center justify-between rounded-(--radius-card) bg-(--color-brand) px-8 text-3xl font-medium text-(--color-brand-ink) disabled:opacity-40">
-            <span>{busy ? t.sending : t.confirmOrder}</span>
-            <span className="tabular-nums">
-              {serverTotal === null ? "…" : money(serverTotal, currency, locale)}
-            </span>
+      {cart.lines.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-16 text-center">
+          <span className="flex size-60 items-center justify-center rounded-full bg-(--color-line) text-(--color-ink-muted)">
+            <Icon name="bag" className="size-28" strokeWidth={1.4} />
+          </span>
+          <h1 className="font-display text-7xl leading-tight font-bold">{t.empty}</h1>
+          <button onClick={onBack}
+            className="mt-6 flex min-h-30 items-center gap-4 rounded-full bg-(--color-brand) px-16 font-display text-4xl font-bold text-(--color-brand-ink)">
+            {t.seeMenu}
+            <Icon name="chevron" className="size-9 rtl:-scale-x-100" strokeWidth={2.4} />
           </button>
         </div>
-      ) : null}
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto px-12 pt-12 pb-72">
+            <h1 className="mb-8 font-display text-6xl leading-tight font-bold">{t.yourOrder}</h1>
+            <ul className="flex flex-col gap-5">
+              {cart.lines.map((l) => (
+                <li key={l.key} className="flex items-center gap-6 rounded-4xl bg-(--color-surface) p-6 shadow-md">
+                  {l.imageUrl ? (
+                    // Decorative: the name beside it carries the meaning.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={l.imageUrl} alt="" className="size-36 shrink-0 rounded-3xl object-cover" />
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display text-4xl leading-tight font-bold">{l.name}</p>
+                    {l.sizeName ? <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
+                    {l.options.length > 0 ? (
+                      <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.options.map((o) => o.name).join(", ")}</p>
+                    ) : null}
+                    <p className="mt-3 font-display text-4xl font-bold tabular-nums text-(--color-brand-deep)">
+                      {money(l.unitPrice * l.quantity, currency, locale)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button onClick={() => cart.setQty(l.key, l.quantity - 1)} aria-label="−"
+                      className="flex size-20 items-center justify-center rounded-full border-2 border-slate-300 bg-(--color-page)">
+                      <Icon name="minus" className="size-8" strokeWidth={2.4} />
+                    </button>
+                    <span className="min-w-12 text-center font-display text-5xl font-bold tabular-nums">{l.quantity}</span>
+                    <button onClick={() => cart.setQty(l.key, l.quantity + 1)} aria-label="+"
+                      className="flex size-20 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
+                      <Icon name="plus" className="size-8" strokeWidth={2.4} />
+                    </button>
+                    <button onClick={() => cart.remove(l.key)} aria-label={t.remove}
+                      className="ms-2 flex size-20 items-center justify-center rounded-full bg-(--color-danger-soft) text-(--color-danger)">
+                      <Icon name="trash" className="size-9" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-10 flex items-baseline justify-between border-t-2 border-(--color-line) px-3 pt-8">
+              <span className="font-display text-5xl font-bold">{t.total}</span>
+              <span className="font-display text-6xl font-bold tabular-nums text-(--color-brand-deep)">
+                {serverTotal === null ? "…" : money(serverTotal, currency, locale)}
+              </span>
+            </div>
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 flex flex-col gap-4 border-t-2 border-(--color-line) bg-(--color-surface) px-12 pt-8 pb-10">
+            {error ? <p role="alert" className="text-center text-2xl font-semibold text-(--color-danger)">{error}</p> : null}
+            <div className="flex gap-5">
+              <button onClick={onBack}
+                className="min-h-30 flex-1 rounded-full bg-(--color-brand-soft) font-display text-3xl font-bold text-(--color-brand-deep)">
+                {t.addMore}
+              </button>
+              <button onClick={confirm} disabled={busy || serverTotal === null}
+                className="flex min-h-30 flex-1 items-center justify-center gap-4 rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
+                <Icon name="check" className="size-9" strokeWidth={2.6} />
+                {busy ? t.sending : t.confirmOrder}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }

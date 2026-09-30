@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
 import { api, getCatalog, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { brandColors } from "@/lib/theme";
 import { CartProvider, useCart } from "@/state/cart";
+import { Icon, LogoTile } from "./icons";
 import WelcomeScreen from "./screens/WelcomeScreen";
 import OrderTypeScreen from "./screens/OrderTypeScreen";
 import TableScreen from "./screens/TableScreen";
@@ -38,6 +40,15 @@ function KioskFlow({ slug }: { slug: string }) {
     document.documentElement.lang = locale;
     document.documentElement.dir = dirOf(locale);
   }, [locale]);
+
+  // The restaurant's accent colour, with readable text on top of it.
+  const primaryColor = boot?.restaurant.primaryColor;
+  useEffect(() => {
+    const { brand, ink } = brandColors(primaryColor);
+    const root = document.documentElement.style;
+    root.setProperty("--color-brand", brand);
+    root.setProperty("--color-brand-ink", ink);
+  }, [primaryColor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,11 +104,15 @@ function KioskFlow({ slug }: { slug: string }) {
 
   if (error || (boot && !boot.catalogReady)) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-8 text-center">
-        <h1 className="text-5xl font-semibold text-(--color-danger)">{t.errorTitle}</h1>
-        <p className="text-2xl text-(--color-ink-muted)">{error ?? t.menuUnavailable}</p>
+      <main role="alert" className="flex min-h-dvh flex-col items-center justify-center gap-8 px-16 text-center">
+        <span className="flex size-60 items-center justify-center rounded-full bg-(--color-brand-soft) text-(--color-brand-deep)">
+          <Icon name="warning" className="size-28" strokeWidth={1.5} />
+        </span>
+        <h1 className="font-display text-7xl leading-tight font-bold">{t.errorTitle}</h1>
+        <p className="text-3xl leading-snug text-(--color-ink-muted)">{error ?? t.menuUnavailable}</p>
         <button onClick={() => location.reload()}
-          className="min-h-20 rounded-(--radius-card) bg-(--color-brand) px-12 text-3xl font-medium text-(--color-brand-ink)">
+          className="mt-6 flex min-h-30 items-center gap-4 rounded-full bg-(--color-brand) px-16 font-display text-4xl font-bold text-(--color-brand-ink)">
+          <Icon name="refresh" className="size-9" strokeWidth={2.2} />
           {t.retry}
         </button>
       </main>
@@ -106,9 +121,7 @@ function KioskFlow({ slug }: { slug: string }) {
 
   if (!boot) {
     return (
-      <main className="flex min-h-dvh items-center justify-center">
-        <p className="text-3xl text-(--color-ink-muted)">{t.loading}</p>
-      </main>
+      <LoadingScreen label={t.loading} />
     );
   }
 
@@ -120,11 +133,12 @@ function KioskFlow({ slug }: { slug: string }) {
     return <WelcomeScreen boot={boot} locale={locale} onLocale={setLocale} onStart={begin} />;
   }
   if (screen === "ORDER_TYPE") {
-    return <OrderTypeScreen options={usable} locale={locale} onPick={pick} onBack={reset} />;
+    return <OrderTypeScreen options={usable} locale={locale} name={boot.restaurant.name} onLocale={setLocale}
+        onPick={pick} onBack={reset} />;
   }
   if (screen === "TABLE" && choice) {
     return (
-      <TableScreen locale={locale} ranges={choice.tableRanges}
+      <TableScreen locale={locale} name={boot.restaurant.name} onLocale={setLocale} ranges={choice.tableRanges}
         onBack={() => setScreen(usable.length === 1 ? "WELCOME" : "ORDER_TYPE")}
         onConfirm={(n) => { setTable(n); setScreen("MENU"); }} />
     );
@@ -138,7 +152,7 @@ function KioskFlow({ slug }: { slug: string }) {
       );
     }
     return (
-      <MenuScreen catalog={catalog} locale={locale} tableNumber={table}
+      <MenuScreen catalog={catalog} locale={locale} name={boot.restaurant.name} onLocale={setLocale} tableNumber={table}
         showImages={boot.ordering.showProductImages}
         onViewOrder={() => setScreen("CART")}
         onBack={() => setScreen(choice?.askTable ? "TABLE" : "WELCOME")} />
@@ -150,6 +164,8 @@ function KioskFlow({ slug }: { slug: string }) {
       <CartScreen
         slug={slug}
         locale={locale}
+        name={boot.restaurant.name}
+        onLocale={setLocale}
         currency={catalog.currency}
         orderType={choice.orderType}
         salesAreaId={choice.salesAreaId}
@@ -165,6 +181,8 @@ function KioskFlow({ slug }: { slug: string }) {
       <TicketScreen
         order={order}
         locale={locale}
+        name={boot.restaurant.name}
+        onLocale={setLocale}
         resetDelaySec={boot.ordering.resetDelaySec}
         standNumber={choice?.askTable ? null : (order.tableNumber ?? null)}
         onDone={reset}
@@ -173,8 +191,21 @@ function KioskFlow({ slug }: { slug: string }) {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center">
-      <p className="text-3xl text-(--color-ink-muted)">{t.loading}</p>
+    <LoadingScreen label={t.loading} />
+  );
+}
+
+function LoadingScreen({ label }: { label: string }) {
+  return (
+    <main role="status" className="flex min-h-dvh flex-col items-center justify-center gap-14 bg-(--color-navy) text-white">
+      <span className="relative flex size-64 items-center justify-center">
+        <svg viewBox="0 0 260 260" className="absolute inset-0 animate-spin [animation-duration:2.4s]" aria-hidden="true">
+          <circle cx="130" cy="130" r="120" fill="none" stroke="var(--color-brand)" strokeWidth="8"
+            strokeDasharray="34 22" strokeLinecap="round" />
+        </svg>
+        <LogoTile className="size-36 rounded-[2.4rem]" iconClass="size-20" />
+      </span>
+      <p className="font-display text-5xl font-bold">{label}</p>
     </main>
   );
 }
