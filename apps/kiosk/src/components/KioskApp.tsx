@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
 import { api, getCatalog, isConnectionError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
+import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
 import { CartProvider, useCart } from "@/state/cart";
 import IdleWarning from "./IdleWarning";
 import { LogoTile } from "./icons";
@@ -28,6 +29,7 @@ export default function KioskApp({ slug }: { slug: string }) {
 }
 
 function KioskFlow({ slug }: { slug: string }) {
+  useKioskFullscreen();
   const cart = useCart();
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
