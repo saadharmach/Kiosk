@@ -139,11 +139,11 @@ export default function MenuScreen({
                 ) : null}
                 <span className="flex flex-1 flex-col justify-between gap-4 p-6">
                   <span className="font-display text-3xl leading-snug font-bold">{p.name}</span>
-                  <span className="flex items-center justify-between gap-3">
+                  <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                     <span className="font-display text-3xl font-bold tabular-nums text-(--color-brand-deep)">
                       {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, catalog.currency, locale)}
                     </span>
-                    <span className="flex gap-2">
+                    <span className="flex flex-wrap gap-2">
                       {p.allergens.map((a) => <AllergenChip key={a.id} a={a} />)}
                     </span>
                   </span>

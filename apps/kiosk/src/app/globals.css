@@ -32,6 +32,12 @@
   --color-brand-deep: color-mix(in srgb, var(--color-brand) 62%, black);
 }
 
+/* The interface is drawn for a 1080x1920 portrait screen (16px root at that size).
+   Every size in the kiosk is in rem, so scaling the root scales the whole UI to fit
+   the real screen, whichever of width or height is the tighter fit. To design for a
+   different resolution, change 67.5 (= width / 16) and 120 (= height / 16). */
+html { font-size: min(calc(100vw / 67.5), calc(100dvh / 120)); }
+
 html, body { height: 100%; }
 
 body {
