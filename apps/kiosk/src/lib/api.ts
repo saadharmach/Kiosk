@@ -80,6 +80,7 @@ export function tableInRanges(n: number, ranges: TableRange[]): boolean {
 
 export type Pricing = "BASE" | "SIZE" | "MENU" | "UNPRICED";
 
+export interface CatalogAllergen { id: string; number: number; name: string }
 export interface CatalogSize { sizeItemId: string; name: string; price: number }
 export interface CatalogOptionItem { articleId: string; name: string; price: number }
 export interface CatalogOptionGroup {
@@ -106,6 +107,7 @@ export interface CatalogProduct {
   optionGroups: CatalogOptionGroup[];
   isMenu: boolean;
   promo: boolean;
+  allergens: CatalogAllergen[];
 }
 
 export interface CatalogCategory {

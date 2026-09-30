@@ -32,7 +32,7 @@ type Dict = {
   tableTitle: string; tableHint: string; tableInvalid: string;
   back: string; confirm: string; clear: string; close: string;
   table: string; chooseSize: string; add: string; viewOrder: string;
-  empty: string; quantity: string;
+  empty: string; quantity: string; allergens: string;
   yourOrder: string; remove: string; confirmOrder: string; sending: string;
   orderNumber: string; payAtCashier: string; priceChanged: string;
   newOrder: string; thanks: string,other: string,standNumber: string;
@@ -48,7 +48,7 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "Numéro de table", tableHint: "Saisissez le numéro inscrit sur votre table",
     tableInvalid: "Ce numéro de table n'existe pas",
     back: "Retour", confirm: "Confirmer", clear: "Effacer", close: "Fermer",
-    table: "Table", chooseSize: "Choisissez une taille", add: "Ajouter",
+    table: "Table", chooseSize: "Choisissez une taille", allergens: "Allergènes", add: "Ajouter",
     viewOrder: "Voir ma commande", empty: "Votre commande est vide", quantity: "Quantité",    yourOrder: "Votre commande", remove: "Retirer", confirmOrder: "Confirmer la commande",
     sending: "Envoi en cours…", orderNumber: "Votre numéro", 
     payAtCashier: "Présentez ce numéro en caisse pour payer",
@@ -65,7 +65,7 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "Table number", tableHint: "Enter the number shown on your table",
     tableInvalid: "That table number does not exist",
     back: "Back", confirm: "Confirm", clear: "Clear", close: "Close",
-    table: "Table", chooseSize: "Choose a size", add: "Add",
+    table: "Table", chooseSize: "Choose a size", allergens: "Allergens", add: "Add",
     viewOrder: "View my order", empty: "Your order is empty", quantity: "Quantity",    yourOrder: "Your order", remove: "Remove", confirmOrder: "Confirm order",
     sending: "Sending…", orderNumber: "Your number",
     payAtCashier: "Show this number at the cashier to pay",
@@ -81,7 +81,7 @@ export const STRINGS: Record<Locale, Dict> = {
     tableTitle: "رقم الطاولة", tableHint: "أدخل الرقم الموجود على طاولتك",
     tableInvalid: "رقم الطاولة غير موجود",
     back: "رجوع", confirm: "تأكيد", clear: "مسح", close: "إغلاق",
-    table: "طاولة", chooseSize: "اختر الحجم", add: "إضافة",
+    table: "طاولة", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية", add: "إضافة",
     viewOrder: "عرض طلبي", empty: "طلبك فارغ", quantity: "الكمية",    yourOrder: "طلبك", remove: "إزالة", confirmOrder: "تأكيد الطلب",
     sending: "جارٍ الإرسال…", orderNumber: "رقمك",
     payAtCashier: "أظهر هذا الرقم عند الصندوق للدفع",

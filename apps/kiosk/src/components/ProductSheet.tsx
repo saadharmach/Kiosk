@@ -45,6 +45,16 @@ export default function ProductSheet({
           <p className="text-2xl text-(--color-ink-muted)">{product.description}</p>
         ) : null}
 
+        {/* The server sends an empty list when the restaurant switches allergens off. */}
+        {product.allergens.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-2xl font-medium">{t.allergens}</p>
+            <p className="text-2xl text-(--color-ink-muted)">
+              {product.allergens.map((a) => a.name).join(", ")}
+            </p>
+          </div>
+        ) : null}
+
         {product.sizes.length > 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-2xl font-medium">{t.chooseSize}</p>
