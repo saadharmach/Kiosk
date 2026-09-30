@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
+import { readTableRanges } from "../common/table-ranges.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
   v === null || v === undefined ? null : v.toNumber();
@@ -64,12 +65,18 @@ export class CatalogService {
         const area = mapping
           ? salesAreas.find((a) => a.untillId === mapping.salesAreaId)
           : undefined;
+        const askTable = t === "EAT_IN" ? (restaurant.settings?.askTableForEatIn ?? true) : false;
+        // Mirrors OrdersService.resolveTable: an order type that cannot be given a table
+        // would let a customer fill a cart and then fail at checkout, so it is not offered.
+        const hasTableSource = askTable
+          ? readTableRanges(area?.tableRanges).length > 0
+          : Boolean(mapping?.fixedTableNumber || mapping?.tableRangeFrom);
         return {
           orderType: t,
-          configured: Boolean(mapping && area),
+          configured: Boolean(mapping && area && hasTableSource),
           salesAreaId: area ? String(area.untillId) : null,
           salesAreaName: area?.name ?? null,
-          askTable: t === "EAT_IN" ? (restaurant.settings?.askTableForEatIn ?? true) : false,
+          askTable,
           tableRanges: t === "EAT_IN" ? (area?.tableRanges ?? []) : [],
           fixedTableNumber: mapping?.fixedTableNumber ?? null,
         };

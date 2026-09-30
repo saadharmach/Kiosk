@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
+import { readTableRanges, tableInRanges } from "../common/table-ranges.js";
 
 @Injectable()
 export class OrdersService {
@@ -192,16 +193,7 @@ export class OrdersService {
         const area = await this.prisma.tpapiSalesArea.findFirst({
           where: { restaurantId, untillId: BigInt(salesAreaId) },
         });
-        // Stored as TPAPI sent it; accept either casing. NaN comparisons fail closed.
-        const ranges = (area?.tableRanges ?? []) as {
-          FromTable?: number; ToTable?: number; fromTable?: number; toTable?: number;
-        }[];
-        const ok = ranges.some((r) => {
-          const from = Number(r.FromTable ?? r.fromTable);
-          const to = Number(r.ToTable ?? r.toTable);
-          return dto.tableNumber! >= from && dto.tableNumber! <= to;
-        });
-        if (!ok) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
+        if (!tableInRanges(dto.tableNumber, readTableRanges(area?.tableRanges))) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
         return { tableNumber: dto.tableNumber, tablePart: mapping?.tablePart ?? "" };
       }
       // Otherwise fall through to fixedTableNumber, then range allocation.

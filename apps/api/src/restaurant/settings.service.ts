@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { readTableRanges } from "../common/table-ranges.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { UpdateSettingsDto } from "./dto/settings.dto.js";
 
@@ -71,21 +72,7 @@ const SETTINGS_DEFAULTS: SettingsPayload = {
   ticketFooterText: null,
 };
 
-/** TpapiSalesArea.tableRanges is Json. Never trust its shape. */
-function readRanges(value: unknown): TableRange[] {
-  if (!Array.isArray(value)) return [];
-  const out: TableRange[] = [];
-  for (const raw of value) {
-    if (!raw || typeof raw !== "object") continue;
-    const o = raw as Record<string, unknown>;
-    // The sync stores TPAPI's own shape. Delphi sends PascalCase on the wire;
-    // the schema comment says camelCase. Accept either rather than guess.
-    const from = Number(o.fromTable ?? o.FromTable);
-    const to = Number(o.toTable ?? o.ToTable);
-    if (Number.isFinite(from) && Number.isFinite(to)) out.push({ fromTable: from, toTable: to });
-  }
-  return out;
-}
+const readRanges = (value: unknown): TableRange[] => readTableRanges(value);
 
 /** undefined = field not sent, keep what is stored. null = clear it. */
 function pick<T>(sent: T | undefined | null, existing: T | null): T | null {

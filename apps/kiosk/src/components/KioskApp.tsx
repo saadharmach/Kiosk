@@ -144,7 +144,9 @@ function KioskFlow({ slug }: { slug: string }) {
         secondary={{ label: t.startOver, onClick: startOver }} />
     );
   }
-  if (error || (boot && !boot.catalogReady)) {
+  // Nothing the customer could order: better a clear message than an empty choice screen.
+  const nothingOrderable = Boolean(boot) && !boot!.orderTypes.some((o) => o.configured);
+  if (error || (boot && !boot.catalogReady) || nothingOrderable) {
     return (
       <StatusScreen header={header} icon="warning" title={t.errorTitle} text={error?.message ?? t.menuUnavailable}
         action={{ label: t.retry, icon: "refresh", onClick: retry }} />
