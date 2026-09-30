@@ -18,9 +18,9 @@ const sleep = (ms, signal) =>
  * Sends bytes to a network printer. Resolves when the printer has taken them.
  * Rejects with a readable message on refusal, timeout or an unreachable host.
  */
-export function sendToPrinter({ host, port, data, connectTimeoutMs = 5000, totalTimeoutMs = 15000 }) {
+export function sendToPrinter({ host, port, data, connectTimeoutMs = 5000, totalTimeoutMs = 15000, connectImpl = net.createConnection }) {
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host, port });
+    const socket = connectImpl({ host, port });
     let flushed = false;
     let settled = false;
     const done = (err) => {

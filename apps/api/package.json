@@ -9,7 +9,9 @@
     "create-admin": "tsx src/cli/create-admin.ts",
     "create-restaurant": "tsx src/cli/create-restaurant.ts",
     "create-restaurant-user": "tsx src/cli/create-restaurant-user.ts",
-    "set-tpapi-credentials": "tsx src/cli/set-tpapi-credentials.ts"
+    "set-tpapi-credentials": "tsx src/cli/set-tpapi-credentials.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@kiosk/db": "workspace:*",

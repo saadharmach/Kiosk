@@ -91,7 +91,13 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
   p.size(1, 1).bold(false).align("left");
   p.line(rule);
 
-  p.line(pair(`Commande ${data.reference}`, data.printedAt, width));
+  const head = `Commande ${data.reference}`;
+  if (head.length + 1 + data.printedAt.length <= width) p.line(pair(head, data.printedAt, width));
+  else {
+    // Narrow paper: the time goes on its own line instead of running off the edge.
+    for (const l of wrap(head, width)) p.line(l);
+    p.line(pair("", data.printedAt, width));
+  }
   p.line(data.orderType);
   p.line(rule);
 

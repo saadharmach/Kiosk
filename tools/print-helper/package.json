@@ -4,9 +4,14 @@
   "private": true,
   "description": "Runs at the restaurant: fetches tickets from the kiosk API and sends them to the network printer.",
   "type": "module",
-  "bin": { "kiosk-print-helper": "./src/cli.mjs" },
-  "scripts": {
-    "start": "node src/cli.mjs"
+  "bin": {
+    "kiosk-print-helper": "./src/cli.mjs"
   },
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
