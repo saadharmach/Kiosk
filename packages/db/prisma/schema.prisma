@@ -89,6 +89,7 @@ model Restaurant {
   orders       Order[]
   kiosks       Kiosk[]
   printers     Printer[]
+  printJobs    PrintJob[]
   terminals    PaymentTerminal[]
   subscription Subscription?
 
@@ -691,6 +692,7 @@ model Order {
   restaurant     Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   kiosk          Kiosk?               @relation(fields: [kioskId], references: [id], onDelete: SetNull)
   items          OrderItem[]
+  printJobs      PrintJob[]
   history        OrderStatusHistory[]
 
   @@unique([restaurantId, reference])
@@ -878,17 +880,64 @@ model Printer {
   lastSeenAt       DateTime?
   lastErrorAt      DateTime?
   lastErrorMessage String?
+  /// Ticket behaviour: { autoPrint, copies, cut, codepage }. Validated by the API.
   config           Json              @default("{}")
+
+  /// SHA-256 of the secret the print helper at the restaurant authenticates with.
+  /// The plaintext is shown once, when it is generated.
+  helperTokenHash     String?        @unique
+  helperTokenIssuedAt DateTime?
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
   restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   kiosk            Kiosk?            @relation(fields: [kioskId], references: [id], onDelete: SetNull)
+  printJobs        PrintJob[]
 
   @@index([restaurantId, status])
   @@index([kioskId])
   @@map("printers")
+}
+
+enum PrintJobStatus {
+  QUEUED
+  PRINTING
+  PRINTED
+  FAILED
+}
+
+/// One ticket waiting for, or already sent to, a restaurant's printer. The helper
+/// at the restaurant fetches queued jobs and reports the result.
+model PrintJob {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId  String         @db.Uuid
+  printerId     String         @db.Uuid
+  orderId       String?        @db.Uuid
+
+  /// TICKET (customer ticket) or TEST.
+  kind          String
+  status        PrintJobStatus @default(QUEUED)
+  /// The finished ESC/POS bytes, so a reprint of an old order never changes.
+  payload       Bytes
+  copies        Int            @default(1)
+
+  attempts      Int            @default(0)
+  lastError     String?
+  /// A failed attempt waits before the next one.
+  nextAttemptAt DateTime?
+  claimedAt     DateTime?
+  printedAt     DateTime?
+  createdAt     DateTime       @default(now())
+
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  printer       Printer        @relation(fields: [printerId], references: [id], onDelete: Cascade)
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([printerId, status, createdAt])
+  @@index([restaurantId, createdAt])
+  @@index([orderId])
+  @@map("print_jobs")
 }
 
 model PaymentTerminal {

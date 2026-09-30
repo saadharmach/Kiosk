@@ -16,15 +16,19 @@ import { RestaurantAuthService } from "./restaurant-auth.service.js";
 import { RestaurantAuthGuard } from "./guards/restaurant-auth.guard.js";
 import { TenantGuard } from "./guards/tenant.guard.js";
 import { StorageService } from "../common/storage.service.js";
+import { OrderPrintController, PrinterController } from "../printing/printer.controller.js";
+import { PrintingModule } from "../printing/printing.module.js";
 
 @Module({
-  imports: [AuthModule, OrderStatusModule, OrderSubmitModule],
+  imports: [AuthModule, OrderStatusModule, OrderSubmitModule, PrintingModule],
   controllers: [
     RestaurantAuthController,
     RestaurantController,
     RestaurantOrdersController,
     CatalogAdminController,
     BrandingController,
+    PrinterController,
+    OrderPrintController,
     SettingsController,
   ],
   providers: [
