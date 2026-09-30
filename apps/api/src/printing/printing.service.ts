@@ -228,30 +228,38 @@ export class PrintingService {
    * (or a repeated poll) can never print the same ticket.
    */
   async next(printer: Printer) {
-    await this.prisma.printer.updateMany({
-      where: { id: printer.id, restaurantId: printer.restaurantId },
-      data: { lastSeenAt: new Date(), status: printer.isEnabled ? "ONLINE" : "DISABLED" },
-    });
+    // Being asked at all is the sign of life. It is only written when the last one is a few
+    // seconds old, because a helper asks every couple of seconds and this is not worth a query each time.
+    if (!printer.lastSeenAt || Date.now() - printer.lastSeenAt.getTime() > 5000) {
+      await this.prisma.printer.updateMany({
+        where: { id: printer.id, restaurantId: printer.restaurantId },
+        data: { lastSeenAt: new Date(), status: printer.isEnabled ? "ONLINE" : "DISABLED" },
+      });
+    }
     if (!printer.isEnabled) return { job: null };
 
-    // A claim nobody answered, and no attempts left, is a failure, not a retry.
-    await this.prisma.$executeRaw`
-      UPDATE print_jobs SET status = 'FAILED', "lastError" = 'The print helper stopped answering'
-      WHERE "printerId" = ${printer.id}::uuid AND "restaurantId" = ${printer.restaurantId}::uuid
-        AND status = 'PRINTING' AND attempts >= ${MAX_ATTEMPTS}
-        AND "claimedAt" < now() - make_interval(secs => ${CLAIM_TIMEOUT_SEC})`;
-
+    // One statement: a claim nobody answered and with no attempts left is marked failed, and the
+    // oldest job that is due is claimed. FOR UPDATE SKIP LOCKED means two polls can never take the same job.
     const rows = await this.prisma.$queryRaw<{ id: string; payload: Buffer; attempts: number }[]>`
-      UPDATE print_jobs SET status = 'PRINTING', "claimedAt" = now(), attempts = attempts + 1
-      WHERE id = (
-        SELECT id FROM print_jobs
+      WITH expired AS (
+        UPDATE print_jobs SET status = 'FAILED', "lastError" = 'The print helper stopped answering'
         WHERE "printerId" = ${printer.id}::uuid AND "restaurantId" = ${printer.restaurantId}::uuid
-          AND ( (status = 'QUEUED' AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= now()))
-             OR (status = 'PRINTING' AND attempts < ${MAX_ATTEMPTS}
-                 AND "claimedAt" < now() - make_interval(secs => ${CLAIM_TIMEOUT_SEC})) )
-        ORDER BY "createdAt" ASC LIMIT 1
-        FOR UPDATE SKIP LOCKED)
-      RETURNING id, payload, attempts`;
+          AND status = 'PRINTING' AND attempts >= ${MAX_ATTEMPTS}
+          AND "claimedAt" < now() - make_interval(secs => ${CLAIM_TIMEOUT_SEC})
+        RETURNING id
+      ), claimed AS (
+        UPDATE print_jobs SET status = 'PRINTING', "claimedAt" = now(), attempts = attempts + 1
+        WHERE id = (
+          SELECT id FROM print_jobs
+          WHERE "printerId" = ${printer.id}::uuid AND "restaurantId" = ${printer.restaurantId}::uuid
+            AND ( (status = 'QUEUED' AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= now()))
+               OR (status = 'PRINTING' AND attempts < ${MAX_ATTEMPTS}
+                   AND "claimedAt" < now() - make_interval(secs => ${CLAIM_TIMEOUT_SEC})) )
+          ORDER BY "createdAt" ASC LIMIT 1
+          FOR UPDATE SKIP LOCKED)
+        RETURNING id, payload, attempts
+      )
+      SELECT id, payload, attempts FROM claimed`;
     const job = rows[0];
     if (!job) return { job: null };
     return {

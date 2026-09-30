@@ -1,0 +1,12 @@
+{
+  "name": "@kiosk/print-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runs at the restaurant: fetches tickets from the kiosk API and sends them to the network printer.",
+  "type": "module",
+  "bin": { "kiosk-print-helper": "./src/cli.mjs" },
+  "scripts": {
+    "start": "node src/cli.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
