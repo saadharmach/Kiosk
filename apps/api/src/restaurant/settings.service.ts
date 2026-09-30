@@ -344,6 +344,26 @@ function audit(
       });
     }
 
+    // unTill rejects a table that no sales-area range covers (ReturnCode 7).
+    if (area.tableRanges.length > 0) {
+      const covered = (from: number, to: number) =>
+        area.tableRanges.some((r) => r.fromTable <= from && to <= r.toTable);
+      const outside: string[] = [];
+      if (hasFixed && !covered(ot.fixedTableNumber!, ot.fixedTableNumber!)) {
+        outside.push(`table ${ot.fixedTableNumber}`);
+      }
+      if (hasRange && !covered(ot.tableRangeFrom!, ot.tableRangeTo!)) {
+        outside.push(`tables ${ot.tableRangeFrom}-${ot.tableRangeTo}`);
+      }
+      if (outside.length > 0) {
+        warnings.push({
+          code: "TABLE_OUTSIDE_SALES_AREA",
+          orderType: ot.orderType,
+          message: `${ot.orderType} sends orders to ${outside.join(" and ")}, which sales area "${area.name}" does not define. unTill will reject every order of this type.`,
+        });
+      }
+    }
+
     if (!ot.tablePart) {
       warnings.push({
         code: "DEFAULT_TABLE_PART",
