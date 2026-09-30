@@ -39,6 +39,9 @@ export default function MenuScreen({
   const t = STRINGS[locale];
   const cart = useCart();
   const [sheet, setSheet] = useState<CatalogProduct | null>(null);
+  // Products whose image failed to load: shown as having no photo.
+  const [brokenImages, setBrokenImages] = useState<ReadonlySet<string>>(new Set());
+  const hasPhoto = (p: CatalogProduct) => Boolean(p.imageUrl) && !brokenImages.has(p.id);
 
   // MENU products are hidden: unTill gives them no price and no required-choice
   // count, so the kiosk cannot price them. Remove this filter once unTill answers.
@@ -77,7 +80,7 @@ export default function MenuScreen({
   );
   // All-or-nothing per department: a grid where half the tiles have a photo and
   // half don't reads as broken rather than sparse.
-  const showImageSlot = showImages && products.some((p) => p.imageUrl);
+  const showImageSlot = showImages && products.some(hasPhoto);
   const open = (p: CatalogProduct) => {
     // Sizes, option groups and allergens all live on the sheet.
     if (p.sizes.length > 0 || p.optionGroups.length > 0 || p.allergens.length > 0) return setSheet(p);
@@ -127,10 +130,11 @@ export default function MenuScreen({
               <button key={p.id} onClick={() => open(p)}
                 className="flex min-h-44 flex-col overflow-hidden rounded-(--radius-card) bg-(--color-surface) text-start shadow-md">
                 {showImageSlot ? (
-                  p.imageUrl ? (
+                  hasPhoto(p) ? (
                     // Decorative: the name below carries the meaning, so alt stays empty.
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                    <img src={p.imageUrl ?? undefined} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover"
+                      onError={() => setBrokenImages((s) => new Set(s).add(p.id))} />
                   ) : (
                     // A flat gap, not a placeholder illustration: keeps rows aligned
                     // when only some products in a department have a photo.

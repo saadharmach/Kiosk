@@ -27,6 +27,8 @@ export default function ProductSheet({
   const cart = useCart();
   const [sizeId, setSizeId] = useState<string | null>(product.sizes[0]?.sizeItemId ?? null);
   const [qty, setQty] = useState(1);
+  const [imageFailed, setImageFailed] = useState(false);
+  const photo = product.imageUrl && !imageFailed ? product.imageUrl : null;
   // groupId -> chosen option article ids. A required group with one item is
   // pre-chosen, so it never blocks the Add button.
   const [picked, setPicked] = useState<Record<string, string[]>>(() =>
@@ -107,14 +109,14 @@ export default function ProductSheet({
         </button>
 
         <div className="flex-1 overflow-y-auto">
-          {product.imageUrl ? (
+          {photo ? (
             // Decorative: the name below carries the meaning, so alt stays empty.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.imageUrl} alt="" className="h-96 w-full object-cover" />
+            <img src={photo} alt="" className="h-96 w-full object-cover" onError={() => setImageFailed(true)} />
           ) : null}
 
           <div className="flex flex-col gap-8 p-12">
-            <div className={product.imageUrl ? "" : "pe-24"}>
+            <div className={photo ? "" : "pe-24"}>
               <h2 className="font-display text-6xl leading-tight font-bold">{product.name}</h2>
               {product.description ? (
                 <p className="mt-3 text-3xl leading-snug text-(--color-ink-muted)">{product.description}</p>

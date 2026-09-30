@@ -7,6 +7,15 @@ import { useCart } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
 
+/** Cart thumbnail that quietly disappears if the image cannot be loaded. */
+function Thumb({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  // Decorative: the name beside it carries the meaning.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" onError={() => setFailed(true)} className="size-36 shrink-0 rounded-3xl object-cover" />;
+}
+
 export default function CartScreen({
   slug, locale, name, currency, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced,
 }: {
@@ -106,11 +115,7 @@ export default function CartScreen({
             <ul className="flex flex-col gap-5">
               {cart.lines.map((l) => (
                 <li key={l.key} className="flex items-center gap-6 rounded-4xl bg-(--color-surface) p-6 shadow-md">
-                  {l.imageUrl ? (
-                    // Decorative: the name beside it carries the meaning.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={l.imageUrl} alt="" className="size-36 shrink-0 rounded-3xl object-cover" />
-                  ) : null}
+                  {l.imageUrl ? <Thumb src={l.imageUrl} /> : null}
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-4xl leading-tight font-bold">{l.name}</p>
                     {l.sizeName ? <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
