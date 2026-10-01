@@ -53,7 +53,9 @@ export class AuthService {
   }
 
   /** Rotates the session: the old refresh token is revoked and a new one issued. */
-  async refresh(refreshToken: string, ctx: SessionContext) {
+  async refresh(refreshToken: string | undefined, ctx: SessionContext) {
+    // No cookie means nobody is signed in: that is a 401, not a crash.
+    if (!refreshToken) throw new UnauthorizedException("Session expired");
     const tokenHash = this.tokens.hashRefreshToken(refreshToken);
     const session = await this.prisma.platformSession.findUnique({
       where: { tokenHash },

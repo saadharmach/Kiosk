@@ -37,7 +37,12 @@ export class RestaurantsService {
       this.prisma.restaurant.count({ where }),
       this.prisma.restaurant.findMany({
         where,
-        select: { ...CARD, _count: { select: { kiosks: true, users: true } } },
+        select: {
+          ...CARD,
+          _count: { select: { users: true, orders: true } },
+          // enough to see at a glance whether the POS link works; never the credentials
+          tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastFailureAt: true, lastSyncAt: true } },
+        },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,

@@ -129,3 +129,13 @@ describe("PrinterHelperGuard: the print helper signs in with its own secret", ()
     }
   });
 });
+
+describe("platform sessions without a refresh cookie", () => {
+  it("answer 401 'session expired', never crash (a signed-out visitor triggers this on every page load)", async () => {
+    const { AuthService } = await import("../src/auth/auth.service.js");
+    const svc = new AuthService({} as never, {} as never, {} as never);
+    for (const missing of [undefined, ""]) {
+      await assert.rejects(svc.refresh(missing, {}), (e) => status(e) === 401);
+    }
+  });
+});

@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
@@ -14,12 +14,12 @@ export class SyncController {
   @HttpCode(200)
   @Roles("SUPER_ADMIN", "SUPPORT")
   @Throttle({ default: { limit: 5, ttl: 300_000 } })
-  run(@Param("id") id: string) {
+  run(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.sync.run(id, "MANUAL");
   }
 
   @Get("sync-runs")
-  history(@Param("id") id: string) {
+  history(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.sync.history(id);
   }
 }

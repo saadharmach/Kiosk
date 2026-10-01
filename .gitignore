@@ -23,5 +23,8 @@ apps/kiosk/next-env.d.ts
 .playwright-cli/
 apps/backoffice/.next
 apps/backoffice/next-env.d.ts
+apps/admin/.next
+apps/admin/next-env.d.ts
 .testenv
 .logs/
+apps/admin/tsconfig.tsbuildinfo

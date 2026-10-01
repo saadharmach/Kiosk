@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
@@ -35,7 +35,7 @@ export class RestaurantsController {
   @Patch(":id")
   @Roles("SUPER_ADMIN")
   update(
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateRestaurantDto,
     @CurrentUser() user: AccessTokenPayload,
     @Req() req: Request,

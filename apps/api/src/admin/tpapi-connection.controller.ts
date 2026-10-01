@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
@@ -15,14 +15,14 @@ export class TpapiConnectionController {
   constructor(private readonly tpapi: TpapiConnectionService) {}
 
   @Get()
-  get(@Param("id") id: string) {
+  get(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.tpapi.get(id);
   }
 
   @Put()
   @Roles("SUPER_ADMIN")
   upsert(
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpsertTpapiDto,
     @CurrentUser() user: AccessTokenPayload,
     @Req() req: Request,
@@ -33,7 +33,7 @@ export class TpapiConnectionController {
   @Post("test")
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  test(@Param("id") id: string, @CurrentUser() user: AccessTokenPayload) {
+  test(@Param("id", new ParseUUIDPipe()) id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.tpapi.test(id, user.sub);
   }
 }

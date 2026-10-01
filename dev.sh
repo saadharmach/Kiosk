@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kiosk dev orchestrator.  Usage: ./dev.sh up | down | status | logs [api|kiosk|backoffice]
+# Kiosk dev orchestrator.  Usage: ./dev.sh up | down | status | logs [api|kiosk|backoffice|admin]
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,6 +7,7 @@ LOGS="$ROOT/.logs"
 API_PORT=3005
 KIOSK_PORT=3002
 BACKOFFICE_PORT=3003
+ADMIN_PORT=3004
 mkdir -p "$LOGS"
 
 alive() { curl -s -o /dev/null --max-time 2 "http://localhost:$1$2"; }
@@ -39,7 +40,7 @@ stop_all() {
   pkill -f "$ROOT/apps/.*/next dev"             2>/dev/null
   sleep 1
   # Whatever still holds one of our ports is a leftover: stop it for good.
-  for port in "$API_PORT" "$KIOSK_PORT" "$BACKOFFICE_PORT"; do
+  for port in "$API_PORT" "$KIOSK_PORT" "$BACKOFFICE_PORT" "$ADMIN_PORT"; do
     for pid in $(port_pids "$port"); do kill -KILL "$pid" 2>/dev/null; done
   done
   sleep 1
@@ -50,6 +51,7 @@ start_api() {
 }
 start_kiosk()      { start_service kiosk      "$KIOSK_PORT"      /  pnpm --filter @kiosk/kiosk-web run dev; }
 start_backoffice() { start_service backoffice "$BACKOFFICE_PORT" /  pnpm --filter @kiosk/backoffice run dev; }
+start_admin()      { start_service admin      "$ADMIN_PORT"      /  pnpm --filter @kiosk/admin run dev; }
 
 wait_for() { # port path label
   for _ in $(seq 1 45); do
@@ -65,17 +67,20 @@ case "${1:-up}" in
     start_api
     start_kiosk
     start_backoffice
+    start_admin
     echo "starting..."
     wait_for "$API_PORT"   "/api/health" "API   http://localhost:$API_PORT/api"
     wait_for "$KIOSK_PORT" "/"           "Kiosk http://localhost:$KIOSK_PORT/r/resto-a"
     wait_for "$BACKOFFICE_PORT" "/"      "Back office http://localhost:$BACKOFFICE_PORT"
+    wait_for "$ADMIN_PORT" "/"           "Platform admin http://localhost:$ADMIN_PORT"
     ;;
   down)   stop_all; echo "stopped" ;;
   status)
     alive "$API_PORT"   "/api/health" && echo "API   up" || echo "API   down"
     alive "$KIOSK_PORT" "/"           && echo "Kiosk up" || echo "Kiosk down"
     alive "$BACKOFFICE_PORT" "/"      && echo "Back office up" || echo "Back office down"
+    alive "$ADMIN_PORT" "/"           && echo "Platform admin up" || echo "Platform admin down"
     ;;
   logs)   tail -f "$LOGS/${2:-api}.log" ;;
-  *)      echo "usage: dev.sh up|down|status|logs [api|kiosk|backoffice]" ;;
+  *)      echo "usage: dev.sh up|down|status|logs [api|kiosk|backoffice|admin]" ;;
 esac
