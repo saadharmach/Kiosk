@@ -3,6 +3,7 @@ import type { Request } from "express";
 import { PasswordService } from "../auth/password.service.js";
 import { PlatformUserDirectory } from "../auth/platform-user-directory.js";
 import { AuditService } from "../common/audit.service.js";
+import { EmailCheckService } from "../common/real-email.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { CreateTeamMemberDto, UpdateTeamMemberDto } from "./dto/team.dto.js";
 import { checkReset, checkTeamChange, type TeamRole } from "./team-rules.js";
@@ -24,6 +25,7 @@ export class TeamService {
     private readonly passwords: PasswordService,
     private readonly directory: PlatformUserDirectory,
     private readonly audit: AuditService,
+    private readonly emailCheck: EmailCheckService,
   ) {}
 
   list() {
@@ -33,6 +35,7 @@ export class TeamService {
   /** Creates the account with a random password, shown once. They must choose their own at first sign-in. */
   async create(dto: CreateTeamMemberDto, actor: Actor, req?: Request) {
     const email = dto.email.trim().toLowerCase();
+    await this.emailCheck.assertReal(email);
     if (await this.prisma.platformUser.findUnique({ where: { email }, select: { id: true } })) {
       throw new ConflictException(`${email} already has a platform account`);
     }

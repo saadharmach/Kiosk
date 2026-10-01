@@ -69,7 +69,7 @@ describe("TeamService", () => {
     };
     prisma.platformUser.findMany = async (a: any) => { writes.push({ op: "findMany", args: a }); return a?.where?.id ? rows.filter((r) => a.where.id.in.includes(r.id)) : rows; };
     const directory = { invalidate: (id?: string) => { invalidated.push(id); } };
-    const svc = new TeamService(prisma, new PasswordService(), directory as never, { record: async (e: unknown) => { audits.push(e); } } as never);
+    const svc = new TeamService(prisma, new PasswordService(), directory as never, { record: async (e: unknown) => { audits.push(e); } } as never, { assertReal: async () => undefined } as never);
     return { svc, writes, audits, invalidated };
   }
   const actor = { id: "admin" };

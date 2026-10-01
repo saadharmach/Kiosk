@@ -63,7 +63,7 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
             </select>
           </Field>
           <Field label="Time zone"><input className={input} value={f.timezone} onChange={set("timezone")} /></Field>
-          <Field label="Contact email"><input type="email" className={input} value={f.contactEmail} onChange={set("contactEmail")} /></Field>
+          <Field label="Contact email" hint="A real address: it is checked."><input type="email" className={input} value={f.contactEmail} onChange={set("contactEmail")} /></Field>
           <Field label="Contact phone"><input className={input} value={f.contactPhone} onChange={set("contactPhone")} /></Field>
           <Field label="Address"><input className={input} value={f.addressLine} onChange={set("addressLine")} /></Field>
         </fieldset>

@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Request } from "express";
 import { AuditService } from "../common/audit.service.js";
+import { EmailCheckService } from "../common/real-email.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { CreateRestaurantDto } from "./dto/create-restaurant.dto.js";
 import type { ListRestaurantsDto } from "./dto/list-restaurants.dto.js";
@@ -16,6 +17,7 @@ export class RestaurantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly emailCheck: EmailCheckService,
   ) {}
 
   async list(query: ListRestaurantsDto) {
@@ -75,6 +77,7 @@ export class RestaurantsService {
   async create(dto: CreateRestaurantDto, actor: { id: string }, req: Request) {
     const exists = await this.prisma.restaurant.findUnique({ where: { slug: dto.slug } });
     if (exists) throw new ConflictException(`Slug "${dto.slug}" is already taken`);
+    if (dto.contactEmail) await this.emailCheck.assertReal(dto.contactEmail);
 
     const restaurant = await this.prisma.restaurant.create({
       data: { ...dto, settings: { create: {} } },
@@ -99,6 +102,8 @@ export class RestaurantsService {
   async update(id: string, dto: UpdateRestaurantDto, actor: { id: string }, req: Request) {
     const before = await this.prisma.restaurant.findUnique({ where: { id }, select: CARD });
     if (!before) throw new NotFoundException("Restaurant not found");
+
+    if (dto.contactEmail) await this.emailCheck.assertReal(dto.contactEmail);
 
     const slugChange = dto.slug !== undefined && dto.slug !== before.slug;
     if (slugChange) {

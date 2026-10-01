@@ -15,7 +15,7 @@ function setup(opts: { orders: number; taken?: string }) {
     },
     order: { count: async (a: any) => { assert.equal(a.where.restaurantId, "r1"); return opts.orders; } },
   };
-  const svc = new RestaurantsService(prisma as never, { record: async (e: unknown) => { audits.push(e); } } as never);
+  const svc = new RestaurantsService(prisma as never, { record: async (e: unknown) => { audits.push(e); } } as never, { assertReal: async () => undefined } as never);
   return { svc, writes, audits };
 }
 const actor = { id: "admin-1" };

@@ -55,7 +55,7 @@ export default function TeamPage({ myId }: { myId: string }) {
             });
           }}>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Email"><input required type="email" className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Email" hint="Use the person's real email address. It is checked, and made-up ones like @example.com or @anything.test are refused."><input required type="email" className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Name (optional)"><input className={input} maxLength={120} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
             <Field label="Role">
               <select className={input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as TeamRole })}>

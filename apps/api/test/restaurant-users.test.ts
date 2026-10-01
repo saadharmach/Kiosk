@@ -28,7 +28,7 @@ function setup(users: Record<string, unknown>[] = []) {
     $transaction: async (ops: { op: string; args: any }[]) => { writes.push(...ops); return []; },
   };
   const audit = { record: async (e: unknown) => { audits.push(e); } };
-  const svc = new RestaurantUsersService(prisma as never, new PasswordService(), audit as never);
+  const svc = new RestaurantUsersService(prisma as never, new PasswordService(), audit as never, { assertReal: async () => undefined } as never);
   return { svc, calls, writes, audits };
 }
 

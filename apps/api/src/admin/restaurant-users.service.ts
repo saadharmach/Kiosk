@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from "@nestjs/common
 import type { Request } from "express";
 import { PasswordService } from "../auth/password.service.js";
 import { AuditService } from "../common/audit.service.js";
+import { EmailCheckService } from "../common/real-email.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { CreateRestaurantUserDto, UpdateRestaurantUserDto } from "./dto/restaurant-user.dto.js";
 import { generateTemporaryPassword } from "./temporary-password.js";
@@ -21,6 +22,7 @@ export class RestaurantUsersService {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
+    private readonly emailCheck: EmailCheckService,
   ) {}
 
   async list(restaurantId: string) {
@@ -36,6 +38,7 @@ export class RestaurantUsersService {
   async create(restaurantId: string, dto: CreateRestaurantUserDto, actor: Actor, req?: Request) {
     await this.requireRestaurant(restaurantId);
     const email = dto.email.trim().toLowerCase();
+    await this.emailCheck.assertReal(email);   // a real address, not a placeholder: this is how the person signs in
     if (await this.prisma.restaurantUser.findFirst({ where: { restaurantId, email }, select: { id: true } })) {
       throw new ConflictException(`${email} already has an account at this restaurant`);
     }

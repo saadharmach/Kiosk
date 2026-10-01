@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { AuditService } from "../common/audit.service.js";
+import { EmailCheckService } from "../common/real-email.js";
 import { CryptoService } from "../common/crypto.service.js";
 import { AdminOrdersController } from "./admin-orders.controller.js";
 import { AdminOrdersService } from "./admin-orders.service.js";
@@ -26,7 +27,7 @@ import { TpapiConnectionService } from "./tpapi-connection.service.js";
 @Module({
   imports: [AuthModule, OrderStatusModule, OrderSubmitModule],
   controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController, AdminOrdersController, TeamController],
-  providers: [RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, CryptoService],
+  providers: [RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, EmailCheckService, CryptoService],
   exports: [AuditService, CryptoService],
 })
 export class AdminModule {}
