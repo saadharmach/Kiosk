@@ -6,6 +6,8 @@ import { ActivityController } from "./activity.controller.js";
 import { ActivityService } from "./activity.service.js";
 import { OverviewController } from "./overview.controller.js";
 import { OverviewService } from "./overview.service.js";
+import { ReadinessController } from "./readiness.controller.js";
+import { ReadinessService } from "./readiness.service.js";
 import { RestaurantUsersController } from "./restaurant-users.controller.js";
 import { RestaurantUsersService } from "./restaurant-users.service.js";
 import { RestaurantsController } from "./restaurants.controller.js";
@@ -15,8 +17,8 @@ import { TpapiConnectionService } from "./tpapi-connection.service.js";
 
 @Module({
   imports: [AuthModule],
-  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController],
-  providers: [RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, AuditService, CryptoService],
+  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController],
+  providers: [RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, AuditService, CryptoService],
   exports: [AuditService, CryptoService],
 })
 export class AdminModule {}

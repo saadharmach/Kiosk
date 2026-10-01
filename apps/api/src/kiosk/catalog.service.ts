@@ -3,7 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
 import { allowedGroups } from "./option-kinds.js";
-import { readTableRanges } from "../common/table-ranges.js";
+import { isOrderTypeConfigured } from "../common/order-type-config.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
   v === null || v === undefined ? null : v.toNumber();
@@ -51,14 +51,11 @@ export class CatalogService {
           ? salesAreas.find((a) => a.untillId === mapping.salesAreaId)
           : undefined;
         const askTable = t === "EAT_IN" ? (restaurant.settings?.askTableForEatIn ?? true) : false;
-        // Mirrors OrdersService.resolveTable: an order type that cannot be given a table
-        // would let a customer fill a cart and then fail at checkout, so it is not offered.
-        const hasTableSource = askTable
-          ? readTableRanges(area?.tableRanges).length > 0
-          : Boolean(mapping?.fixedTableNumber || mapping?.tableRangeFrom);
+        // An order type that cannot be given a table would let a customer fill a cart and then fail at
+        // checkout, so it is not offered (mirrors OrdersService.resolveTable).
         return {
           orderType: t,
-          configured: Boolean(mapping && area && hasTableSource),
+          configured: isOrderTypeConfigured({ askTable, mapping, area }),
           salesAreaId: area ? String(area.untillId) : null,
           salesAreaName: area?.name ?? null,
           askTable,

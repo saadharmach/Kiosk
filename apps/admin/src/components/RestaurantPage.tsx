@@ -1,23 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getRestaurant, type RestaurantDetail, type RestaurantTab } from "@/lib/platform";
+import { getReadiness, getRestaurant, type Readiness, type RestaurantDetail, type RestaurantTab } from "@/lib/platform";
 import ActivityTab from "./ActivityTab";
 import ConnectionTab from "./ConnectionTab";
 import DetailsTab from "./DetailsTab";
+import GoLiveTab from "./GoLiveTab";
 import UsersTab from "./UsersTab";
 import { PosBadge, StatusBadge, secondary } from "./ui";
 
-const TABS: RestaurantTab[] = ["Details", "unTill", "Users", "Activity"];
+const TABS: RestaurantTab[] = ["Go-live", "Details", "unTill", "Users", "Activity"];
 type Tab = RestaurantTab;
 
-export default function RestaurantPage({ id, canWrite, initialTab = "Details", onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; onBack: () => void }) {
+export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; onBack: () => void }) {
   const [r, setR] = useState<RestaurantDetail | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
 
+  // Reloaded after anything changes, so the checklist and the badge never show yesterday's state.
   const load = useCallback(() => {
     getRestaurant(id).then((d) => { setR(d); setFailed(null); }).catch((e) => setFailed((e as Error).message));
+    getReadiness(id).then(setReadiness).catch(() => setReadiness(null));
   }, [id]);
   useEffect(load, [load]);
 
@@ -31,6 +35,12 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Details", o
         <h1 className="text-2xl font-semibold">{r.name}</h1>
         <StatusBadge status={r.status} />
         <PosBadge health={r.tpapi} />
+        {readiness ? (
+          <button onClick={() => setTab("Go-live")}
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${readiness.ready ? "bg-(--color-brand) text-(--color-brand-ink)" : "bg-amber-200 text-amber-950"}`}>
+            {readiness.ready ? "Ready to go live" : `${readiness.requiredTotal - readiness.requiredDone} to do before going live`}
+          </button>
+        ) : null}
         <span className="text-sm text-(--color-ink-muted)">/r/{r.slug} · {r._count.orders} orders</span>
       </div>
 
@@ -45,9 +55,10 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Details", o
 
       {!canWrite ? <p className="mb-4 rounded-lg bg-(--color-surface-2) p-3 text-sm text-(--color-ink-muted)">Read-only: your support account can look at everything and run a sync, but not change anything.</p> : null}
 
+      {tab === "Go-live" ? <GoLiveTab r={r} readiness={readiness} onOpenTab={setTab} /> : null}
       {tab === "Details" ? <DetailsTab r={r} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "unTill" ? <ConnectionTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
-      {tab === "Users" ? <UsersTab id={r.id} canWrite={canWrite} /> : null}
+      {tab === "Users" ? <UsersTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "Activity" ? <ActivityTab id={r.id} /> : null}
     </>
   );

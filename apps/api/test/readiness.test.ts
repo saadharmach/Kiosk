@@ -1,0 +1,192 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { NotFoundException } from "@nestjs/common";
+import { isOrderTypeConfigured } from "../src/common/order-type-config.js";
+import { evaluateReadiness, type CheckKey, type ReadinessFacts } from "../src/admin/readiness.js";
+import { ReadinessService } from "../src/admin/readiness.service.js";
+import { model, type Call } from "./helpers/fake-prisma.js";
+
+const NOW = Date.parse("2026-10-01T12:00:00Z");
+const ago = (ms: number) => new Date(NOW - ms);
+const H = 3_600_000, D = 86_400_000;
+
+/** A restaurant that is completely ready. Each test spoils one thing. */
+const ready = (over: Partial<ReadinessFacts> = {}): ReadinessFacts => ({
+  status: "ACTIVE",
+  till: { isEnabled: true, hasCredentials: true, lastSuccessAt: ago(H), lastFailureAt: null, lastErrorMessage: null, lastSyncAt: ago(H) },
+  menu: { departments: 5, articles: 120, prices: 118 },
+  orderTypes: [{ type: "EAT_IN", configured: true }],
+  activeOwners: 1,
+  printer: { enabled: true, hasAddress: true, helperIssued: true, helperOnline: true },
+  hasLogo: true,
+  placedOrders: 3,
+  ...over,
+});
+const get = (f: ReadinessFacts, key: CheckKey) => evaluateReadiness(f, NOW).checks.find((c) => c.key === key)!;
+
+describe("the go-live checklist", () => {
+  it("a restaurant with everything in place is ready, with every check done", () => {
+    const r = evaluateReadiness(ready(), NOW);
+    assert.equal(r.ready, true);
+    assert.deepEqual(r.checks.map((c) => c.state), Array(8).fill("done"));
+    assert.deepEqual([r.requiredDone, r.requiredTotal, r.recommendedDone, r.recommendedTotal], [5, 5, 3, 3]);
+  });
+
+  it("a brand-new restaurant is not ready, and says what is missing, in order", () => {
+    const r = evaluateReadiness(ready({ till: null, menu: { departments: 0, articles: 0, prices: 0 }, orderTypes: [{ type: "EAT_IN", configured: false }], activeOwners: 0, printer: null, hasLogo: false, placedOrders: 0 }), NOW);
+    assert.equal(r.ready, false);
+    assert.deepEqual(r.checks.filter((c) => c.state === "todo").map((c) => c.key), ["TILL", "MENU", "ORDER_TYPES", "OWNER", "PRINTER", "LOGO", "TEST_ORDER"]);
+    assert.equal(r.requiredDone, 1);   // only "active"
+  });
+
+  it("recommended checks never block going live", () => {
+    const r = evaluateReadiness(ready({ printer: null, hasLogo: false, placedOrders: 0 }), NOW);
+    assert.equal(r.ready, true);
+    assert.equal(r.recommendedDone, 0);
+  });
+
+  it("a suspended or archived restaurant is not ready", () => {
+    for (const status of ["SUSPENDED", "ARCHIVED"] as const) {
+      const c = get(ready({ status }), "ACTIVE");
+      assert.equal(c.state, "todo");
+      assert.match(c.detail, new RegExp(status.toLowerCase()));
+    }
+  });
+
+  describe("the till link", () => {
+    const till = (over: Partial<NonNullable<ReadinessFacts["till"]>>) => ready({ till: { ...ready().till!, ...over } });
+    it("none, no credentials, switched off, never tested", () => {
+      assert.match(get(ready({ till: null }), "TILL").detail, /No unTill connection/);
+      assert.match(get(till({ hasCredentials: false }), "TILL").detail, /no credentials/);
+      assert.match(get(till({ isEnabled: false }), "TILL").detail, /switched off/);
+      assert.match(get(till({ lastSuccessAt: null }), "TILL").detail, /never tested/);
+      for (const f of [ready({ till: null }), till({ hasCredentials: false }), till({ isEnabled: false }), till({ lastSuccessAt: null })]) assert.equal(get(f, "TILL").state, "todo");
+    });
+    it("a failure after the last success blocks, with the reason; a success after a failure is fine", () => {
+      const failing = get(till({ lastSuccessAt: ago(2 * H), lastFailureAt: ago(H), lastErrorMessage: "ECONNREFUSED" }), "TILL");
+      assert.equal(failing.state, "todo");
+      assert.match(failing.detail, /ECONNREFUSED/);
+      assert.equal(get(till({ lastSuccessAt: ago(H), lastFailureAt: ago(2 * H) }), "TILL").state, "done");
+    });
+    it("can be fixed on the unTill tab", () => assert.equal(get(ready({ till: null }), "TILL").tab, "unTill"));
+  });
+
+  describe("the menu", () => {
+    it("not read yet, empty, or without prices", () => {
+      assert.equal(get(ready({ till: { ...ready().till!, lastSyncAt: null } }), "MENU").state, "todo");
+      assert.match(get(ready({ menu: { departments: 5, articles: 0, prices: 0 } }), "MENU").detail, /empty/);
+      assert.match(get(ready({ menu: { departments: 0, articles: 9, prices: 9 } }), "MENU").detail, /empty/);
+      assert.match(get(ready({ menu: { departments: 5, articles: 9, prices: 0 } }), "MENU").detail, /no prices/);
+    });
+    it("an old menu is a warning, not a blocker", () => {
+      const f = ready({ till: { ...ready().till!, lastSyncAt: ago(5 * D) } });
+      const c = get(f, "MENU");
+      assert.equal(c.state, "warning");
+      assert.match(c.detail, /5 days ago/);
+      assert.equal(evaluateReadiness(f, NOW).ready, true);
+    });
+  });
+
+  describe("ways of ordering", () => {
+    it("none switched on, or none set up: blocked, and the restaurant is told where to fix it", () => {
+      assert.equal(get(ready({ orderTypes: [] }), "ORDER_TYPES").state, "todo");
+      const c = get(ready({ orderTypes: [{ type: "TAKE_AWAY", configured: false }] }), "ORDER_TYPES");
+      assert.equal(c.state, "todo");
+      assert.match(c.detail, /Take away is switched on but not set up/);
+      assert.equal(c.tab, undefined);   // only the restaurant can fix it
+    });
+    it("one ready and one not: allowed, with a warning naming the one customers will not see", () => {
+      const c = get(ready({ orderTypes: [{ type: "EAT_IN", configured: true }, { type: "DELIVERY", configured: false }] }), "ORDER_TYPES");
+      assert.equal(c.state, "warning");
+      assert.match(c.detail, /Eat in ready\. Delivery is switched on but not set up/);
+    });
+  });
+
+  it("an owner who can sign in is required", () => {
+    assert.equal(get(ready({ activeOwners: 0 }), "OWNER").state, "todo");
+    assert.match(get(ready({ activeOwners: 2 }), "OWNER").detail, /2 active owners/);
+  });
+
+  describe("the printer", () => {
+    const printer = (over: Partial<NonNullable<ReadinessFacts["printer"]>>) => ready({ printer: { ...ready().printer!, ...over } });
+    it("each way it can be unfinished", () => {
+      assert.equal(get(ready({ printer: null }), "PRINTER").state, "todo");
+      assert.equal(get(printer({ enabled: false }), "PRINTER").state, "todo");
+      assert.equal(get(printer({ hasAddress: false }), "PRINTER").state, "todo");
+      assert.match(get(printer({ helperIssued: false }), "PRINTER").detail, /no secret/);
+    });
+    it("a helper that is simply not running right now is only a warning", () => assert.equal(get(printer({ helperOnline: false }), "PRINTER").state, "warning"));
+  });
+
+  it("the proof: no confirmed order yet is a to-do, but never a blocker", () => {
+    const f = ready({ placedOrders: 0 });
+    assert.equal(get(f, "TEST_ORDER").state, "todo");
+    assert.equal(evaluateReadiness(f, NOW).ready, true);
+  });
+});
+
+describe("is an order type really set up (shared with the kiosk)", () => {
+  const area = (n: number) => ({ tableRanges: n ? [{ FromTable: 1, ToTable: n }] : [] });
+  it("customer picks a table: the sales area needs table ranges", () => {
+    assert.equal(isOrderTypeConfigured({ askTable: true, mapping: {}, area: area(12) }), true);
+    assert.equal(isOrderTypeConfigured({ askTable: true, mapping: {}, area: area(0) }), false);
+  });
+  it("no table asked: a fixed table or an allocation range is needed", () => {
+    assert.equal(isOrderTypeConfigured({ askTable: false, mapping: { fixedTableNumber: 3001 }, area: area(0) }), true);
+    assert.equal(isOrderTypeConfigured({ askTable: false, mapping: { tableRangeFrom: 3000 }, area: area(0) }), true);
+    assert.equal(isOrderTypeConfigured({ askTable: false, mapping: {}, area: area(0) }), false);
+  });
+  it("never without a mapping or a sales area", () => {
+    assert.equal(isOrderTypeConfigured({ askTable: false, mapping: null, area: area(5) }), false);
+    assert.equal(isOrderTypeConfigured({ askTable: false, mapping: { fixedTableNumber: 1 }, area: undefined }), false);
+  });
+});
+
+describe("ReadinessService reads only this restaurant's data", () => {
+  function setup(over: { printerSeen?: Date | null; mappings?: Record<string, unknown>[] } = {}) {
+    const calls: Call[] = [];
+    const prisma = {
+      restaurant: { findUnique: async (a: any) => (a.where.id === "r1" ? {
+        status: "ACTIVE", logoPath: "logo.png",
+        settings: { eatInEnabled: true, takeAwayEnabled: false, deliveryEnabled: false, askTableForEatIn: true },
+        tpapi: { isEnabled: true, credentialsCiphertext: "x", lastSuccessAt: ago(H), lastFailureAt: null, lastErrorMessage: null, lastSyncAt: ago(H) },
+      } : null) },
+      tpapiDepartment: { count: async (a: any) => { calls.push({ model: "tpapiDepartment", op: "count", args: a }); return 4; } },
+      tpapiArticle: { count: async (a: any) => { calls.push({ model: "tpapiArticle", op: "count", args: a }); return 90; } },
+      tpapiArticlePrice: { count: async (a: any) => { calls.push({ model: "tpapiArticlePrice", op: "count", args: a }); return 88; } },
+      tpapiSalesArea: model([{ untillId: 100n, tableRanges: [{ FromTable: 1, ToTable: 12 }] }], calls, "tpapiSalesArea"),
+      orderTypeMapping: model(over.mappings ?? [{ orderType: "EAT_IN", salesAreaId: 100n }], calls, "orderTypeMapping"),
+      restaurantUser: { count: async (a: any) => { calls.push({ model: "restaurantUser", op: "count", args: a }); return 1; } },
+      printer: { findFirst: async (a: any) => { calls.push({ model: "printer", op: "findFirst", args: a }); return { isEnabled: true, address: "192.168.0.109", helperTokenHash: "h", lastSeenAt: over.printerSeen ?? null }; } },
+      order: { count: async (a: any) => { calls.push({ model: "order", op: "count", args: a }); return 2; } },
+    };
+    return { svc: new ReadinessService(prisma as never), calls };
+  }
+
+  it("a fully set-up restaurant comes out ready, and every query carries the restaurant", async () => {
+    const { svc, calls } = setup({ printerSeen: ago(10_000) });
+    const r = await svc.get("r1", NOW);
+    assert.equal(r.ready, true);
+    assert.equal(r.checks.find((c) => c.key === "PRINTER")!.state, "done");
+    assert.ok(calls.length >= 8);
+    for (const c of calls) assert.equal((c.args as any).where.restaurantId, "r1", `${c.model}.${c.op}`);
+  });
+
+  it("the print helper counts as running only if it was seen in the last 40 seconds", async () => {
+    assert.equal((await setup({ printerSeen: ago(30_000) }).svc.get("r1", NOW)).checks.find((c) => c.key === "PRINTER")!.state, "done");
+    assert.equal((await setup({ printerSeen: ago(60_000) }).svc.get("r1", NOW)).checks.find((c) => c.key === "PRINTER")!.state, "warning");
+  });
+
+  it("only orders the till confirmed count as proof", async () => {
+    const { svc, calls } = setup();
+    await svc.get("r1", NOW);
+    const q = calls.find((c) => c.model === "order")!.args as any;
+    assert.deepEqual(q.where.status.in, ["CONFIRMED", "PAID"]);
+  });
+
+  it("an order type with no mapping is not ready; an unknown restaurant is not found", async () => {
+    const r = await setup({ mappings: [] }).svc.get("r1", NOW);
+    assert.equal(r.checks.find((c) => c.key === "ORDER_TYPES")!.state, "todo");
+    await assert.rejects(setup().svc.get("nope", NOW), NotFoundException);
+  });
+});

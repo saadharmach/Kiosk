@@ -15,6 +15,7 @@ const { RestaurantUsersController } = await import("../src/admin/restaurant-user
 const { SyncController } = await import("../src/sync/sync.controller.js");
 const { OverviewController } = await import("../src/admin/overview.controller.js");
 const { ActivityController } = await import("../src/admin/activity.controller.js");
+const { ReadinessController } = await import("../src/admin/readiness.controller.js");
 
 type Ctl = { prototype: Record<string, unknown> };
 const METHOD_KEY = "method";   // Nest stores the HTTP verb under this key
@@ -64,8 +65,8 @@ describe("who may change things on the platform", () => {
     assert.deepEqual(roles.sort(), ["SUPER_ADMIN", "SUPPORT"]);
   });
 
-  it("the overview and the activity log only read: they have no way to change anything", () => {
-    for (const ctl of [OverviewController, ActivityController] as never as Ctl[]) {
+  it("the overview, the activity log and the checklist only read: they have no way to change anything", () => {
+    for (const ctl of [OverviewController, ActivityController, ReadinessController] as never as Ctl[]) {
       const hs = handlers(ctl);
       assert.ok(hs.length > 0);
       assert.ok(hs.every((h) => h.verb === 0));

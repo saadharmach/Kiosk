@@ -70,7 +70,7 @@ export default function Shell() {
           ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} onBack={() => setOpen(null)} />
           : view === "overview"
             ? <OverviewPage onOpen={(id, tab) => setOpen({ id, tab })} />
-            : <RestaurantsPage canWrite={canWrite} onOpen={(id) => setOpen({ id })} />}
+            : <RestaurantsPage canWrite={canWrite} onOpen={(id, tab) => setOpen({ id, tab })} />}
       </main>
     </div>
   );

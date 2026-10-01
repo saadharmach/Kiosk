@@ -121,7 +121,23 @@ export interface Overview {
 }
 export const getOverview = () => request<Overview>("/admin/overview");
 
-export type RestaurantTab = "Details" | "unTill" | "Users" | "Activity";
+export type RestaurantTab = "Go-live" | "Details" | "unTill" | "Users" | "Activity";
+
+export const KIOSK_URL = process.env.NEXT_PUBLIC_KIOSK_URL ?? "http://localhost:3002";
+export const BACKOFFICE_URL = process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "http://localhost:3003";
+
+// ------------------------------------------------------------------- go-live checklist
+
+export type CheckState = "done" | "todo" | "warning";
+export interface Check {
+  key: string; label: string; required: boolean; state: CheckState; detail: string;
+  /** Present when the platform team can fix it here; absent when only the restaurant can, in its own back office. */
+  tab?: "Details" | "unTill" | "Users";
+}
+export interface Readiness {
+  ready: boolean; requiredDone: number; requiredTotal: number; recommendedDone: number; recommendedTotal: number; checks: Check[];
+}
+export const getReadiness = (id: string) => request<Readiness>(`/admin/restaurants/${id}/readiness`);
 
 /** Where to take someone who clicks a finding: the tab where it can be looked at or fixed. */
 export function tabFor(kind: AttentionKind): RestaurantTab {

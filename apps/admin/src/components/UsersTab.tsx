@@ -6,7 +6,7 @@ import { ErrorText, Field, ShownOnce, input, primary, secondary, when } from "./
 
 const ROLES: UserRole[] = ["OWNER", "MANAGER", "STAFF"];
 
-export default function UsersTab({ id, canWrite }: { id: string; canWrite: boolean }) {
+export default function UsersTab({ id, canWrite, onChanged }: { id: string; canWrite: boolean; onChanged: () => void }) {
   const [users, setUsers] = useState<RestaurantUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
@@ -19,7 +19,7 @@ export default function UsersTab({ id, canWrite }: { id: string; canWrite: boole
 
   const act = async (key: string, fn: () => Promise<void>) => {
     setBusy(key); setError(null);
-    try { await fn(); load(); } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
+    try { await fn(); load(); onChanged(); } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   };
 
   if (!users) return <><ErrorText message={error} />{!error ? <p className="text-(--color-ink-muted)">Loading…</p> : null}</>;

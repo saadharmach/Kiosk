@@ -51,7 +51,7 @@ function NewRestaurantForm({ onCreated, onCancel }: { onCreated: (r: RestaurantR
   );
 }
 
-export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolean; onOpen: (id: string) => void }) {
+export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolean; onOpen: (id: string, tab?: "Go-live") => void }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -82,7 +82,7 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
         {canWrite ? <button onClick={() => setAdding(true)} className={primary}>New restaurant</button> : null}
       </div>
 
-      {adding ? <NewRestaurantForm onCancel={() => setAdding(false)} onCreated={(r) => { setAdding(false); onOpen(r.id); }} /> : null}
+      {adding ? <NewRestaurantForm onCancel={() => setAdding(false)} onCreated={(r) => { setAdding(false); onOpen(r.id, "Go-live"); }} /> : null}
       <ErrorText message={failed} />
 
       {!data ? <p className="text-(--color-ink-muted)">Loading…</p> : data.items.length === 0 ? (

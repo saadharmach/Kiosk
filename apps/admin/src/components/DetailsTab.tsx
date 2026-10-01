@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { updateRestaurant, type RestaurantDetail, type Status } from "@/lib/platform";
+import { BACKOFFICE_URL, KIOSK_URL, updateRestaurant, type RestaurantDetail, type Status } from "@/lib/platform";
 import { ErrorText, Field, input, primary, secondary } from "./ui";
-
-const KIOSK_URL = process.env.NEXT_PUBLIC_KIOSK_URL ?? "http://localhost:3002";
-const BACKOFFICE_URL = process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "http://localhost:3003";
 
 const STATUS_ACTIONS: Record<Status, { to: Status; label: string; warn: string }[]> = {
   ACTIVE: [
