@@ -72,13 +72,18 @@ function explain(e, host, port) {
 /**
  * Starts the loop. Returns { stop } which ends it cleanly.
  *
- * options: { apiUrl, token, intervalMs?, log?, fetchImpl?, sendImpl? }
+ * options: { apiUrl, token, intervalMs?, waitSec?, log?, fetchImpl?, sendImpl? }
+ *
+ * The request for work is held open by the API for up to `waitSec` seconds and answered the
+ * moment a ticket exists, so paper comes out right after the customer confirms. `waitSec: 0`
+ * turns that off and polls every `intervalMs` instead.
  */
 export function startHelper(options) {
   const {
     apiUrl,
     token,
     intervalMs = 2000,
+    waitSec = 20,
     log = (level, msg) => console.log(`${new Date().toISOString()} ${level} ${msg}`),
     fetchImpl = fetch,
     sendImpl = sendToPrinter,
@@ -87,10 +92,10 @@ export function startHelper(options) {
   const abort = new AbortController();
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-  async function api(path, init) {
+  async function api(path, init, timeoutMs = 15000) {
     let res;
     try {
-      res = await fetchImpl(`${base}/api${path}`, { ...init, headers, signal: AbortSignal.timeout(15000) });
+      res = await fetchImpl(`${base}/api${path}`, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
       // "fetch failed" alone tells the person installing this nothing.
       const why = e.cause?.code ?? e.cause?.message ?? e.name;
@@ -116,7 +121,8 @@ export function startHelper(options) {
 
   /** One round: returns true if a ticket was handled, so the loop can keep draining. */
   async function poll() {
-    const { job } = await api("/print/next");
+    // The API may hold this open for up to waitSec, so allow that much time, plus the usual.
+    const { job } = await api(waitSec > 0 ? `/print/next?wait=${waitSec}` : "/print/next", undefined, (waitSec + 15) * 1000);
     if (!job) return false;
     log("INFO", `Ticket ${job.id.slice(0, 8)} (attempt ${job.attempt}) to ${job.host}:${job.port}`);
     try {
@@ -135,11 +141,15 @@ export function startHelper(options) {
     let announcedDown = false;
     while (!abort.signal.aborted) {
       try {
+        const started = Date.now();
         const worked = await poll();
         if (announcedDown) log("INFO", "Connection to the API restored");
         failures = 0;
         announcedDown = false;
         if (worked) continue; // more tickets may be waiting
+        // A request the API held open for a while means "nothing yet": ask again at once, there is
+        // no gap to wait out. One that came straight back (an API without waiting) is paced.
+        if (Date.now() - started >= 1000) continue;
         await sleep(intervalMs, abort.signal);
       } catch (e) {
         // Nothing in here may end the loop: a printer PC has to keep trying by itself.

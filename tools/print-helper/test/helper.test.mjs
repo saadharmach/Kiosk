@@ -101,7 +101,7 @@ describe("sendToPrinter", () => {
 });
 
 /** Runs the helper loop against a scripted API and a scripted printer. */
-function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures = 0, status = 200 } = {}) {
+function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures = 0, status = 200, waitSec = 0, nextDelayMs = 0 } = {}) {
   const log = [];
   const sent = [];
   const requests = [];
@@ -113,7 +113,7 @@ function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures 
     requests.push({ url: String(url), method: init?.method ?? "GET", headers: init?.headers, body: init?.body });
     if (failures.length) throw Object.assign(new TypeError("fetch failed"), { cause: { code: failures.shift() } });
     if (status !== 200) return new Response("{}", { status });
-    if (String(url).endsWith("/print/next")) return Response.json({ job: queue.shift() ?? null });
+    if (/\/print\/next(\?.*)?$/.test(String(url))) { if (nextDelayMs) await new Promise((r) => setTimeout(r, nextDelayMs)); return Response.json({ job: queue.shift() ?? null }); }
     if (/\/print\/jobs\/.+\/result$/.test(String(url))) {
       if (reportFails > 0) { reportFails -= 1; return new Response("{}", { status: 500 }); }
       return Response.json({ status: "ok" });
@@ -121,7 +121,7 @@ function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures 
     return new Response("{}", { status: 404 });
   };
   const sendImpl = async (args) => { sent.push(args); if (failSend) throw new Error(failSend); };
-  const helper = startHelper({ apiUrl: "https://api.test/", token: "pht_secret", intervalMs: 10, log: (l, m) => log.push(`${l} ${m}`), fetchImpl, sendImpl });
+  const helper = startHelper({ apiUrl: "https://api.test/", token: "pht_secret", intervalMs: 10, waitSec, log: (l, m) => log.push(`${l} ${m}`), fetchImpl, sendImpl });
   running.push(helper);
   const reports = () => requests.filter((r) => r.url.endsWith("/result")).map((r) => ({ url: r.url, body: JSON.parse(r.body) }));
   const until = async (cond, ms = 2000) => { const t = Date.now(); while (!cond()) { if (Date.now() - t > ms) throw new Error(`timed out; log: ${log.join(" | ")}`); await new Promise((r) => setTimeout(r, 5)); } };
@@ -168,8 +168,8 @@ describe("the helper loop", () => {
   it("prints one ticket at a time, in order (two at once would interleave on the printer)", async () => {
     let active = 0; let overlap = false;
     const order = [];
-    const fetchImpl = (() => { const q = [job("e1"), job("e2")]; return async (url) => String(url).endsWith("/next") ? Response.json({ job: q.shift() ?? null }) : Response.json({}); })();
-    const helper = startHelper({ apiUrl: "https://api.test", token: "t", intervalMs: 10, log: () => {}, fetchImpl,
+    const fetchImpl = (() => { const q = [job("e1"), job("e2")]; return async (url) => /\/next(\?.*)?$/.test(String(url)) ? Response.json({ job: q.shift() ?? null }) : Response.json({}); })();
+    const helper = startHelper({ apiUrl: "https://api.test", token: "t", intervalMs: 10, waitSec: 0, log: () => {}, fetchImpl,
       sendImpl: async ({ data }) => { active++; if (active > 1) overlap = true; await new Promise((r) => setTimeout(r, 30)); order.push(data.toString()); active--; } });
     running.push(helper);
     await new Promise((r) => setTimeout(r, 200));
@@ -189,6 +189,43 @@ describe("the helper loop", () => {
     await h2.until(() => h2.log.some((l) => l.includes("Could not report")), 6000);
     await h2.helper.stop();
     assert.equal(h2.reports().length, 3, "gives up after 3 tries");
+  });
+});
+
+describe("the helper loop: waiting for a ticket", () => {
+  const nextRequests = (h) => h.requests.filter((r) => /\/print\/next/.test(r.url));
+
+  it("asks the API to hold the request open, so a ticket is printed the moment it exists", async () => {
+    const h = harness({ waitSec: 20 });
+    await h.until(() => nextRequests(h).length >= 1);
+    await h.helper.stop();
+    assert.equal(nextRequests(h)[0].url, "https://api.test/api/print/next?wait=20");
+  });
+
+  it("can be told not to wait, for an API that does not hold requests", async () => {
+    const h = harness({ waitSec: 0 });
+    await h.until(() => nextRequests(h).length >= 1);
+    await h.helper.stop();
+    assert.equal(nextRequests(h)[0].url, "https://api.test/api/print/next");
+  });
+
+  it("asks again at once after the API held a request open and found nothing", async () => {
+    // Each answer takes 1.1s, like a long wait that ended empty. A helper that then pauses for
+    // its poll interval would leave a gap in which a ticket sits unprinted.
+    const h = harness({ waitSec: 20, nextDelayMs: 1100 });
+    const t0 = Date.now();
+    await h.until(() => nextRequests(h).length >= 2, 4000);
+    await h.helper.stop();
+    const gap = nextRequests(h).length >= 2 ? Date.now() - t0 : Infinity;
+    assert.ok(gap < 2600, `two requests within ~2.2s, took ${gap}ms`);
+  });
+
+  it("paces itself when the API answers straight away, so it cannot spin", async () => {
+    const h = harness({ waitSec: 20, nextDelayMs: 0 });
+    await new Promise((r) => setTimeout(r, 300));
+    await h.helper.stop();
+    const n = nextRequests(h).length;
+    assert.ok(n >= 3 && n <= 40, `about one request per 10ms interval, not thousands (was ${n})`);
   });
 });
 

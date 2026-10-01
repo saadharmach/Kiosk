@@ -4,7 +4,7 @@ import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
 import { resolveLocale } from "../common/locale.js";
-import { PrintingService } from "../printing/printing.service.js";
+import { PrintingService, type LoadedOrder } from "../printing/printing.service.js";
 import { readTableRanges, tableInRanges } from "../common/table-ranges.js";
 
 @Injectable()
@@ -109,7 +109,7 @@ export class OrdersService {
     this.logger.log(`Order ${order.reference} created (${priced.total} ${priced.currency})`);
     // The ticket is queued once the order is safely stored. It never fails the order, and the
     // promise has its own catch so a printing problem can never become an unhandled rejection.
-    void this.printing.enqueueForOrder(restaurantId, order.id, true).catch(() => undefined);
+    void this.printing.enqueueForOrder(restaurantId, order.id, true, order as unknown as LoadedOrder).catch(() => undefined);
     return this.present(order);
   }
 

@@ -10,16 +10,43 @@ import { buildTicket, type TicketData } from "./ticket.js";
 const MAX_ATTEMPTS = 5;
 /** A job the helper claimed but never answered is handed out again after this long. */
 const CLAIM_TIMEOUT_SEC = 60;
+/** While a helper waits, look again this often in case another API instance queued the ticket. */
+const RECHECK_MS = 3000;
 /** The helper polls every couple of seconds; silence for longer than this means offline. */
-const HELPER_ONLINE_SEC = 20;
+const HELPER_ONLINE_SEC = 40;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** The parts of an order the ticket needs. Prisma's Decimal columns are read with Number(). */
+export interface LoadedOrder {
+  id: string;
+  restaurantId: string;
+  reference: string;
+  orderType: string;
+  tableNumber: number | null;
+  total: unknown;
+  currency: string;
+  createdAt: Date;
+  items: {
+    lineNumber: number;
+    parentLineNumber: number | null;
+    kind: string;
+    articleId: bigint | null;
+    articleName: string;
+    quantity: number;
+    unitPrice: unknown;
+    lineTotal: unknown;
+  }[];
+}
 
 const ORDER_TYPE_FR: Record<string, string> = { EAT_IN: "Sur place", TAKE_AWAY: "À emporter", DELIVERY: "Livraison" };
 
 @Injectable()
 export class PrintingService {
   private readonly logger = new Logger(PrintingService.name);
+
+  /** How often a waiting helper looks again on its own. A field, so a test can shorten it. */
+  protected recheckMs = RECHECK_MS;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -110,10 +137,13 @@ export class PrintingService {
     const one = buildTicket(data, { columns: 48, codepage: cfg.codepage, cut: cfg.cut });
     // Copies are repeated in the payload, so the helper never has to think about them.
     const payload = Buffer.concat(Array.from({ length: cfg.copies }, () => one));
-    return this.prisma.printJob.create({
+    const job = await this.prisma.printJob.create({
       data: { restaurantId: printer.restaurantId, printerId: printer.id, orderId, kind, payload, copies: cfg.copies },
       select: { id: true, status: true },
     });
+    // A helper may be holding a request open, waiting for exactly this. Wake it now.
+    this.wake(printer.id);
+    return job;
   }
 
   async enqueueTest(restaurantId: string) {
@@ -144,16 +174,32 @@ export class PrintingService {
    * Queues the customer's ticket for an order. `automatic` is the kiosk placing an order:
    * it does nothing unless the printer is on and set to print by itself. A reprint from the
    * back office always prints. Never throws for the automatic path: the order matters more.
+   *
+   * `loaded` is the order the caller already has in memory (the kiosk has just created it), which
+   * saves a database round trip. Everything else is fetched at the same time, not one after another:
+   * this is what stands between the customer tapping Confirm and the paper coming out.
    */
-  async enqueueForOrder(restaurantId: string, orderId: string, automatic: boolean) {
+  async enqueueForOrder(restaurantId: string, orderId: string, automatic: boolean, loaded?: LoadedOrder) {
     try {
-      const printer = await this.findPrinter(restaurantId);
+      const orderP = loaded ? this.scoped(loaded, restaurantId) : this.loadOrder(restaurantId, orderId);
+      const namesP = orderP.then((o) => this.frenchNames(restaurantId, o));
+      namesP.catch(() => undefined); // if we return early, a later failure here must not go unhandled
+      const [printer, order, restaurant] = await Promise.all([
+        this.findPrinter(restaurantId),
+        orderP,
+        this.prisma.restaurant.findUniqueOrThrow({
+          where: { id: restaurantId },
+          select: { name: true, timezone: true, settings: { select: { ticketFooterText: true, askTableForEatIn: true } } },
+        }),
+      ]);
+
       if (!printer || !printer.isEnabled) {
         if (automatic) return null;
         throw new BadRequestException("No printer is set up and switched on for this restaurant.");
       }
       if (automatic && !readPrinterConfig(printer.config).autoPrint) return null;
-      const data = await this.ticketFor(restaurantId, orderId);
+
+      const data = this.ticketData(order, restaurant, await namesP);
       return await this.enqueue(printer, "TICKET", orderId, data);
     } catch (e) {
       if (!automatic) throw e;
@@ -162,36 +208,48 @@ export class PrintingService {
     }
   }
 
-  /** The French ticket for an order, built from what was stored, not from today's catalog. */
-  private async ticketFor(restaurantId: string, orderId: string): Promise<TicketData> {
+  /** An order handed in by the caller is only trusted for the restaurant it belongs to. */
+  private async scoped(order: LoadedOrder, restaurantId: string): Promise<LoadedOrder> {
+    if (order.restaurantId !== restaurantId) throw new NotFoundException("Order not found");
+    return order;
+  }
+
+  private async loadOrder(restaurantId: string, orderId: string): Promise<LoadedOrder> {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, restaurantId },
       include: { items: { orderBy: [{ lineNumber: "asc" }] } },
     });
     if (!order) throw new NotFoundException("Order not found");
-    const restaurant = await this.prisma.restaurant.findUniqueOrThrow({
-      where: { id: restaurantId },
-      select: { name: true, timezone: true, settings: { select: { ticketFooterText: true, askTableForEatIn: true } } },
-    });
+    return order as unknown as LoadedOrder;
+  }
 
-    // The ticket is in French whatever language the customer used on screen.
+  /** The ticket is in French whatever language the customer used on screen. */
+  private async frenchNames(restaurantId: string, order: LoadedOrder): Promise<Map<string, string | null>> {
     const articleIds = order.items.filter((i) => i.kind === "PRODUCT" && i.articleId !== null).map((i) => i.articleId as bigint);
-    const presentations = articleIds.length
-      ? await this.prisma.productPresentation.findMany({
-          where: { restaurantId, articleId: { in: articleIds } },
-          select: { articleId: true, displayName: true },
-        })
-      : [];
-    const frName = new Map(presentations.map((p) => [p.articleId.toString(), pickLocalized(p.displayName, "fr", null)]));
+    if (articleIds.length === 0) return new Map();
+    const presentations = await this.prisma.productPresentation.findMany({
+      where: { restaurantId, articleId: { in: articleIds } },
+      select: { articleId: true, displayName: true },
+    });
+    return new Map(presentations.map((p) => [p.articleId.toString(), pickLocalized(p.displayName, "fr", null)]));
+  }
 
-    const lines = order.items
+  /** The French ticket for an order, built from what was stored, not from today's catalog. */
+  private ticketData(
+    order: LoadedOrder,
+    restaurant: { name: string; timezone: string; settings: { ticketFooterText: string | null; askTableForEatIn: boolean } | null },
+    frName: Map<string, string | null>,
+  ): TicketData {
+    // An order straight from creation does not promise its lines are in order.
+    const items = [...order.items].sort((x, y) => x.lineNumber - y.lineNumber);
+    const lines = items
       .filter((i) => i.parentLineNumber === null)
       .map((product) => {
-        const mods = order.items.filter((i) => i.parentLineNumber === product.lineNumber);
+        const mods = items.filter((i) => i.parentLineNumber === product.lineNumber);
         return {
           quantity: product.quantity,
           name: (product.articleId !== null && frName.get(product.articleId.toString())) || product.articleName,
-          total: Number(product.lineTotal) + mods.reduce((s, m) => s + Number(m.lineTotal), 0),
+          total: Number(product.lineTotal) + mods.reduce((sum, m) => sum + Number(m.lineTotal), 0),
           modifiers: mods.map((m) => ({ name: m.articleName, price: Number(m.unitPrice) })),
         };
       });
@@ -222,24 +280,71 @@ export class PrintingService {
     return this.prisma.printer.findUnique({ where: { helperTokenHash: sha256(token) } });
   }
 
+  /** Helpers that are holding a request open waiting for a ticket, by printer. */
+  private readonly waiters = new Map<string, Set<() => void>>();
+
+  /** A ticket was just queued for this printer: let any waiting helper look right away. */
+  private wake(printerId: string) {
+    for (const resume of [...(this.waiters.get(printerId) ?? [])]) resume();
+  }
+
+  private waitForJob(printerId: string, ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+      const set = this.waiters.get(printerId) ?? new Set<() => void>();
+      this.waiters.set(printerId, set);
+      const resume = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", resume);
+        set.delete(resume);
+        if (set.size === 0) this.waiters.delete(printerId);
+        resolve();
+      };
+      const timer = setTimeout(resume, ms);
+      set.add(resume);
+      signal?.addEventListener("abort", resume, { once: true });
+    });
+  }
+
   /**
-   * The helper asks for work. Being asked at all shows it is alive, and its printer is
-   * marked online. Returns the oldest job that is due, claimed atomically so two helpers
-   * (or a repeated poll) can never print the same ticket.
+   * The helper asks for work. Being asked at all shows it is alive, and its printer is marked
+   * online. Returns the oldest job that is due, claimed atomically so two helpers (or a repeated
+   * request) can never print the same ticket.
+   *
+   * With `waitMs` the request is held open until a ticket arrives or the time is up, instead of
+   * answering "nothing" at once. A ticket queued on this server wakes the request immediately, so
+   * paper comes out right after the customer confirms, not at the next poll. It also looks again
+   * every few seconds, in case the ticket was queued by another instance of the API.
    */
-  async next(printer: Printer) {
-    // Being asked at all is the sign of life. It is only written when the last one is a few
-    // seconds old, because a helper asks every couple of seconds and this is not worth a query each time.
-    if (!printer.lastSeenAt || Date.now() - printer.lastSeenAt.getTime() > 5000) {
+  async next(printer: Printer, waitMs = 0, signal?: AbortSignal) {
+    // Being asked is the sign of life. It is written at most every few seconds: a helper asks
+    // constantly and this is not worth a query each time.
+    let lastBeat = printer.lastSeenAt?.getTime() ?? 0;
+    const pulse = async () => {
+      if (Date.now() - lastBeat <= 5000) return;
+      lastBeat = Date.now();
       await this.prisma.printer.updateMany({
         where: { id: printer.id, restaurantId: printer.restaurantId },
         data: { lastSeenAt: new Date(), status: printer.isEnabled ? "ONLINE" : "DISABLED" },
       });
-    }
+    };
+
+    await pulse();
     if (!printer.isEnabled) return { job: null };
 
-    // One statement: a claim nobody answered and with no attempts left is marked failed, and the
-    // oldest job that is due is claimed. FOR UPDATE SKIP LOCKED means two polls can never take the same job.
+    let job = await this.claim(printer);
+    const deadline = Date.now() + waitMs;
+    while (!job && !signal?.aborted && Date.now() < deadline) {
+      await this.waitForJob(printer.id, Math.min(this.recheckMs, deadline - Date.now()), signal);
+      if (signal?.aborted) break;
+      await pulse();
+      job = await this.claim(printer);
+    }
+    return { job };
+  }
+
+  /** One statement: expire a dead claim, then take the oldest job that is due. */
+  private async claim(printer: Printer) {
+    // FOR UPDATE SKIP LOCKED means two requests can never take the same job.
     const rows = await this.prisma.$queryRaw<{ id: string; payload: Buffer; attempts: number }[]>`
       WITH expired AS (
         UPDATE print_jobs SET status = 'FAILED', "lastError" = 'The print helper stopped answering'
@@ -260,16 +365,14 @@ export class PrintingService {
         RETURNING id, payload, attempts
       )
       SELECT id, payload, attempts FROM claimed`;
-    const job = rows[0];
-    if (!job) return { job: null };
+    const row = rows[0];
+    if (!row) return null;
     return {
-      job: {
-        id: job.id,
-        host: printer.address,
-        port: printer.port ?? 9100,
-        attempt: job.attempts,
-        dataBase64: Buffer.from(job.payload).toString("base64"),
-      },
+      id: row.id,
+      host: printer.address,
+      port: printer.port ?? 9100,
+      attempt: row.attempts,
+      dataBase64: Buffer.from(row.payload).toString("base64"),
     };
   }
 
