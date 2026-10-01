@@ -1,20 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getRestaurant, type RestaurantDetail } from "@/lib/platform";
+import { getRestaurant, type RestaurantDetail, type RestaurantTab } from "@/lib/platform";
 import ActivityTab from "./ActivityTab";
 import ConnectionTab from "./ConnectionTab";
 import DetailsTab from "./DetailsTab";
 import UsersTab from "./UsersTab";
 import { PosBadge, StatusBadge, secondary } from "./ui";
 
-const TABS = ["Details", "unTill", "Users", "Activity"] as const;
-type Tab = (typeof TABS)[number];
+const TABS: RestaurantTab[] = ["Details", "unTill", "Users", "Activity"];
+type Tab = RestaurantTab;
 
-export default function RestaurantPage({ id, canWrite, onBack }: { id: string; canWrite: boolean; onBack: () => void }) {
+export default function RestaurantPage({ id, canWrite, initialTab = "Details", onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; onBack: () => void }) {
   const [r, setR] = useState<RestaurantDetail | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Details");
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   const load = useCallback(() => {
     getRestaurant(id).then((d) => { setR(d); setFailed(null); }).catch((e) => setFailed((e as Error).message));
@@ -26,7 +26,7 @@ export default function RestaurantPage({ id, canWrite, onBack }: { id: string; c
 
   return (
     <>
-      <button onClick={onBack} className="mb-4 text-sm text-(--color-ink-muted) underline">← Restaurants</button>
+      <button onClick={onBack} className="mb-4 text-sm text-(--color-ink-muted) underline">← Back</button>
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">{r.name}</h1>
         <StatusBadge status={r.status} />

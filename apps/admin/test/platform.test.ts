@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ago, posState, type PosHealth } from "../src/lib/platform";
+import { ago, posState, tabFor, type AttentionKind, type PosHealth } from "../src/lib/platform";
 
 const health = (over: Partial<PosHealth> = {}): PosHealth => ({ isEnabled: true, lastSuccessAt: null, lastFailureAt: null, lastSyncAt: null, ...over });
 
@@ -28,4 +28,12 @@ describe("how long ago", () => {
     assert.equal(ago("2026-09-28T12:00:00Z", now), "3 days ago");
   });
   it("a clock a little ahead never reads as negative", () => assert.equal(ago("2026-10-01T12:00:30Z", now), "just now"));
+});
+
+describe("where a finding takes you", () => {
+  it("to the tab where it can be looked at", () => {
+    assert.equal(tabFor("NO_OWNER"), "Users");
+    for (const k of ["TILL_FAILING", "STALE_SYNC", "NEVER_SYNCED", "NO_TILL", "TILL_DISABLED"] as AttentionKind[]) assert.equal(tabFor(k), "unTill", k);
+    for (const k of ["ORDERS_STUCK", "ORDERS_FAILED"] as AttentionKind[]) assert.equal(tabFor(k), "Details", k);
+  });
 });

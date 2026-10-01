@@ -13,6 +13,8 @@ const { RestaurantsController } = await import("../src/admin/restaurants.control
 const { TpapiConnectionController } = await import("../src/admin/tpapi-connection.controller.js");
 const { RestaurantUsersController } = await import("../src/admin/restaurant-users.controller.js");
 const { SyncController } = await import("../src/sync/sync.controller.js");
+const { OverviewController } = await import("../src/admin/overview.controller.js");
+const { ActivityController } = await import("../src/admin/activity.controller.js");
 
 type Ctl = { prototype: Record<string, unknown> };
 const METHOD_KEY = "method";   // Nest stores the HTTP verb under this key
@@ -60,5 +62,13 @@ describe("who may change things on the platform", () => {
   it("running a sync stays open to SUPPORT, since it changes nothing about the restaurant itself", () => {
     const roles = Reflect.getMetadata(ROLES_KEY, (SyncController as never as Ctl).prototype.run as object) as string[];
     assert.deepEqual(roles.sort(), ["SUPER_ADMIN", "SUPPORT"]);
+  });
+
+  it("the overview and the activity log only read: they have no way to change anything", () => {
+    for (const ctl of [OverviewController, ActivityController] as never as Ctl[]) {
+      const hs = handlers(ctl);
+      assert.ok(hs.length > 0);
+      assert.ok(hs.every((h) => h.verb === 0));
+    }
   });
 });

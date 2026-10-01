@@ -103,6 +103,35 @@ export interface ActivityItem {
 }
 export const listActivity = (id: string, page = 1) => request<Page<ActivityItem>>(`/admin/restaurants/${id}/activity?page=${page}`);
 
+// ---------------------------------------------------------------------- overview
+
+export type AttentionKind =
+  | "TILL_FAILING" | "ORDERS_STUCK" | "ORDERS_FAILED" | "NO_OWNER"
+  | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
+export type Severity = "problem" | "warning" | "setup";
+
+export interface AttentionItem { restaurantId: string; slug: string; name: string; kind: AttentionKind; severity: Severity; message: string }
+
+export interface Overview {
+  generatedAt: string;
+  restaurants: { ACTIVE: number; SUSPENDED: number; ARCHIVED: number; total: number };
+  orders: { last24h: number; last7d: number };
+  attention: AttentionItem[];
+  recentActivity: { id: string; at: string; restaurantId: string | null; restaurant: string | null; actor: string | null; action: string }[];
+}
+export const getOverview = () => request<Overview>("/admin/overview");
+
+export type RestaurantTab = "Details" | "unTill" | "Users" | "Activity";
+
+/** Where to take someone who clicks a finding: the tab where it can be looked at or fixed. */
+export function tabFor(kind: AttentionKind): RestaurantTab {
+  switch (kind) {
+    case "NO_OWNER": return "Users";
+    case "TILL_FAILING": case "STALE_SYNC": case "NEVER_SYNCED": case "NO_TILL": case "TILL_DISABLED": return "unTill";
+    default: return "Details";
+  }
+}
+
 // ------------------------------------------------------------------- helpers
 
 export type PosState = "NOT_SET_UP" | "DISABLED" | "FAILING" | "CONNECTED" | "UNTESTED";

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { RestaurantTab } from "@/lib/platform";
 import { useAuth } from "@/state/auth";
+import OverviewPage from "./OverviewPage";
 import RestaurantPage from "./RestaurantPage";
 import RestaurantsPage from "./RestaurantsPage";
 import { ErrorText, input, primary } from "./ui";
@@ -11,7 +13,10 @@ export default function Shell() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<"overview" | "restaurants">("overview");
+  // A restaurant that is open, and the tab to open it on.
+  const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab } | null>(null);
+  const go = (v: "overview" | "restaurants") => { setView(v); setOpen(null); };
 
   if (loading) return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
 
@@ -48,17 +53,24 @@ export default function Shell() {
   return (
     <div className="min-h-dvh">
       <header className="flex items-center gap-4 border-b border-(--color-line) bg-(--color-surface-2) px-8 py-3">
-        <button onClick={() => setOpenId(null)} className="text-lg font-semibold">Platform admin</button>
-        <span className="text-sm text-(--color-ink-muted)">Restaurants</span>
+        <span className="text-lg font-semibold">Platform admin</span>
+        <nav className="flex gap-1" aria-label="Sections">
+          {([["overview", "Overview"], ["restaurants", "Restaurants"]] as const).map(([v, label]) => (
+            <button key={v} onClick={() => go(v)} aria-current={view === v ? "page" : undefined}
+              className={`rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"}`}>{label}</button>
+          ))}
+        </nav>
         <div className="ms-auto flex items-center gap-4 text-sm text-(--color-ink-muted)">
           <span>{user.email} · {user.role === "SUPER_ADMIN" ? "super admin" : "support (read-only)"}</span>
           <button onClick={signOut} className="underline">Sign out</button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl p-8">
-        {openId
-          ? <RestaurantPage id={openId} canWrite={canWrite} onBack={() => setOpenId(null)} />
-          : <RestaurantsPage canWrite={canWrite} onOpen={setOpenId} />}
+        {open
+          ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} onBack={() => setOpen(null)} />
+          : view === "overview"
+            ? <OverviewPage onOpen={(id, tab) => setOpen({ id, tab })} />
+            : <RestaurantsPage canWrite={canWrite} onOpen={(id) => setOpen({ id })} />}
       </main>
     </div>
   );
