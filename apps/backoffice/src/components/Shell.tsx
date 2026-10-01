@@ -8,7 +8,8 @@ import AllergensPage from "./AllergensPage";
 import SettingsPage from "./SettingsPage";
 import OrdersPage from "./OrdersPage";
 import PrinterPage from "./PrinterPage";
-const SECTIONS = ["Products", "Categories", "Allergens", "Orders", "Printer", "Settings"] as const;
+import SuggestionsPage from "./SuggestionsPage";
+const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Printer", "Settings"] as const;
 
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
@@ -91,6 +92,7 @@ export default function Shell() {
           <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
           {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />
+          : section === "Suggestions" && slug ? <SuggestionsPage slug={slug} />
           : section === "Allergens" && slug ? <AllergensPage slug={slug} />
           : section === "Orders" && slug ? <OrdersPage slug={slug} />
           : section === "Printer" && slug ? <PrinterPage slug={slug} />

@@ -13,11 +13,13 @@ const CHIP_COLORS: [string, string][] = [
 ];
 
 export default function ProductSheet({
-  product, currency, locale, editing, onClose,
+  product, currency, locale, editing, onAdded, onClose,
 }: {
   product: CatalogProduct;
   /** A cart line being changed: the sheet opens with its choices and saves over it. */
   editing?: CartLine;
+  /** Called after a new line has been added (not after an edit). */
+  onAdded?: () => void;
   currency: string;
   locale: Locale;
   onClose: () => void;
@@ -67,7 +69,7 @@ export default function ProductSheet({
       unitPrice,
     };
     if (editing) cart.replace(editing.key, line, qty);
-    else cart.add(line, qty);
+    else { cart.add(line, qty); onAdded?.(); }
     onClose();
   };
 

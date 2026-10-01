@@ -7,6 +7,8 @@ import { useCart } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
 import ProductSheet from "../ProductSheet";
+import SuggestionPanel from "../SuggestionPanel";
+import { pickSuggestions } from "@/lib/suggestions";
 
 /** Background / text pairs for allergen chips, picked by the allergen's number. */
 const CHIP_COLORS: [string, string][] = [
@@ -39,6 +41,9 @@ export default function MenuScreen({
   const t = STRINGS[locale];
   const cart = useCart();
   const [sheet, setSheet] = useState<CatalogProduct | null>(null);
+  // "Would you like to add…?": the products on offer, and whether the open sheet was reached from it.
+  const [offer, setOffer] = useState<CatalogProduct[] | null>(null);
+  const [sheetFromOffer, setSheetFromOffer] = useState(false);
   // Products whose image failed to load: shown as having no photo.
   const [brokenImages, setBrokenImages] = useState<ReadonlySet<string>>(new Set());
   const hasPhoto = (p: CatalogProduct) => Boolean(p.imageUrl) && !brokenImages.has(p.id);
@@ -68,10 +73,23 @@ export default function MenuScreen({
   // All-or-nothing per department: a grid where half the tiles have a photo and
   // half don't reads as broken rather than sparse.
   const showImageSlot = showImages && products.some(hasPhoto);
-  const open = (p: CatalogProduct) => {
+  /** After something is added: offer that department's own suggestions, once per department per order. */
+  const offerAfterAdding = (p: CatalogProduct) => {
+    if (!p.categoryId || cart.suggested.has(p.categoryId)) return;
+    const picks = pickSuggestions(catalog, p.categoryId, [...cart.lines.map((l) => l.articleId), p.id]);
+    if (picks.length === 0) return;
+    cart.markSuggested(p.categoryId);
+    setOffer(picks);
+  };
+
+  const open = (p: CatalogProduct, fromOffer = false) => {
     // Sizes, option groups and allergens all live on the sheet.
-    if (p.sizes.length > 0 || p.optionGroups.length > 0 || p.allergens.length > 0) return setSheet(p);
+    if (p.sizes.length > 0 || p.optionGroups.length > 0 || p.allergens.length > 0) {
+      setSheetFromOffer(fromOffer);
+      return setSheet(p);
+    }
     cart.add({ articleId: p.id, name: p.name, imageUrl: p.imageUrl, options: [], unitPrice: p.price ?? 0 });
+    if (!fromOffer) offerAfterAdding(p);
   };
 
   return (
@@ -160,7 +178,15 @@ export default function MenuScreen({
       ) : null}
 
       {sheet ? (
-        <ProductSheet product={sheet} currency={catalog.currency} locale={locale} onClose={() => setSheet(null)} />
+        <ProductSheet product={sheet} currency={catalog.currency} locale={locale}
+          // Adding from the offer does not start another offer.
+          onAdded={sheetFromOffer ? undefined : () => offerAfterAdding(sheet)}
+          onClose={() => { setSheet(null); setSheetFromOffer(false); }} />
+      ) : null}
+
+      {offer ? (
+        <SuggestionPanel products={offer} currency={catalog.currency} locale={locale}
+          onPick={(p) => open(p, true)} onClose={() => setOffer(null)} />
       ) : null}
     </main>
   );

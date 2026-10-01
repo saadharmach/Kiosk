@@ -134,7 +134,7 @@ export class CatalogService {
     const areaId = salesArea.untillId;
     const priceLevelId = salesArea.priceLevelId ?? 0n;
 
-    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, allergenLinks, allergenRows] =
+    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, suggestionRows, allergenLinks, allergenRows] =
       await Promise.all([
         this.prisma.tpapiGroup.findMany({ where: { restaurantId } }),
         this.prisma.tpapiDepartment.findMany({
@@ -155,6 +155,7 @@ export class CatalogService {
         this.prisma.tpapiOptionItem.findMany({ where: { restaurantId, priceLevelId } }),
         this.prisma.productPresentation.findMany({ where: { restaurantId } }),
         this.prisma.categoryPresentation.findMany({ where: { restaurantId } }),
+        this.prisma.departmentSuggestion.findMany({ where: { restaurantId } }),
         // Nothing leaves the database when the switch is off.
         showAllergens
           ? this.prisma.productAllergen.findMany({ where: { restaurantId } })
@@ -308,6 +309,16 @@ export class CatalogService {
     // A hidden department takes its products with it, so none are sent that nobody can reach.
     const shownProducts = products.filter((p) => shownCategories.some((c) => c.id === p.categoryId));
 
+    // What to offer after a customer adds something from each department: that department's own list, in
+    // order, limited to products the kiosk can actually show and sell (menus have no price yet).
+    const sellableIds = new Set(shownProducts.filter((p) => p.pricing !== "MENU").map((p) => p.id));
+    const suggestions: Record<string, string[]> = {};
+    for (const row of [...suggestionRows].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      const article = row.articleId.toString();
+      if (!sellableIds.has(article)) continue;
+      (suggestions[row.departmentId.toString()] ??= []).push(article);
+    }
+
     // Only the groups some shown product actually uses.
     const usedGroups: Record<string, { name: string; items: { articleId: string; name: string; price: number }[] }> = {};
     for (const p of shownProducts) {
@@ -323,6 +334,7 @@ export class CatalogService {
       categories: shownCategories,
       products: shownProducts,
       groupDefs: usedGroups,
+      suggestions,
       counts: { categories: shownCategories.length, products: shownProducts.length },
     };
   }

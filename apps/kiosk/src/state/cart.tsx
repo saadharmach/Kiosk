@@ -28,6 +28,9 @@ export interface CartLine {
 
 interface CartApi {
   lines: CartLine[];
+  /** Departments whose suggestions have already been offered in this order. */
+  suggested: ReadonlySet<string>;
+  markSuggested: (departmentId: string) => void;
   count: number;
   total: number;
   add: (line: Omit<CartLine, "key" | "quantity">, qty?: number) => void;
@@ -65,10 +68,13 @@ export function replaceLine(
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [suggested, setSuggested] = useState<ReadonlySet<string>>(new Set());
 
   const api = useMemo<CartApi>(
     () => ({
       lines,
+      suggested,
+      markSuggested: (id) => setSuggested((s) => new Set(s).add(id)),
       count: lines.reduce((n, l) => n + l.quantity, 0),
       total: lines.reduce((n, l) => n + l.quantity * l.unitPrice, 0),
       add: (line, qty = 1) => {
@@ -89,9 +95,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ),
       remove: (key) => setLines((prev) => prev.filter((l) => l.key !== key)),
       replace: (oldKey, line, qty) => setLines((prev) => replaceLine(prev, oldKey, line, qty)),
-      clear: () => setLines([]),
+      clear: () => { setLines([]); setSuggested(new Set()); },
     }),
-    [lines],
+    [lines, suggested],
   );
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

@@ -147,6 +147,8 @@ export interface Catalog {
   currency: string;
   categories: CatalogCategory[];
   products: CatalogProduct[];
+  /** Per department: the products to offer after something from it is added, first first. */
+  suggestions: Record<string, string[]>;
 }
 
 /** What the API sends: each option group's name and choices once, products only list which they use. */

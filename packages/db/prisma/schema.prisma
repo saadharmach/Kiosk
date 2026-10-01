@@ -541,6 +541,23 @@ model CategoryPresentation {
   @@map("category_presentations")
 }
 
+/// The dishes the kiosk offers once a customer adds something from a department.
+/// Each department has its own list.
+model DepartmentSuggestion {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  /// unTill DepartmentId and ArticleId. No FK: a later sync may re-create them.
+  departmentId BigInt
+  articleId    BigInt
+  /// Position in the department's list, first shown first.
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([restaurantId, departmentId, articleId])
+  @@index([restaurantId, departmentId])
+  @@map("department_suggestions")
+}
+
 /// TPAPI has no article→allergen link, so it is declared here.
 model ProductAllergen {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

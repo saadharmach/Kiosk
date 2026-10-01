@@ -53,6 +53,7 @@ type Dict = {
   idleTitle: string; idleText: string; keepOrdering: string; discard: string;
   kindMustHave: string; kindFreeOption: string; kindSupplement: string; kindCondiment: string; kindMenuComponent: string;
   chosenCount: string; edit: string; saveChanges: string;
+  suggestTitle: string; noThanks: string; added: string; done: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -84,6 +85,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleText: "Votre session va se terminer. Touchez ci-dessous pour garder votre commande.",
     kindMustHave: "Option obligatoire", kindFreeOption: "Option gratuite", kindSupplement: "Supplément", kindCondiment: "Condiment",
     kindMenuComponent: "Composant du menu", chosenCount: "{n} sélectionné(s)", edit: "Modifier", saveChanges: "Enregistrer",
+    suggestTitle: "Souhaitez-vous ajouter… ?", noThanks: "Non merci", added: "Ajouté", done: "Terminé",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -112,6 +114,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleText: "Your session is about to end. Tap below to keep your order.",
     kindMustHave: "Must-have option", kindFreeOption: "Free option", kindSupplement: "Supplement", kindCondiment: "Condiment",
     kindMenuComponent: "Component selected inside a menu article", chosenCount: "{n} selected", edit: "Edit", saveChanges: "Save changes",
+    suggestTitle: "Would you like to add…?", noThanks: "No thanks", added: "Added", done: "Done",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -140,6 +143,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleText: "ستنتهي جلستك قريبًا. اضغط أدناه للاحتفاظ بطلبك.",
     kindMustHave: "خيار إلزامي", kindFreeOption: "خيار مجاني", kindSupplement: "إضافة", kindCondiment: "مرافق",
     kindMenuComponent: "مكوّن داخل القائمة", chosenCount: "{n} مختار", edit: "تعديل", saveChanges: "حفظ التعديلات",
+    suggestTitle: "هل تودّ إضافة…؟", noThanks: "لا، شكرًا", added: "تمت الإضافة", done: "تم",
   },
 };
 

@@ -53,6 +53,7 @@ function world(over: Record<string, unknown[]> = {}) {
       { articleId: 10n, displayName: { fr: "Burger FR", en: "Burger EN" }, description: null, imagePath: "restaurants/r1/products/10/a.png", badgeText: "New", isFeatured: true, sortOrder: 5, isVisible: true },
     ],
     categoryPresentation: [],
+    departmentSuggestion: [],
     productAllergen: [{ articleId: 10n, allergenId: 901n }],
     tpapiAllergen: [{ untillId: 901n, number: 1, name: "Gluten" }, { untillId: 902n, number: 2, name: "Nuts" }],
     ...over,
@@ -366,5 +367,27 @@ describe("CatalogService.catalog: the kinds of option", () => {
       { untillId: 90n, name: "Instructions", availableSalesAreaIds: [AREA] },
     ] });
     assert.deepEqual(elsewhere.map((x) => x.kind), ["CONDIMENT"]);
+  });
+});
+
+describe("CatalogService.catalog: suggestions per department", () => {
+  const sug = (departmentId: bigint, articleId: bigint, sortOrder: number) => ({ departmentId, articleId, sortOrder });
+
+  it("sends no suggestions when none are set", async () => {
+    const { c } = await catalog();
+    assert.deepEqual(c.suggestions, {});
+  });
+
+  it("gives each department its own list, in the order set", async () => {
+    const { c } = await catalog({ departmentSuggestion: [sug(1n, 12n, 1), sug(1n, 11n, 0), sug(2n, 10n, 0)] });
+    assert.deepEqual(c.suggestions, { "1": ["11", "12"], "2": ["10"] });
+  });
+
+  it("leaves out anything the kiosk could not sell: unpriced, menus, hidden, gone from unTill", async () => {
+    const { c } = await catalog({
+      productPresentation: [{ articleId: 11n, displayName: null, description: null, imagePath: null, badgeText: null, isFeatured: false, sortOrder: 1, isVisible: false }],
+      departmentSuggestion: [sug(3n, 13n, 0), sug(3n, 15n, 1), sug(3n, 11n, 2), sug(3n, 999n, 3), sug(3n, 10n, 4)],
+    });
+    assert.deepEqual(c.suggestions, { "3": ["10"] });
   });
 });
