@@ -26,7 +26,7 @@ function Tile({ label, value, note, tone }: { label: string; value: string | num
   );
 }
 
-export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: RestaurantTab) => void }) {
+export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: RestaurantTab, filter?: string) => void }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +70,7 @@ export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: Re
               <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
                 {data.attention.map((a: AttentionItem) => (
                   <li key={`${a.restaurantId}:${a.kind}`}>
-                    <button onClick={() => onOpen(a.restaurantId, tabFor(a.kind))} className="flex w-full items-start gap-4 p-4 text-start hover:bg-(--color-surface-2)">
+                    <button onClick={() => onOpen(a.restaurantId, tabFor(a.kind), a.kind === "ORDERS_FAILED" ? "FAILED" : a.kind === "ORDERS_STUCK" ? "PENDING,SENT" : undefined)} className="flex w-full items-start gap-4 p-4 text-start hover:bg-(--color-surface-2)">
                       <span className={`mt-0.5 w-24 shrink-0 rounded-full px-2.5 py-0.5 text-center text-xs font-medium ${STYLE[a.severity]}`}>{LABEL[a.severity]}</span>
                       <span className="min-w-0 flex-1"><span className="font-medium">{a.name}</span><span className="block text-sm text-(--color-ink-muted)">{a.message}</span></span>
                       <span aria-hidden className="text-(--color-ink-muted)">→</span>

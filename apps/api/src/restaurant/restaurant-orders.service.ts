@@ -173,7 +173,8 @@ export class RestaurantOrdersService {
     });
   }
 
-  async retry(restaurantId: string, orderId: string, actorId: string | null) {
+  /** `actor` says who asked: the restaurant's staff from their back office, or the platform team. */
+  async retry(restaurantId: string, orderId: string, actorId: string | null, actor: "RESTAURANT_USER" | "PLATFORM_USER" = "RESTAURANT_USER") {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, restaurantId },
       select: { status: true, reference: true },
@@ -188,9 +189,9 @@ export class RestaurantOrdersService {
       restaurantId,
       orderId,
       to: "PENDING",
-      actor: "RESTAURANT_USER",
+      actor,
       actorId,
-      reason: "Retry requested by staff",
+      reason: actor === "PLATFORM_USER" ? "Retry requested by the platform team" : "Retry requested by staff",
       patch: { tpapiLastError: null },
     });
   }

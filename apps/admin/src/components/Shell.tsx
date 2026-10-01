@@ -15,7 +15,7 @@ export default function Shell() {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"overview" | "restaurants">("overview");
   // A restaurant that is open, and the tab to open it on.
-  const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab } | null>(null);
+  const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab; filter?: string } | null>(null);
   const go = (v: "overview" | "restaurants") => { setView(v); setOpen(null); };
 
   if (loading) return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
@@ -67,9 +67,9 @@ export default function Shell() {
       </header>
       <main className="mx-auto max-w-6xl p-8">
         {open
-          ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} onBack={() => setOpen(null)} />
+          ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} initialFilter={open.filter} onBack={() => setOpen(null)} />
           : view === "overview"
-            ? <OverviewPage onOpen={(id, tab) => setOpen({ id, tab })} />
+            ? <OverviewPage onOpen={(id, tab, filter) => setOpen({ id, tab, filter })} />
             : <RestaurantsPage canWrite={canWrite} onOpen={(id, tab) => setOpen({ id, tab })} />}
       </main>
     </div>

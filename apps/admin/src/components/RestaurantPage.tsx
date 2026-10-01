@@ -6,13 +6,15 @@ import ActivityTab from "./ActivityTab";
 import ConnectionTab from "./ConnectionTab";
 import DetailsTab from "./DetailsTab";
 import GoLiveTab from "./GoLiveTab";
+import OrdersTab from "./OrdersTab";
+import TillLogTab from "./TillLogTab";
 import UsersTab from "./UsersTab";
 import { PosBadge, StatusBadge, secondary } from "./ui";
 
-const TABS: RestaurantTab[] = ["Go-live", "Details", "unTill", "Users", "Activity"];
+const TABS: RestaurantTab[] = ["Go-live", "Details", "unTill", "Users", "Orders", "Till log", "Activity"];
 type Tab = RestaurantTab;
 
-export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; onBack: () => void }) {
+export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", initialFilter, onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; initialFilter?: string; onBack: () => void }) {
   const [r, setR] = useState<RestaurantDetail | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -59,6 +61,8 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", o
       {tab === "Details" ? <DetailsTab r={r} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "unTill" ? <ConnectionTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "Users" ? <UsersTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
+      {tab === "Orders" ? <OrdersTab id={r.id} canWrite={canWrite} initialFilter={initialFilter} /> : null}
+      {tab === "Till log" ? <TillLogTab id={r.id} /> : null}
       {tab === "Activity" ? <ActivityTab id={r.id} /> : null}
     </>
   );

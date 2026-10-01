@@ -123,10 +123,49 @@ export interface Overview {
 }
 export const getOverview = () => request<Overview>("/admin/overview");
 
-export type RestaurantTab = "Go-live" | "Details" | "unTill" | "Users" | "Activity";
+export type RestaurantTab = "Go-live" | "Details" | "unTill" | "Users" | "Orders" | "Till log" | "Activity";
 
 export const KIOSK_URL = process.env.NEXT_PUBLIC_KIOSK_URL ?? "http://localhost:3002";
 export const BACKOFFICE_URL = process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "http://localhost:3003";
+
+// ---------------------------------------------------------------------- orders
+
+export type OrderStatus = "DRAFT" | "PENDING" | "SENT" | "CONFIRMED" | "PAID" | "FAILED" | "CANCELLED";
+
+export interface OrderRow {
+  id: string; reference: string; status: OrderStatus; orderType: string; tableNumber: number | null;
+  itemCount: number; total: number; currency: string; createdAt: string; sentAt: string | null; tpapiLastError: string | null;
+}
+export interface OrderItem {
+  lineNumber: number; parentLineNumber: number | null; kind: string; articleName: string; displayName: string | null;
+  sizeName: string | null; optionGroupName: string | null; quantity: number; unitPrice: number; lineTotal: number; text: string | null;
+}
+export interface OrderDetail {
+  id: string; reference: string; status: OrderStatus; orderType: string; tableNumber: number | null; currency: string;
+  total: number; itemCount: number; createdAt: string; sentAt: string | null; confirmedAt: string | null;
+  tpapi: { attempts: number; returnCode: number | null; lastError: string | null; correlationId: string | null };
+  items: OrderItem[];
+  history: { fromStatus: OrderStatus | null; toStatus: OrderStatus; actor: string; reason: string | null; createdAt: string }[];
+}
+
+/** What "needs a look" means in an order list: not yet at the till, waiting for it, or refused by it. */
+export const NEEDS_ATTENTION = "PENDING,SENT,FAILED";
+
+export const listOrders = (id: string, q: { status?: string; reference?: string; page?: number }) =>
+  request<{ orders: OrderRow[]; total: number; page: number; pages: number }>(
+    `/admin/restaurants/${id}/orders?${qs({ status: q.status, reference: q.reference, page: q.page ? String(q.page) : undefined })}`);
+export const getOrder = (id: string, orderId: string) => request<OrderDetail>(`/admin/restaurants/${id}/orders/${orderId}`);
+export const verifyOrder = (id: string, orderId: string) =>
+  request<{ reference: string; confirmed?: boolean; unreachable?: boolean }>(`/admin/restaurants/${id}/orders/${orderId}/verify`, { method: "POST" });
+export const retryOrder = (id: string, orderId: string) =>
+  request<unknown>(`/admin/restaurants/${id}/orders/${orderId}/retry`, { method: "POST" });
+
+export interface TillLogItem {
+  id: string; at: string; operation: string | null; ok: boolean; level: string; returnCode: number | null;
+  message: string | null; durationMs: number | null; orderReference: string | null;
+}
+export const listTillLog = (id: string, page = 1, failuresOnly = false) =>
+  request<Page<TillLogItem>>(`/admin/restaurants/${id}/till-log?page=${page}&failures=${failuresOnly}`);
 
 // ------------------------------------------------------------------- go-live checklist
 
@@ -146,6 +185,7 @@ export function tabFor(kind: AttentionKind): RestaurantTab {
   switch (kind) {
     case "NO_OWNER": return "Users";
     case "TILL_FAILING": case "SYNC_FAILING": case "STALE_SYNC": case "NEVER_SYNCED": case "NO_TILL": case "TILL_DISABLED": return "unTill";
+    case "ORDERS_STUCK": case "ORDERS_FAILED": return "Orders";
     default: return "Details";
   }
 }
