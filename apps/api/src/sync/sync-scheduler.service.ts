@@ -34,8 +34,8 @@ export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
 
     // The first look comes a little after start-up, so the server is fully up and a restart loop cannot hammer the tills.
     this.first = setTimeout(() => {
-      void this.tick();
-      this.timer = setInterval(() => void this.tick(), TICK_MS);
+      void this.safeTick();
+      this.timer = setInterval(() => void this.safeTick(), TICK_MS);
       this.timer.unref?.();
     }, FIRST_TICK_MS);
     this.first.unref?.();
@@ -69,6 +69,19 @@ export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
       // null with enabled=true means "as soon as the scheduler next looks" (nothing has run yet)
       nextAt: at && at.getTime() > now ? at.toISOString() : null,
     };
+  }
+
+  /**
+   * What the timer calls. A pass can fail for reasons outside our control (the database is slow, the pool
+   * times out), and a rejection nobody catches takes the whole API down with it, so nothing escapes from here.
+   */
+  async safeTick(now = Date.now()): Promise<string[]> {
+    try {
+      return await this.tick(now);
+    } catch (e) {
+      this.logger.error(`Menu sync pass failed, will look again next minute: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
   }
 
   /** One pass: sync every restaurant whose turn has come, one after the other. Returns who was synced. */

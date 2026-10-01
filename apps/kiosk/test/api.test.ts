@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { ApiError, api, createOrder, isConnectionError, priceCart, tableInRanges } from "../src/lib/api";
+import { ApiError, api, createOrder, isConnectionError, isUnavailableError, priceCart, tableInRanges } from "../src/lib/api";
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -75,5 +75,38 @@ describe("tableInRanges", () => {
     assert.equal(tableInRanges(5, [{} as never]), false);
     assert.equal(tableInRanges(5, []), false);
     assert.equal(tableInRanges(Number.NaN, ranges), false);
+  });
+});
+
+describe("a restaurant that is switched off", () => {
+  const unavailable = { statusCode: 503, code: "RESTAURANT_UNAVAILABLE", message: "This restaurant is not taking orders right now", restaurantName: "Chez Sam" };
+
+  it("is recognised by its code, with the restaurant's name, and is not a lost connection", async () => {
+    globalThis.fetch = reply(503, unavailable);
+    await assert.rejects(api.bootstrap("sam"), (e) => {
+      assert.ok(isUnavailableError(e));
+      assert.equal(isConnectionError(e), false);
+      assert.equal((e as ApiError).restaurantName, "Chez Sam");
+      assert.equal((e as ApiError).status, 503);
+      return true;
+    });
+  });
+
+  it("also when it happens while an order is being placed", async () => {
+    globalThis.fetch = reply(503, unavailable);
+    await assert.rejects(createOrder("sam", { clientOrderId: "x", orderType: "EAT_IN", salesAreaId: "1", lines: [] }), isUnavailableError);
+    await assert.rejects(priceCart("sam", { orderType: "EAT_IN", salesAreaId: "1", lines: [] }), isUnavailableError);
+  });
+
+  it("an ordinary 503 from a gateway (not JSON) is still a connection problem, not 'unavailable'", async () => {
+    globalThis.fetch = reply(503, "<html>Service Unavailable</html>", true);
+    await assert.rejects(api.bootstrap("sam"), (e) => isConnectionError(e) && !isUnavailableError(e));
+  });
+
+  it("other errors and unknown addresses are not 'unavailable'", async () => {
+    globalThis.fetch = reply(404, { statusCode: 404, message: "Restaurant not available" });
+    await assert.rejects(api.bootstrap("ghost"), (e) => !isUnavailableError(e) && !isConnectionError(e));
+    assert.equal(isUnavailableError(new Error("x")), false);
+    assert.equal(isUnavailableError(undefined), false);
   });
 });

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { requireOrderable } from "./availability.js";
 import { StorageService } from "../common/storage.service.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
 import { allowedGroups } from "./option-kinds.js";
@@ -22,7 +23,7 @@ export class CatalogService {
       where: { slug },
       include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true } } },
     });
-    if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
+    requireOrderable(restaurant);
 
     const salesAreas = await this.prisma.tpapiSalesArea.findMany({
       where: { restaurantId: restaurant.id },
@@ -116,7 +117,7 @@ export class CatalogService {
         settings: { select: { showAllergens: true } },
       },
     });
-    if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
+    requireOrderable(restaurant);
     const restaurantId = restaurant.id;
     const showAllergens = restaurant.settings?.showAllergens ?? false;
         // The server resolves the language. The browser never receives three of everything.

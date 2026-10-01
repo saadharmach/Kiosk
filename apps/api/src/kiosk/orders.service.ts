@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { requireOrderable } from "./availability.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
@@ -20,9 +21,9 @@ export class OrdersService {
   async create(slug: string, dto: CreateOrderDto) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, currency: true, status: true, settings: true, locale: true },
+      select: { id: true, name: true, currency: true, status: true, settings: true, locale: true },
     });
-    if (!restaurant || restaurant.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
+    requireOrderable(restaurant);
     const restaurantId = restaurant.id;
 
     // ---- idempotency: the same clientOrderId always returns the same order
@@ -115,9 +116,9 @@ export class OrdersService {
 
   preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
     return this.prisma.restaurant
-      .findUnique({ where: { slug }, select: { id: true, currency: true, status: true, settings: true, locale: true } })
+      .findUnique({ where: { slug }, select: { id: true, name: true, currency: true, status: true, settings: true, locale: true } })
       .then((r) => {
-        if (!r || r.status !== "ACTIVE") throw new NotFoundException("Restaurant not available");
+        requireOrderable(r);
         // Same rule as create(): no point quoting a price for an order that would be refused.
         this.assertOrderTypeEnabled(r.settings, dto.orderType);
         return this.pricing.price(r.id, r.currency, {
@@ -267,11 +268,9 @@ export class OrdersService {
   async getByClientOrderId(slug: string, clientOrderId: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, status: true },
+      select: { id: true, name: true, status: true },
     });
-    if (!restaurant || restaurant.status !== "ACTIVE") {
-      throw new NotFoundException("Restaurant not available");
-    }
+    requireOrderable(restaurant);
 
     const order = await this.prisma.order.findFirst({
       where: { restaurantId: restaurant.id, clientRequestId: clientOrderId },

@@ -17,8 +17,11 @@ const STATUS_ACTIONS: Record<Status, { to: Status; label: string; warn: string }
 };
 
 export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDetail; canWrite: boolean; onChanged: () => void }) {
+  // The address can change until the restaurant has taken its first order; after that it is part of a printed,
+  // installed kiosk and is fixed.
+  const slugEditable = canWrite && r._count.orders === 0;
   const [f, setF] = useState({
-    name: r.name, city: r.city ?? "", country: r.country ?? "", currency: r.currency, locale: r.locale, timezone: r.timezone,
+    slug: r.slug, name: r.name, city: r.city ?? "", country: r.country ?? "", currency: r.currency, locale: r.locale, timezone: r.timezone,
     contactEmail: r.contactEmail ?? "", contactPhone: r.contactPhone ?? "", addressLine: r.addressLine ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -33,7 +36,9 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
 
   const save = () => {
     // Only what was filled in is sent: an emptied optional field is left as it is, not blanked with "".
-    const body = Object.fromEntries(Object.entries(f).filter(([, v]) => v.trim() !== "")) as typeof f;
+    const body = Object.fromEntries(
+      Object.entries(f).filter(([k, v]) => v.trim() !== "" && (k !== "slug" || v !== r.slug)),   // the address only when it changed
+    ) as typeof f;
     return run(body);
   };
 
@@ -42,6 +47,12 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
       <section>
         <h2 className="mb-3 text-lg font-medium">Details</h2>
         <fieldset disabled={!canWrite || busy} className="grid gap-4 md:grid-cols-3">
+          <Field label="Address on the kiosk" hint={slugEditable
+            ? "Lowercase letters, digits and dashes. Changing it breaks any kiosk already opened at the old address, so do it before the kiosk is installed."
+            : "Fixed: the restaurant has taken orders, so its kiosk address can no longer change."}>
+            <input className={input} value={f.slug} disabled={!slugEditable} pattern="[a-z0-9]([a-z0-9\-]{0,58}[a-z0-9])?" maxLength={60}
+              onChange={(e) => { setF({ ...f, slug: e.target.value.toLowerCase() }); setSaved(false); }} />
+          </Field>
           <Field label="Name"><input className={input} value={f.name} minLength={2} maxLength={120} onChange={set("name")} /></Field>
           <Field label="City"><input className={input} value={f.city} maxLength={120} onChange={set("city")} /></Field>
           <Field label="Country (2 letters)"><input className={input} value={f.country} minLength={2} maxLength={2} onChange={(e) => { setF({ ...f, country: e.target.value.toUpperCase() }); setSaved(false); }} /></Field>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
-import { ApiError, createOrder, isConnectionError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
+import { ApiError, createOrder, isConnectionError, isUnavailableError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
 import { useCart, type CartLine } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
@@ -19,7 +19,7 @@ function Thumb({ src }: { src: string }) {
 }
 
 export default function CartScreen({
-  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced,
+  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced, onUnavailable,
 }: {
   slug: string;
   locale: Locale;
@@ -33,6 +33,8 @@ export default function CartScreen({
   tableNumber: number | null;
   onBack: () => void;
   onPlaced: (order: PlacedOrder) => void;
+  /** The restaurant was switched off while the customer was ordering: the cart is kept, the kiosk shows its calm screen. */
+  onUnavailable: (e: ApiError) => void;
 }) {
   const t = STRINGS[locale];
   const cart = useCart();
@@ -69,7 +71,11 @@ export default function CartScreen({
     setError(null);
     priceCart(slug, { orderType, salesAreaId, locale, lines: wire() }).then(
       (p) => !cancelled && setServerTotal(p.total),
-      (e) => !cancelled && setError(isConnectionError(e) ? t.connectionInline : e.message),
+      (e) => {
+        if (cancelled) return;
+        if (isUnavailableError(e)) return onUnavailable(e);
+        setError(isConnectionError(e) ? t.connectionInline : e.message);
+      },
     );
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +98,7 @@ export default function CartScreen({
       onPlaced(order);
     } catch (e) {
       const err = e as ApiError;
+      if (isUnavailableError(err)) return onUnavailable(err);
       setError(
         err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message,
       );

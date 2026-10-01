@@ -50,7 +50,7 @@ export interface NewRestaurant {
 export const createRestaurant = (body: NewRestaurant) =>
   request<RestaurantRow>("/admin/restaurants", { method: "POST", body: JSON.stringify(body) });
 
-export type RestaurantEdit = Partial<Omit<NewRestaurant, "slug">> & { status?: Status };
+export type RestaurantEdit = Partial<NewRestaurant> & { status?: Status };
 export const updateRestaurant = (id: string, body: RestaurantEdit) =>
   request<RestaurantRow>(`/admin/restaurants/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 

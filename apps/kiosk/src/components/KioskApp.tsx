@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
-import { api, getCatalog, isConnectionError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { api, getCatalog, isConnectionError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
 import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
 import { BrandContext } from "@/state/brand";
@@ -29,13 +29,19 @@ export default function KioskApp({ slug }: { slug: string }) {
   );
 }
 
+/** What the kiosk needs to know about a failed request. */
+function toKioskError(e: Error & { restaurantName?: string }) {
+  return { message: e.message, connection: isConnectionError(e), unavailable: isUnavailableError(e), name: e.restaurantName };
+}
+
 function KioskFlow({ slug }: { slug: string }) {
   useKioskFullscreen();
   const cart = useCart();
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   // `connection` marks a request that never got an answer, as opposed to the server refusing it.
-  const [error, setError] = useState<{ message: string; connection: boolean } | null>(null);
+  // `unavailable` marks a restaurant that is switched off: a calm screen, not an error, and `name` is its name.
+  const [error, setError] = useState<{ message: string; connection: boolean; unavailable: boolean; name?: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [locale, setLocale] = useState<Locale>("fr");
   const [screen, setScreen] = useState<Screen>("WELCOME");
@@ -65,10 +71,25 @@ function KioskFlow({ slug }: { slug: string }) {
         setBoot(d);
         if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
       },
-      (e) => !cancelled && setError({ message: e.message, connection: isConnectionError(e) }),
+      (e) => !cancelled && setError(toKioskError(e)),
     );
     return () => { cancelled = true; };
   }, [slug, attempt]);
+
+  // A switched-off restaurant may be switched back on while nobody is standing here, so look again every
+  // minute without any flicker, and carry on by itself as soon as it answers.
+  const unavailable = Boolean(error?.unavailable);
+  useEffect(() => {
+    if (!unavailable) return;
+    const timer = setInterval(() => {
+      api.bootstrap(slug).then((d) => {
+        setBoot(d);
+        if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
+        setError(null);
+      }, () => undefined);
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [unavailable, slug]);
 
   // Load the menu as soon as the order type resolves the sales area, so the
   // customer never waits on a spinner after choosing their table.
@@ -77,7 +98,7 @@ function KioskFlow({ slug }: { slug: string }) {
     let cancelled = false;
     getCatalog(slug, choice.salesAreaId, locale).then(
       (c) => !cancelled && setCatalog(c),
-      (e) => !cancelled && setError({ message: e.message, connection: isConnectionError(e) }),
+      (e) => !cancelled && setError(toKioskError(e)),
     );
     return () => { cancelled = true; };
   }, [slug, choice, locale, attempt]);
@@ -143,6 +164,13 @@ function KioskFlow({ slug }: { slug: string }) {
   const startOver = () => { setError(null); reset(); setAttempt((n) => n + 1); };
   const header = boot ? { name: boot.restaurant.name, locale, onLocale: setLocale } : undefined;
 
+  if (error?.unavailable) {
+    const named = error.name ? { name: error.name, locale, onLocale: setLocale } : header;
+    return withBrand(
+      <StatusScreen header={named} icon="info" title={t.unavailableTitle} text={t.unavailableText}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} />,
+    );
+  }
   if (error?.connection) {
     return withBrand(
       <StatusScreen header={header} icon="warning" title={t.connectionTitle} text={t.connectionText}
@@ -213,6 +241,7 @@ function KioskFlow({ slug }: { slug: string }) {
         tableNumber={table}
         onBack={() => setScreen("MENU")}
         onPlaced={(o) => { setOrder(o); setScreen("TICKET"); }}
+        onUnavailable={(e) => setError(toKioskError(e))}
       />
     );
   }

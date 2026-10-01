@@ -100,6 +100,18 @@ export class RestaurantsService {
     const before = await this.prisma.restaurant.findUnique({ where: { id }, select: CARD });
     if (!before) throw new NotFoundException("Restaurant not found");
 
+    const slugChange = dto.slug !== undefined && dto.slug !== before.slug;
+    if (slugChange) {
+      // Frozen once the first order exists: the address may be printed on a sticker on a machine nobody
+      // is standing next to, and changing it would silently break that machine.
+      if ((await this.prisma.order.count({ where: { restaurantId: id } })) > 0) {
+        throw new ConflictException("The address can no longer be changed: this restaurant has taken orders");
+      }
+      if (await this.prisma.restaurant.findUnique({ where: { slug: dto.slug }, select: { id: true } })) {
+        throw new ConflictException(`Address "${dto.slug}" is already taken`);
+      }
+    }
+
     const after = await this.prisma.restaurant.update({
       where: { id },
       data: {
@@ -114,7 +126,7 @@ export class RestaurantsService {
         restaurantId: id,
         actorType: "PLATFORM_USER",
         actorId: actor.id,
-        action: dto.status ? `restaurant.status.${dto.status.toLowerCase()}` : "restaurant.update",
+        action: dto.status ? `restaurant.status.${dto.status.toLowerCase()}` : slugChange ? "restaurant.slug.change" : "restaurant.update",
         entityType: "Restaurant",
         entityId: id,
         before,

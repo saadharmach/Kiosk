@@ -135,6 +135,15 @@ describe("the scheduler", () => {
     await first;
   });
 
+  it("a pass that fails for reasons outside our control (database timeout) never throws out of the timer, which would take the API down", async () => {
+    const prisma = { restaurant: { findMany: async () => { throw new Error("Timed out fetching a new connection from the connection pool"); } } };
+    const sched = new SyncSchedulerService(prisma as never, {} as never);
+    await assert.rejects(sched.tick(NOW), /connection pool/);      // the pass itself does fail…
+    assert.deepEqual(await sched.safeTick(NOW), []);              // …but what the timer calls never does
+    // and the next pass is not blocked by the failed one
+    assert.deepEqual(await sched.safeTick(NOW), []);
+  });
+
   it("on start-up, a sync that was running when the server stopped is closed as failed, so it cannot block", async () => {
     const { sched, queries } = setup([], []);
     await sched.closeInterrupted(NOW);

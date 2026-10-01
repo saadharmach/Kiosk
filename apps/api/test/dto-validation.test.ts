@@ -28,8 +28,12 @@ describe("the bodies the platform screens send are accepted by the API's validat
     await check(UpdateRestaurantDto, {});
   });
 
-  it("but not the slug, an unknown status, or a field that does not exist", async () => {
-    await refused(UpdateRestaurantDto, { slug: "other" });
+  it("the address can be sent, but only in the shape a public URL needs", async () => {
+    await check(UpdateRestaurantDto, { slug: "chez-sam-2" });
+    for (const bad of ["Chez Sam", "UPPER", "-x", "x-", "a/b", "é", ""]) await refused(UpdateRestaurantDto, { slug: bad });
+  });
+
+  it("but not an unknown status, or a field that does not exist", async () => {
     await refused(UpdateRestaurantDto, { status: "DELETED" });
     await refused(UpdateRestaurantDto, { colour: "#fff" });
     await refused(UpdateRestaurantDto, { name: "x" });

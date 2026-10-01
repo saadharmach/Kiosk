@@ -1,9 +1,12 @@
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
+  constructor(message: string, readonly status: number, readonly code?: string, readonly restaurantName?: string) {
     super(message);
     this.name = "ApiError";
   }
 }
+
+/** The restaurant exists but is not taking orders right now (switched off by the platform). */
+export const isUnavailableError = (e: unknown): boolean => e instanceof ApiError && e.code === "RESTAURANT_UNAVAILABLE";
 
 /** The request never reached the API, or an intermediary answered instead of it. */
 export const isConnectionError = (e: unknown): boolean => e instanceof ApiError && e.code === "NETWORK";
@@ -29,7 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message =
       (Array.isArray(body?.message) ? body.message.join(", ") : body?.message) ??
       `Request failed with ${res.status}`;
-    throw new ApiError(message, res.status, body?.code);
+    throw new ApiError(message, res.status, body?.code, typeof body?.restaurantName === "string" ? body.restaurantName : undefined);
   }
   return body as T;
 }

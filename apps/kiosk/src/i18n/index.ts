@@ -54,6 +54,7 @@ type Dict = {
   kindMustHave: string; kindFreeOption: string; kindSupplement: string; kindCondiment: string; kindMenuComponent: string;
   chosenCount: string; edit: string; saveChanges: string;
   suggestTitle: string; noThanks: string; added: string; done: string;
+  unavailableTitle: string; unavailableText: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -86,6 +87,8 @@ export const STRINGS: Record<Locale, Dict> = {
     kindMustHave: "Option obligatoire", kindFreeOption: "Option gratuite", kindSupplement: "Supplément", kindCondiment: "Condiment",
     kindMenuComponent: "Composant du menu", chosenCount: "{n} sélectionné(s)", edit: "Modifier", saveChanges: "Enregistrer",
     suggestTitle: "Souhaitez-vous ajouter… ?", noThanks: "Non merci", added: "Ajouté", done: "Terminé",
+    unavailableTitle: "Momentanément indisponible",
+    unavailableText: "Nous ne pouvons pas prendre de commande sur cette borne pour le moment. Merci de vous adresser à un membre de notre équipe.",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -115,6 +118,8 @@ export const STRINGS: Record<Locale, Dict> = {
     kindMustHave: "Must-have option", kindFreeOption: "Free option", kindSupplement: "Supplement", kindCondiment: "Condiment",
     kindMenuComponent: "Component selected inside a menu article", chosenCount: "{n} selected", edit: "Edit", saveChanges: "Save changes",
     suggestTitle: "Would you like to add…?", noThanks: "No thanks", added: "Added", done: "Done",
+    unavailableTitle: "Temporarily unavailable",
+    unavailableText: "We can't take orders on this kiosk right now. Please ask a member of our staff.",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -144,6 +149,8 @@ export const STRINGS: Record<Locale, Dict> = {
     kindMustHave: "خيار إلزامي", kindFreeOption: "خيار مجاني", kindSupplement: "إضافة", kindCondiment: "مرافق",
     kindMenuComponent: "مكوّن داخل القائمة", chosenCount: "{n} مختار", edit: "تعديل", saveChanges: "حفظ التعديلات",
     suggestTitle: "هل تودّ إضافة…؟", noThanks: "لا، شكرًا", added: "تمت الإضافة", done: "تم",
+    unavailableTitle: "غير متاح مؤقتًا",
+    unavailableText: "لا يمكننا استلام الطلبات على هذه الشاشة حاليًا. يُرجى التوجّه إلى أحد موظفينا.",
   },
 };
 

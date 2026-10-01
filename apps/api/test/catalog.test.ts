@@ -216,10 +216,11 @@ describe("CatalogService.catalog: input checks", () => {
     }
   });
 
-  it("answers 404 for a restaurant that is not active", async () => {
+  it("answers 503 'unavailable' (not 404) for a restaurant that is not active, so the kiosk can show a calm screen", async () => {
     const { svc } = setup({}, { showAllergens: true }, { status: "SUSPENDED" });
-    await assert.rejects(svc.catalog("resto-a", "100"), (e: { getStatus?: () => number }) => e.getStatus?.() === 404);
-    await assert.rejects(svc.bootstrap("resto-a"), (e: { getStatus?: () => number }) => e.getStatus?.() === 404);
+    const unavailable = (e: { getStatus?: () => number; getResponse?: () => { code?: string } }) => e.getStatus?.() === 503 && e.getResponse?.().code === "RESTAURANT_UNAVAILABLE";
+    await assert.rejects(svc.catalog("resto-a", "100"), unavailable);
+    await assert.rejects(svc.bootstrap("resto-a"), unavailable);
   });
 });
 

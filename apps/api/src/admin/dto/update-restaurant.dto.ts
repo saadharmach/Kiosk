@@ -1,12 +1,17 @@
 import {
-  IsEmail, IsEnum, IsHexColor, IsOptional, IsString, Length, MaxLength,
+  IsEmail, IsEnum, IsHexColor, IsOptional, IsString, Length, Matches, MaxLength,
 } from "class-validator";
 
 /**
- * Everything optional, and the slug can never change: it is a public URL.
+ * Everything optional. The slug is a public URL (it may be on a sticker on a machine nobody is standing next
+ * to), so it can only change until the restaurant has taken its first order: the service enforces that.
  * Every field needs a validator: the API rejects any property that has none (forbidNonWhitelisted).
  */
 export class UpdateRestaurantDto {
+  @IsOptional()
+  @Matches(/^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$/, { message: "slug must be lowercase letters, digits and dashes" })
+  slug?: string;
+
   @IsOptional() @IsString() @Length(2, 120)
   name?: string;
 
