@@ -185,7 +185,7 @@ export default function MenuScreen({
       ) : null}
 
       {offer ? (
-        <SuggestionPanel products={offer} currency={catalog.currency} locale={locale}
+        <SuggestionPanel products={offer} currency={catalog.currency} locale={locale} showImages={showImages}
           onPick={(p) => open(p, true)} onClose={() => setOffer(null)} />
       ) : null}
     </main>

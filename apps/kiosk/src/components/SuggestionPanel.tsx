@@ -19,11 +19,13 @@ function Photo({ src }: { src: string }) {
  * it opens; a tile turns to "Added" as soon as its product is in the order.
  */
 export default function SuggestionPanel({
-  products, currency, locale, onPick, onClose,
+  products, currency, locale, showImages = true, onPick, onClose,
 }: {
   products: CatalogProduct[];
   currency: string;
   locale: Locale;
+  /** The restaurant can switch product photos off. */
+  showImages?: boolean;
   /** A product with choices to make opens its sheet; anything else is added straight away. */
   onPick: (p: CatalogProduct) => void;
   onClose: () => void;
@@ -46,7 +48,7 @@ export default function SuggestionPanel({
               <li key={p.id}>
                 <button onClick={() => onPick(p)} disabled={added}
                   className="flex h-full w-full flex-col overflow-hidden rounded-(--radius-card) border-[3px] border-(--color-line) bg-(--color-page) text-start disabled:opacity-80">
-                  {p.imageUrl ? <Photo src={p.imageUrl} /> : null}
+                  {showImages && p.imageUrl ? <Photo src={p.imageUrl} /> : null}
                   <span className="flex flex-1 flex-col justify-between gap-3 p-5">
                     <span className="line-clamp-2 font-display text-3xl leading-tight font-bold break-words">{p.name}</span>
                     <span className="flex items-center justify-between gap-3">
