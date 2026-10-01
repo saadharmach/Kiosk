@@ -1,12 +1,15 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { OptionKind } from "@/lib/api";
 
 export interface CartOption {
   optionGroupId: string;
   articleId: string;
   name: string;
   price: number;
+  /** Which of unTill's option kinds it is, so the cart can name it. */
+  kind: OptionKind;
 }
 
 export interface CartLine {

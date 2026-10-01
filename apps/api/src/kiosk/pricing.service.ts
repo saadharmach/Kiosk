@@ -2,11 +2,13 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { PrismaService } from "../prisma/prisma.service.js";
 import { pickLocalized, resolveLocale, type Locale } from "../common/locale.js";
 import type { CartLineDto, PriceCartDto } from "./dto/cart.dto.js";
+import { allowedGroups, type ArticleOptionLink, type DepartmentOptions } from "./option-kinds.js";
 
 const dec = (v: { toNumber(): number }): number => v.toNumber();
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 export type PricedModifier = {
-  kind: "SIZE" | "OPTION";
+  /** OPTION covers must-have and free options; unTill tells them apart by the article's link. */
+  kind: "SIZE" | "OPTION" | "SUPPLEMENT" | "CONDIMENT";
   articleId: string | null;
   optionGroupId: string | null;
   sizeItemId: string | null;
@@ -60,7 +62,7 @@ export class PricingService {
     const priceLevelId = salesArea.priceLevelId ?? 0n;
     const wanted = [...new Set(dto.lines.map((l) => BigInt(l.articleId)))];
 
-    const [articles, prices, sizePrices, sizeItems, links, optItems, optGroups, presentations] =
+    const [articles, prices, sizePrices, sizeItems, links, optItems, optGroups, presentations, departments] =
       await Promise.all([
         this.prisma.tpapiArticle.findMany({
           where: { restaurantId, untillId: { in: wanted }, isActive: true, isPresent: true },
@@ -76,8 +78,14 @@ export class PricingService {
         this.prisma.tpapiOptionItem.findMany({ where: { restaurantId, priceLevelId } }),
         this.prisma.tpapiOptionGroup.findMany({ where: { restaurantId } }),
         this.prisma.productPresentation.findMany({ where: { restaurantId, articleId: { in: wanted } } }),
+        // A department carries the supplement and condiment groups of all its articles.
+        this.prisma.tpapiDepartment.findMany({
+          where: { restaurantId },
+          select: { untillId: true, supplementOptionId: true, condimentOptionId: true },
+        }),
       ]);
 
+    const departmentById = new Map<string, DepartmentOptions>(departments.map((d) => [d.untillId.toString(), d]));
     const articleById = new Map(articles.map((a) => [a.untillId.toString(), a]));
     const priceById = new Map(prices.map((p) => [p.articleId.toString(), p]));
     const presById = new Map(presentations.map((p) => [p.articleId.toString(), p]));
@@ -108,7 +116,7 @@ export class PricingService {
     const pricedLines: PricedLine[] = dto.lines.map((line) =>
       this.priceLine(line, {
         locale, areaId, articleById, priceById, presById, sizePriceBy, sizeName,
-        optItemBy, groupName, linksOf, allArticleNames, sizeKey, optItemKey,
+        optItemBy, groupName, linksOf, departmentById, allArticleNames, sizeKey, optItemKey,
       }),
     );
 
@@ -170,22 +178,30 @@ export class PricingService {
       throw new BadRequestException(`No price for "${article.name}" in this zone`);
     }
 
-    // ---- options
-    const allowed = (ctx.linksOf.get(line.articleId) ?? []) as {
-      optionGroupId: bigint; requiredChoices: number | null;
-    }[];
+    // ---- options: the article's own groups plus its department's supplement and condiment groups
+    const allowed = allowedGroups(
+      (ctx.linksOf.get(line.articleId) ?? []) as ArticleOptionLink[],
+      article.departmentId ? (ctx.departmentById.get(article.departmentId.toString()) as DepartmentOptions | undefined) : undefined,
+    );
     const chosen = line.options ?? [];
     const perGroup = new Map<string, number>();
+    const seen = new Set<string>();
 
     for (const opt of chosen) {
-      const link = allowed.find((l) => l.optionGroupId.toString() === opt.optionGroupId);
-      if (!link) throw new BadRequestException(`Option group ${opt.optionGroupId} is not valid for "${article.name}"`);
+      const group = allowed.find((g) => g.groupId.toString() === opt.optionGroupId);
+      if (!group) throw new BadRequestException(`Option group ${opt.optionGroupId} is not valid for "${article.name}"`);
       const item = ctx.optItemBy.get(ctx.optItemKey(opt.optionGroupId, opt.articleId));
       if (!item) throw new BadRequestException(`Invalid choice in "${ctx.groupName.get(opt.optionGroupId) ?? "options"}"`);
+      // The same extra twice would be two lines at the till. A real choice is made once.
+      const pair = `${opt.optionGroupId}:${opt.articleId}`;
+      if (seen.has(pair)) {
+        throw new BadRequestException(`The same choice was sent twice in "${ctx.groupName.get(opt.optionGroupId) ?? "options"}"`);
+      }
+      seen.add(pair);
 
       perGroup.set(opt.optionGroupId, (perGroup.get(opt.optionGroupId) ?? 0) + 1);
       modifiers.push({
-        kind: "OPTION",
+        kind: group.kind === "SUPPLEMENT" || group.kind === "CONDIMENT" ? group.kind : "OPTION",
         articleId: opt.articleId,
         optionGroupId: opt.optionGroupId,
         sizeItemId: null,
@@ -196,12 +212,12 @@ export class PricingService {
     }
 
     // ---- "choose exactly N" rules from composed_options
-    for (const link of allowed) {
-      if (link.requiredChoices === null) continue;
-      const got = perGroup.get(link.optionGroupId.toString()) ?? 0;
-      if (got !== link.requiredChoices) {
-        const name = ctx.groupName.get(link.optionGroupId.toString()) ?? "options";
-        throw new BadRequestException(`"${article.name}" requires exactly ${link.requiredChoices} choice(s) in ${name}, got ${got}`);
+    for (const group of allowed) {
+      if (group.requiredChoices === null) continue;
+      const got = perGroup.get(group.groupId.toString()) ?? 0;
+      if (got !== group.requiredChoices) {
+        const name = ctx.groupName.get(group.groupId.toString()) ?? "options";
+        throw new BadRequestException(`"${article.name}" requires exactly ${group.requiredChoices} choice(s) in ${name}, got ${got}`);
       }
     }
 

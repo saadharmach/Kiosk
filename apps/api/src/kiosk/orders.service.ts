@@ -166,7 +166,8 @@ export class OrdersService {
           restaurantId,
           lineNumber,
           parentLineNumber: parent,
-          kind: m.kind === "SIZE" ? "SIZE" : line.isMenu ? "MENU_CHOICE" : "OPTION",
+          // A menu's choices are components; otherwise the kind says which of unTill's option types it is.
+          kind: m.kind === "SIZE" ? "SIZE" : line.isMenu ? "MENU_CHOICE" : m.kind === "SUPPLEMENT" ? "SUPPLEMENT" : m.kind === "CONDIMENT" ? "CONDIMENT" : "OPTION",
           articleId: m.articleId ? BigInt(m.articleId) : null,
           articleName: m.name,
           quantity: line.quantity,

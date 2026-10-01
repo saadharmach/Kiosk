@@ -6,9 +6,9 @@ type Row = Record<string, unknown>;
 export const D = (n: number) => ({ toNumber: () => n });
 
 /**
- * Does a row satisfy a where clause? Supports equality and { in: [...] } on the fields a row
- * actually has. Keys the row does not have (restaurantId on a fixture, say) are skipped, and
- * nested filters like { has } are left to the code under test.
+ * Does a row satisfy a where clause? Supports equality, { in: [...] } on the fields a row
+ * actually has, and { has: value } on array columns. Keys the row does not have (restaurantId on a
+ * fixture, say) are skipped.
  */
 export function matches(row: Row, where: Row | undefined): boolean {
   if (!where) return true;
@@ -17,6 +17,9 @@ export function matches(row: Row, where: Row | undefined): boolean {
     const value = row[key];
     if (cond && typeof cond === "object" && "in" in (cond as Row)) {
       if (!((cond as { in: unknown[] }).in).includes(value)) return false;
+    } else if (cond && typeof cond === "object" && "has" in (cond as Row)) {
+      // an array column that must contain the value, like availableSalesAreaIds
+      if (!Array.isArray(value) || !value.includes((cond as { has: unknown }).has)) return false;
     } else if (cond !== undefined && typeof cond !== "object") {
       if (value !== cond) return false;
     } else if (typeof cond === "bigint" && value !== cond) return false;

@@ -13,7 +13,7 @@ function world(over: Record<string, unknown[]> = {}) {
   return {
     tpapiGroup: [{ untillId: 9n, name: "Food" }],
     tpapiDepartment: [
-      { untillId: 1n, name: "Mains", number: 1, groupId: 9n, availableSalesAreaIds: [AREA] },
+      { untillId: 1n, name: "Mains", number: 1, groupId: 9n, availableSalesAreaIds: [AREA], supplementOptionId: 80n, condimentOptionId: 90n },
       { untillId: 2n, name: "Desserts", number: 2, groupId: 9n, availableSalesAreaIds: [AREA] },
       { untillId: 3n, name: "Drinks", number: 3, groupId: 9n, availableSalesAreaIds: [AREA] },
     ],
@@ -38,10 +38,16 @@ function world(over: Record<string, unknown[]> = {}) {
     tpapiArticleSizePrice: [{ articleId: 12n, sizeItemId: 71n, amount: D(3) }, { articleId: 12n, sizeItemId: 72n, amount: D(5) }],
     tpapiSizeModifierItem: [{ untillId: 71n, name: "Small", isActive: true }, { untillId: 72n, name: "Large", isActive: true }],
     tpapiArticleOption: [{ articleId: 14n, optionGroupId: 50n, requiredChoices: null, isFreeOption: false }],
-    tpapiOptionGroup: [{ untillId: 50n, name: "Flavour", availableSalesAreaIds: [AREA] }],
+    tpapiOptionGroup: [
+      { untillId: 50n, name: "Flavour", availableSalesAreaIds: [AREA] },
+      { untillId: 80n, name: "Extras", availableSalesAreaIds: [AREA] },
+      { untillId: 90n, name: "Instructions", availableSalesAreaIds: [AREA] },
+    ],
     tpapiOptionItem: [
       { optionGroupId: 50n, articleId: 21n, amount: D(2), vat: D(10) },
-      { optionGroupId: 50n, articleId: 22n, amount: D(0), vat: null },
+      { optionGroupId: 50n, articleId: 22n, amount: D(1), vat: D(10) },
+      { optionGroupId: 80n, articleId: 21n, amount: D(1.5), vat: D(10) },
+      { optionGroupId: 90n, articleId: 22n, amount: D(0), vat: null },
     ],
     productPresentation: [
       { articleId: 10n, displayName: { fr: "Burger FR", en: "Burger EN" }, description: null, imagePath: "restaurants/r1/products/10/a.png", badgeText: "New", isFeatured: true, sortOrder: 5, isVisible: true },
@@ -104,6 +110,20 @@ describe("CatalogService.catalog: what the kiosk can sell", () => {
   it("hides a zero-price product whose options are all free", async () => {
     const { c } = await catalog({ tpapiOptionItem: [{ optionGroupId: 50n, articleId: 21n, amount: D(0), vat: null }] });
     assert.ok(!names(c).includes("Custom drink"));
+  });
+
+  it("hides a zero-price product when only an optional choice costs something, because the customer can skip it", async () => {
+    // Custom drink's own group has a free choice: the line could stay at zero.
+    const { c } = await catalog({ tpapiOptionItem: [
+      { optionGroupId: 50n, articleId: 21n, amount: D(2), vat: D(10) },
+      { optionGroupId: 50n, articleId: 22n, amount: D(0), vat: null },
+    ] });
+    assert.ok(!names(c).includes("Custom drink"));
+  });
+
+  it("does not let a department's paid supplement make zero-price items sellable", async () => {
+    const { c } = await catalog();
+    assert.ok(!names(c).includes("Staff meal"), "Staff meal is in a department with a paid supplement group and must stay hidden");
   });
 
   it("marks sized products as SIZE, with the sizes sorted by price", async () => {
@@ -279,5 +299,72 @@ describe("CatalogService.bootstrap: the restaurant's look", () => {
   it("says the catalog is not ready before the first sync", async () => {
     const { svc } = setup({}, { showAllergens: true }, { tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: null } });
     assert.equal((await svc.bootstrap("resto-a")).catalogReady, false);
+  });
+});
+
+describe("CatalogService.catalog: option groups are sent once", () => {
+  it("sends each group's name and choices once for the whole catalog, not once per product", async () => {
+    const { c } = await catalog();
+    for (const p of c.products) for (const g of p.optionGroups) assert.deepEqual(Object.keys(g).sort(), ["id", "kind", "requiredChoices"], "a product only says which groups it uses");
+    assert.deepEqual(Object.keys(c.groupDefs).sort(), ["50", "80", "90"]);
+    assert.equal(c.groupDefs["80"]!.name, "Extras");
+    assert.ok(c.groupDefs["80"]!.items.length > 0);
+  });
+
+  it("every group a product uses has a definition", async () => {
+    const { c } = await catalog();
+    for (const p of c.products) for (const g of p.optionGroups) assert.ok(c.groupDefs[g.id], `group ${g.id} of ${p.name}`);
+  });
+
+  it("does not send a definition no shown product uses", async () => {
+    const { c } = await catalog({ categoryPresentation: [{ scope: "DEPARTMENT", untillId: 1n, isVisible: false }, { scope: "DEPARTMENT", untillId: 3n, isVisible: false }] });
+    assert.deepEqual(c.groupDefs, {}, "the departments that use these groups are hidden");
+  });
+
+  it("is much smaller than repeating the list on every product", async () => {
+    const { c } = await catalog();
+    const repeated = JSON.stringify(c.products.map((p) => p.optionGroups.map((g) => ({ ...g, ...c.groupDefs[g.id] }))));
+    const shared = JSON.stringify([c.products.map((p) => p.optionGroups), c.groupDefs]);
+    assert.ok(shared.length < repeated.length);
+  });
+});
+
+describe("CatalogService.catalog: the kinds of option", () => {
+  /** A product's groups joined with the shared definitions, the way the kiosk reads them. */
+  const groupsOf = async (name: string, over: Record<string, unknown[]> = {}) => {
+    const { c } = await catalog(over);
+    return c.products.find((p) => p.name === name)!.optionGroups.map((g) => ({ ...g, ...c.groupDefs[g.id]! }));
+  };
+
+  it("labels the article's own groups must-have, and its free-option group free", async () => {
+    const own = (free: boolean) => ({ tpapiArticleOption: [{ articleId: 10n, optionGroupId: 50n, requiredChoices: null, isFreeOption: free }] });
+    assert.equal((await groupsOf("Burger FR", own(false))).find((x) => x.id === "50")!.kind, "MUST_HAVE");
+    assert.equal((await groupsOf("Burger FR", own(true))).find((x) => x.id === "50")!.kind, "FREE_OPTION");
+  });
+
+  it("adds the department's supplement and condiment groups to every product in it", async () => {
+    const g = await groupsOf("Burger FR");
+    assert.deepEqual(g.map((x) => [x.name, x.kind]), [["Extras", "SUPPLEMENT"], ["Instructions", "CONDIMENT"]]);
+    assert.equal(g[0]!.requiredChoices, null);
+    assert.deepEqual(g[0]!.items.map((i) => i.name), ["Mayo"]);
+  });
+
+  it("lists must-have first, then free, then supplements, then condiments", async () => {
+    const g = await groupsOf("Burger FR", { tpapiArticleOption: [{ articleId: 10n, optionGroupId: 50n, requiredChoices: null, isFreeOption: false }] });
+    assert.deepEqual(g.map((x) => x.kind), ["MUST_HAVE", "SUPPLEMENT", "CONDIMENT"]);
+  });
+
+  it("gives nothing to a product whose department has no such groups", async () => {
+    assert.deepEqual(await groupsOf("Cake"), []);
+  });
+
+  it("leaves out a department group with no items, or one not sold in this zone", async () => {
+    const empty = await groupsOf("Burger FR", { tpapiOptionItem: [] });
+    assert.deepEqual(empty, []);
+    const elsewhere = await groupsOf("Burger FR", { tpapiOptionGroup: [
+      { untillId: 80n, name: "Extras", availableSalesAreaIds: [999n] },
+      { untillId: 90n, name: "Instructions", availableSalesAreaIds: [AREA] },
+    ] });
+    assert.deepEqual(elsewhere.map((x) => x.kind), ["CONDIMENT"]);
   });
 });

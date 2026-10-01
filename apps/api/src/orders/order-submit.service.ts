@@ -23,6 +23,26 @@ export const ORDER_ITEM_TYPE = {
   FREE_TEXT: 6,
 } as const;
 
+/**
+ * unTill's OrderItemType for a stored line. `isFreeOption` is true when the line's group is the
+ * article's free-option group; it only matters for plain OPTION lines (must-have vs free).
+ */
+export function orderItemTypeFor(kind: string, isFreeOption: boolean): number {
+  switch (kind) {
+    case "MENU_CHOICE":
+      return ORDER_ITEM_TYPE.MENU_COMPONENT;
+    case "SUPPLEMENT":
+      return ORDER_ITEM_TYPE.SUPPLEMENT;
+    case "CONDIMENT":
+      return ORDER_ITEM_TYPE.CONDIMENT;
+    case "TEXT":
+    case "REMOVAL":
+      return ORDER_ITEM_TYPE.FREE_TEXT;
+    default:
+      return isFreeOption ? ORDER_ITEM_TYPE.FREE_OPTION : ORDER_ITEM_TYPE.MUST_HAVE;
+  }
+}
+
 const DEFAULT_TABLE_PART = "a";
 const VALID_TABLE_PARTS = ["a", "b", "c", "d", "e", "f"];
 /** After this many tries we stop retrying and make the failure visible. */
@@ -213,21 +233,8 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
 
 
         
-    const typeOf = (kind: string, parentArticleId: bigint, optionGroupId: bigint | null): number => {
-      switch (kind) {
-        case "MENU_CHOICE":
-          return ORDER_ITEM_TYPE.MENU_COMPONENT;
-        case "SUPPLEMENT":
-          return ORDER_ITEM_TYPE.SUPPLEMENT;
-        case "TEXT":
-        case "REMOVAL":
-          return ORDER_ITEM_TYPE.FREE_TEXT;
-        default:
-          return optionGroupId && freeLinks.has(`${parentArticleId}:${optionGroupId}`)
-            ? ORDER_ITEM_TYPE.FREE_OPTION
-            : ORDER_ITEM_TYPE.MUST_HAVE;
-      }
-    };
+    const typeOf = (kind: string, parentArticleId: bigint, optionGroupId: bigint | null): number =>
+      orderItemTypeFor(kind, optionGroupId !== null && freeLinks.has(`${parentArticleId}:${optionGroupId}`));
 
     // unTill reads parent/child from POSITION: a parent, then its own modifiers,
     // then the next parent. A size is not a line at all — it rides on the

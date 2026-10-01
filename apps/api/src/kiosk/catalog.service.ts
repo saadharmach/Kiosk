@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { PrismaService } from "../prisma/prisma.service.js";
 import { StorageService } from "../common/storage.service.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
+import { allowedGroups } from "./option-kinds.js";
 import { readTableRanges } from "../common/table-ranges.js";
 
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
@@ -188,6 +189,7 @@ export class CatalogService {
       allergenIdsOf.set(k, [...(allergenIdsOf.get(k) ?? []), l.allergenId.toString()]);
     }
     const optGroupById = new Map(optGroups.map((g) => [g.untillId.toString(), g]));
+    const departmentById = new Map(departments.map((d) => [d.untillId.toString(), d]));
 
     const itemsOfGroup = new Map<string, typeof optItems>();
     for (const i of optItems) {
@@ -219,6 +221,23 @@ export class CatalogService {
       .filter((c) => c.visible)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
+    // ---- option groups: each one's name and choices, built once and shared by every product that uses it
+    const groupDefs = new Map<string, { name: string; items: { articleId: string; name: string; price: number }[] } | null>();
+    const groupDef = (id: string) => {
+      if (!groupDefs.has(id)) {
+        const g = optGroupById.get(id);
+        const items = g
+          ? (itemsOfGroup.get(id) ?? []).map((i) => ({
+              articleId: i.articleId.toString(),
+              name: articleName.get(i.articleId.toString()) ?? i.articleId.toString(),
+              price: dec(i.amount) ?? 0,
+            }))
+          : [];
+        groupDefs.set(id, g && items.length > 0 ? { name: g.name, items } : null);   // skip empty groups
+      }
+      return groupDefs.get(id) ?? null;
+    };
+
     // ---- products
     const products = articles
       .map((a) => {
@@ -231,23 +250,14 @@ export class CatalogService {
           price: dec(s.amount) ?? 0,
         })).sort((x, y) => x.price - y.price);
 
-        const optionGroups = (optionsOfArticle.get(key) ?? [])
-          .map((link) => {
-            const g = optGroupById.get(link.optionGroupId.toString());
-            if (!g) return null;
-            const items = (itemsOfGroup.get(link.optionGroupId.toString()) ?? []).map((i) => ({
-              articleId: i.articleId.toString(),
-              name: articleName.get(i.articleId.toString()) ?? i.articleId.toString(),
-              price: dec(i.amount) ?? 0,
-            }));
-            if (items.length === 0) return null;   // skip empty groups
-            return {
-              id: g.untillId.toString(),
-              name: g.name,
-              requiredChoices: link.requiredChoices,
-              isFree: link.isFreeOption,
-              items,
-            };
+        // The article's own groups, plus its department's supplement and condiment groups. A group is
+        // sent once for the whole catalog (groupDefs); a product only says which ones it uses.
+        const department = a.departmentId ? departmentById.get(a.departmentId.toString()) : undefined;
+        const optionGroups = allowedGroups(optionsOfArticle.get(key) ?? [], department)
+          .map((allowed) => {
+            const def = groupDef(allowed.groupId.toString());
+            if (!def) return null;
+            return { id: allowed.groupId.toString(), kind: allowed.kind, requiredChoices: allowed.requiredChoices, items: def.items };
           })
           .filter((g): g is NonNullable<typeof g> => g !== null);
 
@@ -255,7 +265,9 @@ export class CatalogService {
         // A base price of zero is only sellable when a paid option makes the line cost
         // something: the order path refuses a zero-priced line, so such a product
         // would be a tile that always fails at checkout.
-        const paidByOptions = optionGroups.some((g) => g.items.some((i) => i.price > 0));
+        // Only a group the customer must choose from, and only if every choice costs something, counts:
+        // an optional supplement can be skipped, which would leave a zero-priced line.
+        const paidByOptions = optionGroups.some((g) => g.kind === "MUST_HAVE" && g.items.every((i) => i.price > 0));
         const pricing =
           a.isMenu && !price ? "MENU"
           : a.sizeModifierId && sizes.length > 0 ? "SIZE"
@@ -278,7 +290,7 @@ export class CatalogService {
           price: pricing === "BASE" ? dec(price!.amount) : null,
           vat: price ? dec(price.vat) : null,
           sizes,
-          optionGroups,
+          optionGroups: optionGroups.map(({ id, kind, requiredChoices }) => ({ id, kind, requiredChoices })),
           isMenu: a.isMenu,
           promo: a.promo,
           allergens: (allergenIdsOf.get(key) ?? [])
@@ -296,11 +308,21 @@ export class CatalogService {
     // A hidden department takes its products with it, so none are sent that nobody can reach.
     const shownProducts = products.filter((p) => shownCategories.some((c) => c.id === p.categoryId));
 
+    // Only the groups some shown product actually uses.
+    const usedGroups: Record<string, { name: string; items: { articleId: string; name: string; price: number }[] }> = {};
+    for (const p of shownProducts) {
+      for (const g of p.optionGroups) {
+        const def = groupDef(g.id);
+        if (def) usedGroups[g.id] = def;
+      }
+    }
+
     return {
       currency: restaurant.currency,
       salesArea: { id: areaId.toString(), name: salesArea.name, priceLevelId: priceLevelId.toString() },
       categories: shownCategories,
       products: shownProducts,
+      groupDefs: usedGroups,
       counts: { categories: shownCategories.length, products: shownProducts.length },
     };
   }

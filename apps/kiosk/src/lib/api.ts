@@ -101,11 +101,18 @@ export type Pricing = "BASE" | "SIZE" | "MENU" | "UNPRICED";
 export interface CatalogAllergen { id: string; number: number; name: string }
 export interface CatalogSize { sizeItemId: string; name: string; price: number }
 export interface CatalogOptionItem { articleId: string; name: string; price: number }
+/**
+ * unTill's kinds of option. A menu's components (type 5) are chosen inside a menu article and are
+ * not offered yet, because menus have no prices in unTill.
+ */
+export type OptionKind = "MUST_HAVE" | "FREE_OPTION" | "SUPPLEMENT" | "CONDIMENT";
+
+/** A group as a product uses it, joined with the group's name and choices (see hydrateCatalog). */
 export interface CatalogOptionGroup {
   id: string;
+  kind: OptionKind;
   name: string;
   requiredChoices: number | null;
-  isFree: boolean;
   items: CatalogOptionItem[];
 }
 
@@ -142,9 +149,33 @@ export interface Catalog {
   products: CatalogProduct[];
 }
 
-export const getCatalog = (slug: string, salesAreaId: string, locale: string) =>
-  request<Catalog>(
-    `/kiosk/${slug}/catalog?salesAreaId=${encodeURIComponent(salesAreaId)}&locale=${encodeURIComponent(locale)}`,
+/** What the API sends: each option group's name and choices once, products only list which they use. */
+export interface RawCatalog extends Omit<Catalog, "products"> {
+  products: (Omit<CatalogProduct, "optionGroups"> & {
+    optionGroups: { id: string; kind: OptionKind; requiredChoices: number | null }[];
+  })[];
+  groupDefs: Record<string, { name: string; items: CatalogOptionItem[] }>;
+}
+
+/** Joins each product's groups with the shared definitions. The same objects are reused, so it costs no memory. */
+export function hydrateCatalog(raw: RawCatalog): Catalog {
+  return {
+    ...raw,
+    products: raw.products.map((p) => ({
+      ...p,
+      optionGroups: p.optionGroups.flatMap((g) => {
+        const def = raw.groupDefs[g.id];
+        return def ? [{ ...g, name: def.name, items: def.items }] : [];
+      }),
+    })),
+  };
+}
+
+export const getCatalog = async (slug: string, salesAreaId: string, locale: string) =>
+  hydrateCatalog(
+    await request<RawCatalog>(
+      `/kiosk/${slug}/catalog?salesAreaId=${encodeURIComponent(salesAreaId)}&locale=${encodeURIComponent(locale)}`,
+    ),
   );
 
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { STRINGS, money, type Locale } from "@/i18n";
+import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
+import { KIND_ORDER } from "@/lib/options";
 import { ApiError, createOrder, isConnectionError, priceCart, type PlacedOrder, type WireCartLine } from "@/lib/api";
 import { useCart } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
@@ -122,9 +123,15 @@ export default function CartScreen({
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-4xl leading-tight font-bold">{l.name}</p>
                     {l.sizeName ? <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
-                    {l.options.length > 0 ? (
-                      <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.options.map((o) => o.name).join(", ")}</p>
-                    ) : null}
+                    {/* Each kind of option on its own line, under unTill's name for it */}
+                    {KIND_ORDER.map((kind) => {
+                      const names = l.options.filter((o) => o.kind === kind).map((o) => o.name);
+                      return names.length > 0 ? (
+                        <p key={kind} className="mt-1 text-2xl text-(--color-ink-muted)">
+                          <span className="font-semibold">{KIND_LABEL(kind, t)}:</span> {names.join(", ")}
+                        </p>
+                      ) : null;
+                    })}
                     <p className="mt-3 font-display text-4xl font-bold tabular-nums text-(--color-brand-deep)">
                       {money(l.unitPrice * l.quantity, currency, locale)}
                     </p>

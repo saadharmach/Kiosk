@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { STRINGS, money, type Locale } from "@/i18n";
+import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import type { CatalogOptionGroup, CatalogProduct } from "@/lib/api";
+import { isComplete, isExtra, limits, preselected, toggled } from "@/lib/options";
 import { useCart } from "@/state/cart";
 import { Icon } from "./icons";
-
-/** How many items a group needs. Only an explicit count allows more than one pick. */
-const minPicks = (g: CatalogOptionGroup) => g.requiredChoices ?? (g.isFree ? 0 : 1);
-const maxPicks = (g: CatalogOptionGroup) => g.requiredChoices ?? 1;
 
 const CHIP_COLORS: [string, string][] = [
   ["#fde2e2", "#7f1d1d"], ["#fef3c7", "#78350f"], ["#dbeafe", "#1e3a8a"],
@@ -29,41 +26,25 @@ export default function ProductSheet({
   const [qty, setQty] = useState(1);
   const [imageFailed, setImageFailed] = useState(false);
   const photo = product.imageUrl && !imageFailed ? product.imageUrl : null;
-  // groupId -> chosen option article ids. A required group with one item is
-  // pre-chosen, so it never blocks the Add button.
-  const [picked, setPicked] = useState<Record<string, string[]>>(() =>
-    Object.fromEntries(
-      product.optionGroups
-        .filter((g) => minPicks(g) > 0 && g.items.length === 1)
-        .map((g) => [g.id, [g.items[0].articleId]]),
-    ),
-  );
+  // groupId -> chosen option article ids. A required group with one item is pre-chosen.
+  const [picked, setPicked] = useState<Record<string, string[]>>(() => preselected(product.optionGroups));
+  // Supplements and condiments start folded away; a customer opens the ones they want.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const size = product.sizes.find((s) => s.sizeItemId === sizeId);
   const chosen = product.optionGroups.flatMap((g) =>
     g.items
       .filter((i) => (picked[g.id] ?? []).includes(i.articleId))
-      .map((i) => ({ optionGroupId: g.id, articleId: i.articleId, name: i.name, price: i.price })),
+      .map((i) => ({ optionGroupId: g.id, articleId: i.articleId, name: i.name, price: i.price, kind: g.kind })),
   );
   const unitPrice =
     (size ? size.price : (product.price ?? 0)) + chosen.reduce((sum, o) => sum + o.price, 0);
-  const groupsDone = product.optionGroups.every((g) => {
-    const n = (picked[g.id] ?? []).length;
-    return g.requiredChoices !== null ? n === g.requiredChoices : n >= minPicks(g);
-  });
+  const groupsDone = product.optionGroups.every((g) => isComplete(g, picked[g.id] ?? []));
   const canAdd =
     unitPrice > 0 && (product.sizes.length === 0 || Boolean(size)) && groupsDone;
 
   const toggle = (g: CatalogOptionGroup, articleId: string) =>
-    setPicked((prev) => {
-      const cur = prev[g.id] ?? [];
-      if (cur.includes(articleId)) {
-        // A required single pick is replaced, never cleared.
-        return minPicks(g) > 0 && maxPicks(g) === 1 ? prev : { ...prev, [g.id]: cur.filter((x) => x !== articleId) };
-      }
-      if (maxPicks(g) === 1) return { ...prev, [g.id]: [articleId] };
-      return cur.length >= maxPicks(g) ? prev : { ...prev, [g.id]: [...cur, articleId] };
-    });
+    setPicked((prev) => ({ ...prev, [g.id]: toggled(g, prev[g.id] ?? [], articleId) }));
 
   const addToCart = () => {
     cart.add(
@@ -166,35 +147,64 @@ export default function ProductSheet({
             ) : null}
 
             {product.optionGroups.map((g) => {
-              const multi = maxPicks(g) > 1;
+              const { min, max } = limits(g);
+              const multi = max > 1;
+              const extra = isExtra(g);
+              const isOpen = !extra || open[g.id] === true;
+              const count = (picked[g.id] ?? []).length;
+              const rule =
+                g.requiredChoices !== null ? t.chooseCount.replace("{n}", String(g.requiredChoices)) : min > 0 ? t.required : t.optional;
+
+              const heading = (
+                <>
+                  <span className="flex min-w-0 flex-col gap-1 text-start">
+                    <span className="font-display text-4xl leading-tight font-bold">{g.name}</span>
+                    {/* unTill's own name for what kind of option this is */}
+                    <span className="text-2xl font-semibold tracking-wide text-(--color-ink-muted)">{KIND_LABEL(g.kind, t)}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-4">
+                    <span className="rounded-full bg-(--color-brand-soft) px-5 py-2 text-2xl font-bold text-(--color-brand-deep)">
+                      {extra && count > 0 ? t.chosenCount.replace("{n}", String(count)) : rule}
+                    </span>
+                    {extra ? (
+                      <Icon name="chevron" strokeWidth={2.6}
+                        className={`size-9 text-(--color-ink-muted) transition-transform ${isOpen ? "rotate-90" : "rtl:-scale-x-100"}`} />
+                    ) : null}
+                  </span>
+                </>
+              );
+
               return (
                 <div key={g.id} className="flex flex-col gap-4 border-t-2 border-(--color-line) pt-8">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-display text-4xl font-bold">{g.name}</p>
-                    <p className="shrink-0 rounded-full bg-(--color-brand-soft) px-5 py-2 text-2xl font-bold text-(--color-brand-deep)">
-                      {g.requiredChoices !== null
-                        ? t.chooseCount.replace("{n}", String(g.requiredChoices))
-                        : minPicks(g) > 0 ? t.required : t.optional}
-                    </p>
-                  </div>
-                  <div role={multi ? "group" : "radiogroup"} aria-label={g.name}
-                    className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-4">
-                    {g.items.map((i) => {
-                      const on = (picked[g.id] ?? []).includes(i.articleId);
-                      return (
-                        <button key={i.articleId} role={multi ? "checkbox" : "radio"} aria-checked={on}
-                          onClick={() => toggle(g, i.articleId)} className={card(on)}>
-                          {marker(on, multi)}
-                          <span className="flex flex-col gap-1">
-                            <span className="font-display text-3xl leading-tight font-bold">{i.name}</span>
-                            {i.price > 0 ? (
-                              <span className="text-2xl text-(--color-ink-muted) tabular-nums">+{money(i.price, currency, locale)}</span>
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {extra ? (
+                    <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
+                      className="flex min-h-20 items-center justify-between gap-4">
+                      {heading}
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4">{heading}</div>
+                  )}
+
+                  {isOpen ? (
+                    <div role={multi ? "group" : "radiogroup"} aria-label={g.name}
+                      className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-4">
+                      {g.items.map((i) => {
+                        const on = (picked[g.id] ?? []).includes(i.articleId);
+                        return (
+                          <button key={i.articleId} role={multi ? "checkbox" : "radio"} aria-checked={on}
+                            onClick={() => toggle(g, i.articleId)} className={card(on)}>
+                            {marker(on, multi)}
+                            <span className="flex flex-col gap-1">
+                              <span className="font-display text-3xl leading-tight font-bold">{i.name}</span>
+                              {i.price > 0 ? (
+                                <span className="text-2xl text-(--color-ink-muted) tabular-nums">+{money(i.price, currency, locale)}</span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

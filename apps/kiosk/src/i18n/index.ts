@@ -51,6 +51,8 @@ type Dict = {
   itemsCount: string; addMore: string; seeMenu: string; resetNote: string; total: string;
   connectionTitle: string; connectionText: string; connectionInline: string; startOver: string;
   idleTitle: string; idleText: string; keepOrdering: string; discard: string;
+  kindMustHave: string; kindFreeOption: string; kindSupplement: string; kindCondiment: string; kindMenuComponent: string;
+  chosenCount: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -80,6 +82,8 @@ export const STRINGS: Record<Locale, Dict> = {
     connectionInline: "Connexion perdue. Votre commande est conservée : touchez à nouveau pour réessayer.",
     idleTitle: "Êtes-vous toujours là ?", keepOrdering: "Continuer ma commande", discard: "Abandonner et recommencer",
     idleText: "Votre session va se terminer. Touchez ci-dessous pour garder votre commande.",
+    kindMustHave: "Option obligatoire", kindFreeOption: "Option gratuite", kindSupplement: "Supplément", kindCondiment: "Condiment",
+    kindMenuComponent: "Composant du menu", chosenCount: "{n} sélectionné(s)",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -106,6 +110,8 @@ export const STRINGS: Record<Locale, Dict> = {
     connectionInline: "Connection lost. Your order is kept: tap again to retry.",
     idleTitle: "Are you still there?", keepOrdering: "Continue ordering", discard: "Discard and start over",
     idleText: "Your session is about to end. Tap below to keep your order.",
+    kindMustHave: "Must-have option", kindFreeOption: "Free option", kindSupplement: "Supplement", kindCondiment: "Condiment",
+    kindMenuComponent: "Component selected inside a menu article", chosenCount: "{n} selected",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -132,8 +138,19 @@ export const STRINGS: Record<Locale, Dict> = {
     connectionInline: "انقطع الاتصال. طلبك محفوظ: اضغط مرة أخرى للمحاولة.",
     idleTitle: "هل ما زلت هنا؟", keepOrdering: "متابعة الطلب", discard: "إلغاء والبدء من جديد",
     idleText: "ستنتهي جلستك قريبًا. اضغط أدناه للاحتفاظ بطلبك.",
+    kindMustHave: "خيار إلزامي", kindFreeOption: "خيار مجاني", kindSupplement: "إضافة", kindCondiment: "مرافق",
+    kindMenuComponent: "مكوّن داخل القائمة", chosenCount: "{n} مختار",
   },
 };
 
 export const ORDER_TYPE_LABEL = (t: string, d: Dict) =>
   t === "EAT_IN" ? d.eatIn : t === "TAKE_AWAY" ? d.takeAway : d.delivery;
+
+/** unTill's name for each kind of option, in the customer's language. */
+export type OptionKindName = "MUST_HAVE" | "FREE_OPTION" | "SUPPLEMENT" | "CONDIMENT" | "MENU_COMPONENT";
+export const KIND_LABEL = (kind: OptionKindName, d: Dict): string =>
+  kind === "MUST_HAVE" ? d.kindMustHave
+  : kind === "FREE_OPTION" ? d.kindFreeOption
+  : kind === "SUPPLEMENT" ? d.kindSupplement
+  : kind === "CONDIMENT" ? d.kindCondiment
+  : d.kindMenuComponent;

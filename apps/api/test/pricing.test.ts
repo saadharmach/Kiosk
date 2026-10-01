@@ -7,7 +7,7 @@ const AREA = 100n;
 
 const article = (id: bigint, name: string, over: Record<string, unknown> = {}) => ({
   untillId: id, name, isActive: true, isPresent: true, isMenu: false,
-  sizeModifierId: null, availableSalesAreaIds: [AREA], ...over,
+  sizeModifierId: null, availableSalesAreaIds: [AREA], departmentId: null, ...over,
 });
 
 /** A small restaurant: a burger with sauces, a sized drink, a steak with a "choose 3" group, and some traps. */
@@ -15,10 +15,12 @@ function world() {
   return {
     tpapiSalesArea: [{ untillId: AREA, priceLevelId: 10n, number: 1 }],
     tpapiArticle: [
-      article(1n, "Burger"),
-      article(2n, "Cola", { sizeModifierId: 7n }),
+      article(1n, "Burger", { departmentId: 1n }),
+      article(2n, "Cola", { sizeModifierId: 7n, departmentId: 2n }),
       article(4n, "Ketchup"), article(11n, "Mayo"),
-      article(8n, "Steak"),
+      article(31n, "Extra cheese"), article(32n, "Bacon"), article(33n, "No onions"), article(34n, "Well done"), article(35n, "Extra sauce"),
+      article(8n, "Steak", { departmentId: 1n }),
+      article(2n + 100n, "unused", { departmentId: 2n }),
       article(12n, "Pepper"), article(13n, "Mushroom"), article(14n, "Garlic"), article(15n, "Bearnaise"),
       article(5n, "Hidden"),
       article(6n, "Inactive", { isActive: false }),
@@ -43,7 +45,12 @@ function world() {
       { articleId: 1n, optionGroupId: 50n, requiredChoices: null, isFreeOption: false },
       { articleId: 8n, optionGroupId: 60n, requiredChoices: 3, isFreeOption: false },
     ],
-    tpapiOptionGroup: [{ untillId: 50n, name: "Sauce" }, { untillId: 60n, name: "Drinks Options" }],
+    // Department 1 (burgers, steaks) has supplements and condiments; department 2 (drinks) has neither.
+    tpapiDepartment: [
+      { untillId: 1n, supplementOptionId: 80n, condimentOptionId: 90n },
+      { untillId: 2n, supplementOptionId: null, condimentOptionId: null },
+    ],
+    tpapiOptionGroup: [{ untillId: 50n, name: "Sauce" }, { untillId: 60n, name: "Drinks Options" }, { untillId: 80n, name: "Extras" }, { untillId: 90n, name: "Instructions" }],
     tpapiOptionItem: [
       { optionGroupId: 50n, articleId: 4n, amount: D(0.5), vat: D(10) },
       { optionGroupId: 50n, articleId: 11n, amount: D(0), vat: null },
@@ -51,6 +58,11 @@ function world() {
       { optionGroupId: 60n, articleId: 13n, amount: D(1), vat: D(10) },
       { optionGroupId: 60n, articleId: 14n, amount: D(1), vat: D(10) },
       { optionGroupId: 60n, articleId: 15n, amount: D(1), vat: D(10) },
+      { optionGroupId: 80n, articleId: 31n, amount: D(1.5), vat: D(10) },
+      { optionGroupId: 80n, articleId: 32n, amount: D(2), vat: D(10) },
+      { optionGroupId: 90n, articleId: 33n, amount: D(0), vat: null },
+      { optionGroupId: 90n, articleId: 34n, amount: D(0), vat: null },
+      { optionGroupId: 90n, articleId: 35n, amount: D(0.5), vat: D(10) },
     ],
     productPresentation: [
       { articleId: 1n, isVisible: true, displayName: { fr: "Burger FR", en: "Burger EN", ar: "برغر" } },
@@ -174,5 +186,61 @@ describe("PricingService: names in the customer's language", () => {
     const cart = await price([{ articleId: "8", quantity: 1, options: [
       { optionGroupId: "60", articleId: "12" }, { optionGroupId: "60", articleId: "13" }, { optionGroupId: "60", articleId: "14" }] }], { locale: "en" });
     assert.equal(cart.lines[0]!.displayName, "Steak"); // no presentation: the unTill name
+  });
+});
+
+describe("PricingService: supplements and condiments from the department", () => {
+  const burger = (options: { optionGroupId: string; articleId: string }[]) => ({ articleId: "1", quantity: 1, options });
+  const sup = (id: string) => ({ optionGroupId: "80", articleId: id });
+  const cond = (id: string) => ({ optionGroupId: "90", articleId: id });
+
+  it("prices a supplement from the department's supplement group, and marks it as one", async () => {
+    const cart = await price([burger([sup("31")])]);
+    assert.equal(cart.lines[0]!.unitPrice, 11.5);
+    assert.equal(cart.lines[0]!.modifiers[0]!.kind, "SUPPLEMENT");
+    assert.equal(cart.lines[0]!.modifiers[0]!.name, "Extra cheese");
+  });
+
+  it("allows several supplements on one line", async () => {
+    const cart = await price([burger([sup("31"), sup("32")])]);
+    assert.equal(cart.lines[0]!.unitPrice, 13.5);
+    assert.deepEqual(cart.lines[0]!.modifiers.map((m) => m.kind), ["SUPPLEMENT", "SUPPLEMENT"]);
+  });
+
+  it("prices a condiment, free or paid, and marks it as one", async () => {
+    const cart = await price([burger([cond("33"), cond("35")])]);
+    assert.equal(cart.lines[0]!.unitPrice, 10.5);
+    assert.deepEqual(cart.lines[0]!.modifiers.map((m) => m.kind), ["CONDIMENT", "CONDIMENT"]);
+  });
+
+  it("mixes every kind on one line, each keeping its own kind", async () => {
+    const cart = await price([burger([{ optionGroupId: "50", articleId: "4" }, sup("32"), cond("34")])]);
+    assert.deepEqual(cart.lines[0]!.modifiers.map((m) => m.kind), ["OPTION", "SUPPLEMENT", "CONDIMENT"]);
+    assert.equal(cart.lines[0]!.unitPrice, 12.5);
+  });
+
+  it("multiplies supplements by the quantity like any other price", async () => {
+    const cart = await price([{ articleId: "1", quantity: 3, options: [sup("31")] }]);
+    assert.equal(cart.lines[0]!.lineTotal, 34.5);
+  });
+
+  it("does not offer a department's supplements to an article in another department", async () => {
+    await reject(price([{ articleId: "2", quantity: 1, sizeItemId: "71", options: [sup("31")] }]), 400, /not valid for/);
+  });
+
+  it("rejects an item that is not in the supplement group", async () => {
+    await reject(price([burger([{ optionGroupId: "80", articleId: "33" }])]), 400, /Invalid choice/);
+  });
+
+  it("rejects the same choice sent twice", async () => {
+    await reject(price([burger([sup("31"), sup("31")])]), 400, /twice/);
+    await reject(price([burger([cond("33"), cond("33")])]), 400, /twice/);
+  });
+
+  it("does not count supplements towards a 'choose exactly N' group", async () => {
+    const steak = await price([{ articleId: "8", quantity: 1, options: [
+      { optionGroupId: "60", articleId: "12" }, { optionGroupId: "60", articleId: "13" }, { optionGroupId: "60", articleId: "14" }, sup("31"),
+    ] }]);
+    assert.equal(steak.lines[0]!.unitPrice, 24.5);
   });
 });
