@@ -73,6 +73,24 @@ describe("what needs the platform team's attention", () => {
   });
 });
 
+describe("failing menu syncs", () => {
+  const syncing = (n: number, why: string | null = "boom") => healthy({ syncFailures: n, lastSyncError: why });
+  it("one or two failures in a row are a heads-up, three or more a problem, and the reason is shown", () => {
+    const one = buildAttention([syncing(1)], NOW)[0]!;
+    assert.deepEqual([one.kind, one.severity], ["SYNC_FAILING", "warning"]);
+    assert.match(one.message, /last menu update from the till failed: boom/);
+    assert.equal(buildAttention([syncing(2)], NOW)[0]!.severity, "warning");
+    const many = buildAttention([syncing(3)], NOW)[0]!;
+    assert.equal(many.severity, "problem");
+    assert.match(many.message, /last 3 menu updates/);
+  });
+  it("is said once: a failing till or a stale menu is not reported again on top of it", () => {
+    assert.deepEqual(kinds([healthy({ syncFailures: 4, tpapi: { isEnabled: true, lastSuccessAt: ago(H), lastFailureAt: null, lastSyncAt: ago(9 * D), lastErrorMessage: null } })]), ["SYNC_FAILING"]);
+    assert.deepEqual(kinds([healthy({ syncFailures: 2, tpapi: { isEnabled: true, lastSuccessAt: ago(2 * H), lastFailureAt: ago(H), lastSyncAt: ago(H), lastErrorMessage: "down" } })]), ["TILL_FAILING"]);
+  });
+  it("nothing when the latest sync worked", () => assert.deepEqual(kinds([syncing(0)]), []));
+});
+
 describe("the overview endpoint's numbers", () => {
   function build() {
     const queries: { model: string; op: string; args: any }[] = [];
@@ -94,6 +112,7 @@ describe("the overview endpoint's numbers", () => {
         },
         count: async (args: any) => { queries.push({ model: "order", op: "count", args }); return args.where.createdAt.gte.getTime() === NOW - D ? 12 : 80; },
       },
+      syncRun: { findMany: q("syncRun", "findMany", []) },
       auditLog: { findMany: q("auditLog", "findMany", [
         { id: "a1", createdAt: ago(H), restaurantId: "r1", actorType: "PLATFORM_USER", actorId: "p1", actorLabel: null, action: "restaurant.update" },
       ]) },

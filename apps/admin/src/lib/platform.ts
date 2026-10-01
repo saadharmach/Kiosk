@@ -80,6 +80,8 @@ export interface SyncRun {
   startedAt: string; finishedAt: string | null; durationMs: number | null; errorMessage: string | null;
 }
 export const syncRuns = (id: string) => request<SyncRun[]>(`/admin/restaurants/${id}/sync-runs`);
+export interface SyncSchedule { enabled: boolean; intervalMin: number; nextAt: string | null }
+export const syncSchedule = (id: string) => request<SyncSchedule>(`/admin/restaurants/${id}/sync-schedule`);
 export const runSync = (id: string) => request<SyncRun>(`/admin/restaurants/${id}/sync`, { method: "POST" });
 
 // ------------------------------------------------------------------------ users
@@ -107,7 +109,7 @@ export const listActivity = (id: string, page = 1) => request<Page<ActivityItem>
 
 export type AttentionKind =
   | "TILL_FAILING" | "ORDERS_STUCK" | "ORDERS_FAILED" | "NO_OWNER"
-  | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
+  | "SYNC_FAILING" | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
 export type Severity = "problem" | "warning" | "setup";
 
 export interface AttentionItem { restaurantId: string; slug: string; name: string; kind: AttentionKind; severity: Severity; message: string }
@@ -143,7 +145,7 @@ export const getReadiness = (id: string) => request<Readiness>(`/admin/restauran
 export function tabFor(kind: AttentionKind): RestaurantTab {
   switch (kind) {
     case "NO_OWNER": return "Users";
-    case "TILL_FAILING": case "STALE_SYNC": case "NEVER_SYNCED": case "NO_TILL": case "TILL_DISABLED": return "unTill";
+    case "TILL_FAILING": case "SYNC_FAILING": case "STALE_SYNC": case "NEVER_SYNCED": case "NO_TILL": case "TILL_DISABLED": return "unTill";
     default: return "Details";
   }
 }

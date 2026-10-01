@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import {
-  getConnection, runSync, saveConnection, syncRuns, testConnection,
-  type Connection, type SyncRun, type TestResult,
+  getConnection, runSync, saveConnection, syncRuns, syncSchedule, testConnection,
+  type Connection, type SyncRun, type SyncSchedule, type TestResult,
 } from "@/lib/platform";
 import { ErrorText, Field, input, primary, secondary, when } from "./ui";
 
 export default function ConnectionTab({ id, canWrite, onChanged }: { id: string; canWrite: boolean; onChanged: () => void }) {
   const [conn, setConn] = useState<Connection | null | undefined>(undefined);   // undefined: loading, null: none yet
   const [runs, setRuns] = useState<SyncRun[]>([]);
+  const [schedule, setSchedule] = useState<SyncSchedule | null>(null);
   const [f, setF] = useState({ host: "", port: "", useTls: false, isEnabled: true, appName: "", userName: "", password: "", appToken: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "test" | "sync" | null>(null);
@@ -26,6 +27,7 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
       if (e instanceof ApiError && e.status === 404) setConn(null); else setError((e as Error).message);
     }
     syncRuns(id).then(setRuns).catch(() => undefined);
+    syncSchedule(id).then(setSchedule).catch(() => undefined);
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -89,11 +91,20 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
           <div className="mb-3 flex items-center gap-4">
             <h2 className="text-lg font-medium">Menu sync</h2>
             <button disabled={busy !== null} className={secondary} onClick={() => {
-              if (window.confirm("Read the menu from the till now? This replaces the restaurant's copy of the menu data (prices, products, options). Photos, translations and suggestions are kept.")) {
+              if (window.confirm("Read the menu from the till now? The kiosk keeps showing the current menu until the new one is complete. Photos, translations and suggestions are kept.")) {
                 void act("sync", async () => { await runSync(id); await load(); onChanged(); });
               }
             }}>{busy === "sync" ? "Syncing…" : "Sync now"}</button>
           </div>
+          {schedule ? (
+            <p className="mb-3 text-sm text-(--color-ink-muted)">
+              {!schedule.enabled
+                ? "Automatic syncing is switched off on this server: the menu changes only when someone presses Sync now."
+                : !conn.isEnabled
+                  ? "Automatic syncing waits until this connection is switched on."
+                  : `Read automatically about every ${schedule.intervalMin >= 60 && schedule.intervalMin % 60 === 0 ? `${schedule.intervalMin / 60} h` : `${schedule.intervalMin} min`}. ${schedule.nextAt ? `Next read around ${new Date(schedule.nextAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "The next read is due now."} After a failure it tries again sooner.`}
+            </p>
+          ) : null}
           {runs.length === 0 ? <p className="text-sm text-(--color-ink-muted)">No sync has run yet.</p> : (
             <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
               <table className="w-full text-sm">

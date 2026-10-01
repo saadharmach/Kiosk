@@ -33,7 +33,7 @@ describe("how long ago", () => {
 describe("where a finding takes you", () => {
   it("to the tab where it can be looked at", () => {
     assert.equal(tabFor("NO_OWNER"), "Users");
-    for (const k of ["TILL_FAILING", "STALE_SYNC", "NEVER_SYNCED", "NO_TILL", "TILL_DISABLED"] as AttentionKind[]) assert.equal(tabFor(k), "unTill", k);
+    for (const k of ["TILL_FAILING", "SYNC_FAILING", "STALE_SYNC", "NEVER_SYNCED", "NO_TILL", "TILL_DISABLED"] as AttentionKind[]) assert.equal(tabFor(k), "unTill", k);
     for (const k of ["ORDERS_STUCK", "ORDERS_FAILED"] as AttentionKind[]) assert.equal(tabFor(k), "Details", k);
   });
 });

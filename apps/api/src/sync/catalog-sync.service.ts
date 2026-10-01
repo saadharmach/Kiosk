@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TpapiClientFactory } from "../common/tpapi-client.factory.js";
@@ -26,6 +26,35 @@ function parseComposedOptions(value?: string): Map<string, number> {
   return out;
 }
 
+/** A sync that started longer ago than this and never finished is taken to have died with the server. */
+export const SYNC_STALE_MIN = 10;
+
+type Delegate = { deleteMany: (a: unknown) => Promise<unknown>; createMany: (a: unknown) => Promise<unknown> };
+
+/**
+ * Writes every table's new rows in ONE transaction. The kiosk keeps reading the old menu until the whole new
+ * one is in place (an empty or half-replaced menu is never visible), and if anything fails nothing changes.
+ */
+export async function replaceAllAtomically(
+  prisma: { $transaction: (fn: (tx: unknown) => Promise<void>, opts?: { maxWait?: number; timeout?: number }) => Promise<void> },
+  restaurantId: string,
+  pending: [table: string, rows: Row[]][],
+): Promise<void> {
+  await prisma.$transaction(
+    async (tx) => {
+      for (const [table, rows] of pending) {
+        const delegate = (tx as Record<string, Delegate>)[table]!;
+        await delegate.deleteMany({ where: { restaurantId } });
+        for (let i = 0; i < rows.length; i += 500) {
+          await delegate.createMany({ data: rows.slice(i, i + 500), skipDuplicates: true });
+        }
+      }
+    },
+    // Many small inserts over a slow link can take a while; far longer than the default 5 seconds.
+    { maxWait: 15_000, timeout: 180_000 },
+  );
+}
+
 @Injectable()
 export class CatalogSyncService {
   private readonly logger = new Logger(CatalogSyncService.name);
@@ -36,8 +65,19 @@ export class CatalogSyncService {
   ) {}
 
   async run(restaurantId: string, trigger: "MANUAL" | "SCHEDULED" | "STARTUP" = "MANUAL") {
+    // Two syncs of one restaurant at once would fight over the same rows (a double click, or the
+    // scheduler meeting a manual run), so the second is refused.
+    const alreadyRunning = await this.prisma.syncRun.findFirst({
+      where: { restaurantId, status: "RUNNING", startedAt: { gt: new Date(Date.now() - SYNC_STALE_MIN * 60_000) } },
+      select: { id: true },
+    });
+    if (alreadyRunning) throw new ConflictException("A sync is already running for this restaurant");
+
     const correlationId = randomUUID();
     const startedAt = Date.now();
+    // What the run learns is held here and written together at the end (see replaceAllAtomically).
+    const pending: [string, Row[]][] = [];
+    const queue = (table: string, rows: Row[]) => { pending.push([table, rows]); };
     const run = await this.prisma.syncRun.create({
       data: { restaurantId, trigger, correlationId, status: "RUNNING" },
       select: { id: true },
@@ -55,7 +95,7 @@ export class CatalogSyncService {
       // ---------------------------------------------------------- global data
       const salesAreasRes = await call<{ SalesAreas: Row[] }>("GetSalesAreasInfo");
       const salesAreas = salesAreasRes.SalesAreas ?? [];
-      await this.replace(this.prisma.tpapiSalesArea, restaurantId,
+      queue("tpapiSalesArea",
         salesAreas.map((a) => ({
           restaurantId,
           untillId: bi(a.SalesAreaId),
@@ -67,21 +107,21 @@ export class CatalogSyncService {
       stats.salesAreas = salesAreas.length;
 
       const prices = (await call<{ Prices: Row[] }>("GetPricesInfo")).Prices ?? [];
-      await this.replace(this.prisma.tpapiPriceLevel, restaurantId,
+      queue("tpapiPriceLevel",
         prices.map((p) => ({
           restaurantId, untillId: bi(p.PriceId), name: str(p.PriceName), hqId: str(p.HqId) || null,
         })));
       stats.priceLevels = prices.length;
 
       const categories = (await call<{ Categories: Row[] }>("GetCategoriesInfo")).Categories ?? [];
-      await this.replace(this.prisma.tpapiCategory, restaurantId,
+      queue("tpapiCategory",
         categories.map((c) => ({
           restaurantId, untillId: bi(c.CategoryId), name: str(c.CategoryName), hqId: str(c.HqId) || null,
         })));
       stats.categories = categories.length;
 
       const groups = (await call<{ Groups: Row[] }>("GetGroupsInfo")).Groups ?? [];
-      await this.replace(this.prisma.tpapiGroup, restaurantId,
+      queue("tpapiGroup",
         groups.map((g) => ({
           restaurantId, untillId: bi(g.GroupId), name: str(g.GroupName),
           categoryId: bi(g.CategoryId), hqId: str(g.HqId) || null,
@@ -89,12 +129,12 @@ export class CatalogSyncService {
       stats.groups = groups.length;
 
       const sizeMods = (await call<{ SizeModifiers: Row[] }>("GetSizeModifiersInfo")).SizeModifiers ?? [];
-      await this.replace(this.prisma.tpapiSizeModifier, restaurantId,
+      queue("tpapiSizeModifier",
         sizeMods.map((s) => ({
           restaurantId, untillId: bi(s.Id), number: num(s.Number),
           name: str(s.Name), isActive: Boolean(s.IsActive),
         })));
-      await this.replace(this.prisma.tpapiSizeModifierItem, restaurantId,
+      queue("tpapiSizeModifierItem",
         sizeMods.flatMap((s) => ((s.Items ?? []) as Row[]).map((i) => ({
           restaurantId, untillId: bi(i.Id), sizeModifierId: bi(s.Id),
           number: num(i.Number), name: str(i.Name), isActive: Boolean(i.IsActive),
@@ -102,7 +142,7 @@ export class CatalogSyncService {
       stats.sizeModifiers = sizeMods.length;
 
       const allergens = (await call<{ Allergens: Row[] }>("GetAllergensInfo")).Allergens ?? [];
-      await this.replace(this.prisma.tpapiAllergen, restaurantId,
+      queue("tpapiAllergen",
         allergens.map((a) => ({
           restaurantId, untillId: bi(a.Id), number: num(a.Number), name: str(a.Name),
           description: str(a.Description) || null, isActive: Boolean(a.IsActive),
@@ -110,7 +150,7 @@ export class CatalogSyncService {
       stats.allergens = allergens.length;
 
       const courses = (await call<{ Courses: Row[] }>("GetCourses")).Courses ?? [];
-      await this.replace(this.prisma.tpapiCourse, restaurantId,
+      queue("tpapiCourse",
         courses.map((c) => ({
           restaurantId, untillId: bi(c.Id), number: num(c.Number), name: str(c.Name),
           separate: Boolean(c.Separate), autoFire: Boolean(c.AutoFire),
@@ -118,7 +158,7 @@ export class CatalogSyncService {
       stats.courses = courses.length;
 
       const payments = (await call<{ Payments: Row[] }>("GetPaymentsInfo")).Payments ?? [];
-      await this.replace(this.prisma.tpapiPayment, restaurantId,
+      queue("tpapiPayment",
         payments.map((p) => ({
           restaurantId, untillId: bi(p.PaymentId), number: num(p.PaymentNumber),
           name: str(p.PaymentName), kind: num(p.PaymentKind),
@@ -126,7 +166,7 @@ export class CatalogSyncService {
       stats.payments = payments.length;
 
       const printers = (await call<{ Printers: Row[] }>("GetPrintersInfo")).Printers ?? [];
-      await this.replace(this.prisma.tpapiPrinter, restaurantId,
+      queue("tpapiPrinter",
         printers.map((p) => ({
           restaurantId, untillId: bi(p.Id), name: str(p.Name),
           guid: str(p.Guid) || null, nullPrinter: Boolean(p.NullPrinter),
@@ -234,13 +274,16 @@ export class CatalogSyncService {
         }
       }
 
-      await this.replace(this.prisma.tpapiDepartment, restaurantId, [...departments.values()]);
-      await this.replace(this.prisma.tpapiOptionGroup, restaurantId, [...optionGroups.values()]);
-      await this.replace(this.prisma.tpapiOptionItem, restaurantId, [...optionItems.values()]);
-      await this.replace(this.prisma.tpapiArticle, restaurantId, [...articles.values()]);
-      await this.replace(this.prisma.tpapiArticlePrice, restaurantId, articlePrices);
-      await this.replace(this.prisma.tpapiArticleSizePrice, restaurantId, sizePrices);
-      await this.replace(this.prisma.tpapiArticleOption, restaurantId, [...articleOptions.values()]);
+      queue("tpapiDepartment", [...departments.values()]);
+      queue("tpapiOptionGroup", [...optionGroups.values()]);
+      queue("tpapiOptionItem", [...optionItems.values()]);
+      queue("tpapiArticle", [...articles.values()]);
+      queue("tpapiArticlePrice", articlePrices);
+      queue("tpapiArticleSizePrice", sizePrices);
+      queue("tpapiArticleOption", [...articleOptions.values()]);
+
+      // Everything the till said, in one go. Until this commits the kiosk still has the previous menu.
+      await replaceAllAtomically(this.prisma as never, restaurantId, pending);
 
       stats.departments = departments.size;
       stats.articles = articles.size;
@@ -350,26 +393,8 @@ export class CatalogSyncService {
         level: ok ? "INFO" : "ERROR", ok, durationMs, message,
       },
     }).catch(() => undefined);
-  }
+  }}
 
-
-
-  /**
-   * Replace every row of one mirror table for this restaurant.
-   * Safe because presentation data lives in separate tables with no FK.
-   */
-  private async replace(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delegate: { deleteMany: (a: any) => Promise<unknown>; createMany: (a: any) => Promise<unknown> },
-    restaurantId: string,
-    rows: Row[],
-  ): Promise<void> {
-    await delegate.deleteMany({ where: { restaurantId } });
-    for (let i = 0; i < rows.length; i += 500) {
-      await delegate.createMany({ data: rows.slice(i, i + 500), skipDuplicates: true });
-    }
-  }
-}
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -2,7 +2,7 @@
 
 export type AttentionKind =
   | "TILL_FAILING" | "ORDERS_STUCK" | "ORDERS_FAILED" | "NO_OWNER"
-  | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
+  | "SYNC_FAILING" | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
 
 /** problem: customers or staff are affected now. warning: it will become one. setup: not finished being set up. */
 export type Severity = "problem" | "warning" | "setup";
@@ -24,6 +24,9 @@ export interface RestaurantFacts {
   stuckOrders: number;
   /** Orders that failed in the last 24 hours. */
   failedOrders: number;
+  /** How many of the newest menu syncs failed in a row (0 when the latest worked or none ran), and why. */
+  syncFailures?: number;
+  lastSyncError?: string | null;
 }
 
 export interface AttentionItem {
@@ -79,6 +82,14 @@ export function buildAttention(restaurants: RestaurantFacts[], now = Date.now())
     if (bad !== null && (ok === null || bad > ok)) {
       add("TILL_FAILING", "problem", `The till link is failing${t.lastErrorMessage ? `: ${t.lastErrorMessage}` : "."}`);
       continue;   // a menu that cannot be read is the same problem, said once
+    }
+
+    if ((r.syncFailures ?? 0) > 0) {
+      const n = r.syncFailures!;
+      // A few failures in a row can be a blip; three or more means the menu is not being kept up to date.
+      add("SYNC_FAILING", n >= 3 ? "problem" : "warning",
+        `The last ${n === 1 ? "menu update" : `${n} menu updates`} from the till failed${r.lastSyncError ? `: ${r.lastSyncError}` : "."} The kiosk keeps showing the previous menu.`);
+      continue;
     }
 
     if (!t.lastSyncAt) {
