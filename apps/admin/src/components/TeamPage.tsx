@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  createTeamMember, listTeam, resetTeamPassword, teamActivity, updateTeamMember,
+  createTeamMember, invitationNotice, listTeam, resendTeamInvitation, resetTeamPassword, teamActivity, updateTeamMember,
   type TeamMember, type TeamRole,
 } from "@/lib/platform";
-import { ErrorText, Field, ShownOnce, input, primary, secondary, when } from "./ui";
+import { ErrorText, Field, input, primary, secondary, when } from "./ui";
 
 const ROLE_LABEL: Record<TeamRole, string> = { SUPER_ADMIN: "Super admin", SUPPORT: "Support (read-only)" };
 const readable = (a: string) => a.replace("platform_user.", "").replace(/_/g, " ");
@@ -14,7 +14,7 @@ export default function TeamPage({ myId }: { myId: string }) {
   const [team, setTeam] = useState<TeamMember[] | null>(null);
   const [activity, setActivity] = useState<Awaited<ReturnType<typeof teamActivity>>>([]);
   const [error, setError] = useState<string | null>(null);
-  const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ email: string; fullName: string; role: TeamRole }>({ email: "", fullName: "", role: "SUPPORT" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export default function TeamPage({ myId }: { myId: string }) {
   useEffect(load, [load]);
 
   const act = async (key: string, fn: () => Promise<void>) => {
-    setBusy(key); setError(null);
+    setBusy(key); setError(null); setNotice(null);
     try { await fn(); load(); } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   };
 
@@ -40,7 +40,7 @@ export default function TeamPage({ myId }: { myId: string }) {
       </div>
       <p className="-mt-3 text-sm text-(--color-ink-muted)">The people who can sign in to this admin. A super admin can change everything; support can look and run a menu sync or re-check an order.</p>
 
-      {secret ? <ShownOnce title={secret.title} secret={secret.value} onDone={() => setSecret(null)} /> : null}
+      {notice ? <p role="status" className={`rounded-lg p-3 text-sm ${notice.tone === "ok" ? "bg-(--color-surface-2)" : "bg-amber-100 text-amber-950"}`}>{notice.text}</p> : null}
       <ErrorText message={error} />
 
       {adding ? (
@@ -49,7 +49,7 @@ export default function TeamPage({ myId }: { myId: string }) {
             e.preventDefault();
             void act("create", async () => {
               const out = await createTeamMember({ email: form.email.trim(), role: form.role, ...(form.fullName.trim() ? { fullName: form.fullName.trim() } : {}) });
-              setSecret({ title: `Temporary password for ${out.user.email}`, value: out.temporaryPassword });
+              setNotice(invitationNotice(out.user.email, "invitation", out.invitation));
               setForm({ email: "", fullName: "", role: "SUPPORT" });
               setAdding(false);
             });
@@ -63,9 +63,9 @@ export default function TeamPage({ myId }: { myId: string }) {
               </select>
             </Field>
           </div>
-          <p className="mt-3 text-sm text-(--color-ink-muted)">A random password is made and shown once. They sign in with it and are asked to choose their own straight away.</p>
+          <p className="mt-3 text-sm text-(--color-ink-muted)">They get an email with a link to choose their own password. Opening that link also proves the address is theirs. Nobody, including you, ever sees a password.</p>
           <div className="mt-3 flex gap-3">
-            <button type="submit" disabled={busy !== null} className={primary}>{busy === "create" ? "Adding…" : "Add member"}</button>
+            <button type="submit" disabled={busy !== null} className={primary}>{busy === "create" ? "Sending…" : "Send invitation"}</button>
             <button type="button" className={secondary} onClick={() => setAdding(false)}>Cancel</button>
           </div>
         </form>
@@ -88,16 +88,20 @@ export default function TeamPage({ myId }: { myId: string }) {
                       <option value="SUPER_ADMIN">{ROLE_LABEL.SUPER_ADMIN}</option><option value="SUPPORT">{ROLE_LABEL.SUPPORT}</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3">{!m.isActive ? "switched off" : locked ? "locked (too many wrong passwords)" : m.mustChangePassword ? "has not chosen a password yet" : "active"}</td>
+                  <td className="px-4 py-3">{!m.isActive ? "switched off" : m.invitation === "pending" ? "invited: waiting for them to choose a password" : m.invitation === "expired" ? "invitation expired: send it again" : locked ? "locked (too many wrong passwords)" : m.mustChangePassword ? "has not chosen a password yet" : "active"}</td>
                   <td className="px-4 py-3 text-(--color-ink-muted)">{when(m.lastLoginAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
                       {!me ? (
-                        <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
-                          if (window.confirm(`Make a new password for ${m.email}? The old one stops working and they are signed out everywhere.`)) {
-                            void act(m.id, async () => { const r = await resetTeamPassword(m.id); setSecret({ title: `New temporary password for ${m.email}`, value: r.temporaryPassword }); });
-                          }
-                        }}>Reset password</button>
+                        m.invitation !== "none" ? (
+                          <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => void act(m.id, async () => { const r = await resendTeamInvitation(m.id); setNotice(invitationNotice(m.email, "invitation", r.invitation)); })}>Resend invitation</button>
+                        ) : (
+                          <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
+                            if (window.confirm(`Send ${m.email} a link to choose a new password? Their current password stops working at once and they are signed out everywhere.`)) {
+                              void act(m.id, async () => { const r = await resetTeamPassword(m.id); setNotice(invitationNotice(m.email, "reset link", r.invitation)); });
+                            }
+                          }}>Send reset link</button>
+                        )
                       ) : null}
                       {!me ? (
                         <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {

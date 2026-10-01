@@ -50,10 +50,12 @@ describe("what a platform admin may not do to the team", () => {
 });
 
 describe("TeamService", () => {
-  function setup(users: any[]) {
+  function setup(users: any[], liveLinks: { userId: string }[] = []) {
     const writes: { op: string; args: any }[] = [];
     const audits: any[] = [];
     const invalidated: (string | undefined)[] = [];
+    const sent: any[] = [];
+    let mailWorks = true;
     const rows = users.map((u) => ({ isActive: true, mustChangePassword: false, role: "SUPPORT", ...u }));
     const prisma: any = {
       platformUser: {
@@ -64,13 +66,15 @@ describe("TeamService", () => {
         update: (a: any) => ({ op: "update", args: a }),
       },
       platformSession: { updateMany: (a: any) => ({ op: "revokeSessions", args: a }) },
+      accountToken: { findMany: async () => liveLinks },
       auditLog: { findMany: async () => [{ id: "a1", createdAt: new Date(), actorId: "gone", action: "platform_user.create", entityId: "u1" }] },
       $transaction: async (ops: any[]) => { writes.push(...ops); return []; },
     };
     prisma.platformUser.findMany = async (a: any) => { writes.push({ op: "findMany", args: a }); return a?.where?.id ? rows.filter((r) => a.where.id.in.includes(r.id)) : rows; };
     const directory = { invalidate: (id?: string) => { invalidated.push(id); } };
-    const svc = new TeamService(prisma, new PasswordService(), directory as never, { record: async (e: unknown) => { audits.push(e); } } as never, { assertReal: async () => undefined } as never);
-    return { svc, writes, audits, invalidated };
+    const invites = { sendLink: async (t: unknown) => { sent.push(t); return mailWorks ? { sent: true } : { sent: false, error: "no smtp" }; } };
+    const svc = new TeamService(prisma, new PasswordService(), directory as never, { record: async (e: unknown) => { audits.push(e); } } as never, { assertReal: async () => undefined } as never, invites as never);
+    return { svc, writes, audits, invalidated, sent, breakMail: () => { mailWorks = false; } };
   }
   const actor = { id: "admin" };
 
@@ -80,18 +84,27 @@ describe("TeamService", () => {
     assert.equal((writes[0]!.args as any).select.passwordHash, undefined);
   });
 
-  it("a new member gets a random password shown once, stored only as a hash, and must change it at first sign-in", async () => {
-    const { svc, writes, audits } = setup([]);
+  it("a new member is emailed an invitation: no password is shown or known, and the stored one is unusable", async () => {
+    const { svc, writes, audits, sent } = setup([]);
     const out = await svc.create({ email: " New@Team.CO ", role: "SUPPORT", fullName: " Sam " }, actor);
     const data = writes.find((w) => w.op === "create")!.args.data;
     assert.equal(data.email, "new@team.co");
-    assert.equal(data.mustChangePassword, true);
     assert.equal(data.fullName, "Sam");
-    assert.ok(await new PasswordService().verify(data.passwordHash, out.temporaryPassword));
+    assert.equal(data.passwordSetAt, null);
+    assert.ok(data.passwordHash.startsWith("$argon2"));
+    assert.equal("temporaryPassword" in out, false);
     assert.equal(JSON.stringify(out.user).includes("passwordHash"), false);
-    assert.equal(JSON.stringify(audits).includes(out.temporaryPassword), false);
+    assert.deepEqual(out.invitation, { sent: true });
+    assert.deepEqual([sent[0].realm, sent[0].kind, sent[0].user.email], ["PLATFORM", "INVITE", "new@team.co"]);
     assert.equal(audits[0].action, "platform_user.create");
     assert.equal(audits[0].restaurantId, undefined);
+  });
+
+  it("if the email cannot be sent the account still exists, and the answer says so", async () => {
+    const m = setup([]); m.breakMail();
+    const out = await m.svc.create({ email: "a@b.co", role: "SUPPORT" }, actor);
+    assert.equal(m.writes.filter((w) => w.op === "create").length, 1);
+    assert.deepEqual(out.invitation, { sent: false, error: "no smtp" });
   });
 
   it("refuses an address that already has an account", async () => {
@@ -121,18 +134,38 @@ describe("TeamService", () => {
     assert.ok(writes.length > 0);
   });
 
-  it("a reset gives a random password shown once, forces a change, unlocks, ends every session, and refuses your own account", async () => {
-    const { svc, writes, audits, invalidated } = setup([{ id: "u1", email: "a@x.co", role: "SUPPORT" }]);
+  it("a reset cuts off the old password and every session at once, unlocks, and emails a link: no password is shown; your own account is refused", async () => {
+    const { svc, writes, audits, invalidated, sent } = setup([{ id: "u1", email: "a@x.co", role: "SUPPORT" }]);
     const out = await svc.resetPassword("u1", actor);
     const upd = writes.find((w) => w.op === "update")!.args.data;
-    assert.equal(upd.mustChangePassword, true);
+    assert.equal(upd.passwordSetAt, null);
     assert.equal(upd.failedLoginCount, 0);
     assert.equal(upd.lockedUntil, null);
-    assert.ok(await new PasswordService().verify(upd.passwordHash, out.temporaryPassword));
+    assert.ok(upd.passwordHash.startsWith("$argon2"));
     assert.ok(writes.some((w) => w.op === "revokeSessions"));
     assert.deepEqual(invalidated, ["u1"]);
-    assert.equal(JSON.stringify(audits).includes(out.temporaryPassword), false);
+    assert.equal("temporaryPassword" in out, false);
+    assert.deepEqual(out.invitation, { sent: true });
+    assert.equal(sent[0].kind, "RESET");
+    assert.equal(audits[0].action, "platform_user.password_reset");
     await assert.rejects(svc.resetPassword("admin", { id: "admin" }), BadRequestException);
+  });
+
+  it("an invitation can be sent again, only to someone who has not chosen a password yet", async () => {
+    const a = setup([{ id: "u1", email: "a@x.co", passwordSetAt: null }]);
+    assert.deepEqual((await a.svc.resendInvitation("u1", actor)).invitation, { sent: true });
+    assert.equal(a.sent[0].kind, "INVITE");
+    assert.equal(a.audits[0].action, "platform_user.invite_resent");
+    const b = setup([{ id: "u1", email: "a@x.co", passwordSetAt: new Date() }]);
+    await assert.rejects(b.svc.resendInvitation("u1", actor), /already chosen a password/);
+    await assert.rejects(b.svc.resendInvitation("nope", actor), NotFoundException);
+  });
+
+  it("the list says who is still waiting to choose a password, and whether their link is still good", async () => {
+    const { svc } = setup([{ id: "has", email: "a@x.co", passwordSetAt: new Date() }, { id: "waiting", email: "b@x.co", passwordSetAt: null }, { id: "lapsed", email: "c@x.co", passwordSetAt: null }], [{ userId: "waiting" }]);
+    const list = await svc.list();
+    assert.deepEqual(list.map((u) => [u.id, u.invitation]), [["has", "none"], ["waiting", "pending"], ["lapsed", "expired"]]);
+    assert.equal(JSON.stringify(list).includes("passwordSetAt"), false);
   });
 
   it("the team's activity names who did what, even for someone since removed", async () => {

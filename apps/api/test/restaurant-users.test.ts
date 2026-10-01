@@ -9,13 +9,18 @@ import { model, type Call } from "./helpers/fake-prisma.js";
 
 const ACTOR = { id: "admin-1" };
 
-function setup(users: Record<string, unknown>[] = []) {
+function setup(users: Record<string, unknown>[] = [], liveLinks: { userId: string }[] = []) {
   const calls: Call[] = [];
+  const sent: any[] = [];
+  let mailWorks = true;
   const writes: { op: string; args: any }[] = [];
   const audits: any[] = [];
   const rows = users.map((u) => ({ isActive: true, ...u }));
   const prisma = {
-    restaurant: { findUnique: async (a: any) => (a.where.id === "r1" || a.where.id === "r2" ? { id: a.where.id } : null) },
+    restaurant: { findUnique: async (a: any) => (a.where.id === "r1" || a.where.id === "r2" ? { id: a.where.id, name: "Chez Sam", slug: "chez-sam", locale: "fr" } : null) },
+    accountToken: {
+      findMany: async (a: any) => { calls.push({ model: "accountToken", op: "findMany", args: a }); return liveLinks; },
+    },
     restaurantUser: {
       ...model(rows, calls, "restaurantUser"),
       create: async (a: any) => {
@@ -28,8 +33,9 @@ function setup(users: Record<string, unknown>[] = []) {
     $transaction: async (ops: { op: string; args: any }[]) => { writes.push(...ops); return []; },
   };
   const audit = { record: async (e: unknown) => { audits.push(e); } };
-  const svc = new RestaurantUsersService(prisma as never, new PasswordService(), audit as never, { assertReal: async () => undefined } as never);
-  return { svc, calls, writes, audits };
+  const invites = { sendLink: async (t: unknown) => { sent.push(t); return mailWorks ? { sent: true } : { sent: false, error: "no smtp" }; } };
+  const svc = new RestaurantUsersService(prisma as never, new PasswordService(), audit as never, { assertReal: async () => undefined } as never, invites as never);
+  return { svc, calls, writes, audits, sent, breakMail: () => { mailWorks = false; } };
 }
 
 describe("temporary passwords", () => {
@@ -45,19 +51,33 @@ describe("temporary passwords", () => {
 });
 
 describe("creating a restaurant user", () => {
-  it("returns the password once, stores only a hash that checks out, and never audits it", async () => {
-    const { svc, writes, audits } = setup();
+  it("emails an invitation; nobody is shown or told a password, and the stored one is unusable", async () => {
+    const { svc, writes, audits, sent } = setup();
     const out = await svc.create("r1", { email: "  New@Resto.TEST ", role: "MANAGER", fullName: " Sam " }, ACTOR);
     const stored = writes[0]!.args.data;
     assert.equal(stored.email, "new@resto.test");
     assert.equal(stored.restaurantId, "r1");
     assert.equal(stored.fullName, "Sam");
-    assert.notEqual(stored.passwordHash, out.temporaryPassword);
-    assert.ok(await new PasswordService().verify(stored.passwordHash, out.temporaryPassword));
-    assert.equal(JSON.stringify(out.user).includes("passwordHash"), false);
-    assert.equal(JSON.stringify(audits).includes(out.temporaryPassword), false);
+    assert.equal(stored.passwordSetAt, null);                      // still waiting to choose one
+    assert.ok(stored.passwordHash.startsWith("$argon2"));          // a hash of something nobody knows
+    assert.equal("temporaryPassword" in out, false);
+    assert.equal(JSON.stringify(out).includes("passwordHash"), false);
+    assert.equal(JSON.stringify(out.user).includes("passwordSetAt"), false);
+    assert.deepEqual(out.invitation, { sent: true });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].realm, "RESTAURANT");
+    assert.equal(sent[0].kind, "INVITE");
+    assert.equal(sent[0].user.email, "new@resto.test");
+    assert.deepEqual(sent[0].restaurant, { id: "r1", name: "Chez Sam", slug: "chez-sam", locale: "fr" });
     assert.equal(audits[0].action, "restaurant_user.create");
     assert.equal(audits[0].restaurantId, "r1");
+  });
+
+  it("if the email cannot be sent the account still exists, and the answer says so", async () => {
+    const m = setup(); m.breakMail();
+    const out = await m.svc.create("r1", { email: "a@b.co", role: "STAFF" }, ACTOR);
+    assert.equal(m.writes.filter((w) => w.op === "create").length, 1);
+    assert.deepEqual(out.invitation, { sent: false, error: "no smtp" });
   });
 
   it("refuses an address that already has an account there (any capitalisation)", async () => {
@@ -106,27 +126,73 @@ describe("changing a restaurant user", () => {
 });
 
 describe("resetting a password", () => {
-  it("replaces the hash, unlocks the account, ends every session, and shows the new password only in the reply", async () => {
-    const { svc, writes, audits } = setup([{ id: "u1", restaurantId: "r1", email: "a@b.test", role: "OWNER", isActive: true }]);
+  const user = { id: "u1", restaurantId: "r1", email: "a@b.test", role: "OWNER", isActive: true, passwordSetAt: new Date() };
+
+  it("cuts off the old password and every session at once, unlocks the account, and emails a link: no password is shown", async () => {
+    const { svc, writes, audits, sent } = setup([user]);
     const out = await svc.resetPassword("r1", "u1", ACTOR);
     const w = writes[0]!;
     assert.deepEqual(w.args.where, { id: "u1", restaurantId: "r1" });
     assert.equal(w.args.data.failedLoginCount, 0);
     assert.equal(w.args.data.lockedUntil, null);
-    assert.ok(await new PasswordService().verify(w.args.data.passwordHash, out.temporaryPassword));
+    assert.equal(w.args.data.passwordSetAt, null);
+    assert.ok(w.args.data.passwordHash.startsWith("$argon2"));
     assert.equal(writes[1]!.op, "revokeSessions");
-    assert.equal(JSON.stringify(audits).includes(out.temporaryPassword), false);
+    assert.equal("temporaryPassword" in out, false);
+    assert.deepEqual(out.invitation, { sent: true });
+    assert.equal(sent[0].kind, "RESET");
     assert.equal(audits[0].action, "restaurant_user.password_reset");
+  });
+
+  it("a user of another restaurant cannot be reset through this one", async () => {
+    const { svc, writes, sent } = setup([{ ...user, restaurantId: "r2" }]);
+    await assert.rejects(svc.resetPassword("r1", "u1", ACTOR), NotFoundException);
+    assert.equal(writes.length + sent.length, 0);
+  });
+});
+
+describe("resending an invitation", () => {
+  it("only for someone who has not chosen a password yet", async () => {
+    const waiting = { id: "u1", restaurantId: "r1", email: "a@b.co", role: "STAFF", isActive: true, passwordSetAt: null };
+    const a = setup([waiting]);
+    assert.deepEqual((await a.svc.resendInvitation("r1", "u1", ACTOR)).invitation, { sent: true });
+    assert.equal(a.sent[0].kind, "INVITE");
+    assert.equal(a.audits[0].action, "restaurant_user.invite_resent");
+
+    const b = setup([{ ...waiting, passwordSetAt: new Date() }]);
+    await assert.rejects(b.svc.resendInvitation("r1", "u1", ACTOR), /already chosen a password/);
+    assert.equal(b.sent.length, 0);
+  });
+
+  it("not for a user of another restaurant", async () => {
+    const { svc, sent } = setup([{ id: "u1", restaurantId: "r2", email: "a@b.co", role: "STAFF", isActive: true, passwordSetAt: null }]);
+    await assert.rejects(svc.resendInvitation("r1", "u1", ACTOR), NotFoundException);
+    assert.equal(sent.length, 0);
   });
 });
 
 describe("listing", () => {
   it("never returns a password hash and stays inside the restaurant", async () => {
-    const { svc, calls } = setup([{ id: "u1", restaurantId: "r1", email: "a@b.test", role: "OWNER" }]);
+    const { svc, calls } = setup([{ id: "u1", restaurantId: "r1", email: "a@b.test", role: "OWNER", passwordSetAt: new Date() }]);
     await svc.list("r1");
-    const call = calls.find((c) => c.op === "findMany")!;
+    const call = calls.find((c) => c.op === "findMany" && c.model === "restaurantUser")!;
     assert.equal((call.args as any).where.restaurantId, "r1");
     assert.equal((call.args as any).select.passwordHash, undefined);
+  });
+
+  it("says who is still waiting to choose a password, and whether their link is still good", async () => {
+    const base = { restaurantId: "r1", role: "STAFF", isActive: true };
+    const { svc, calls } = setup(
+      [{ ...base, id: "has", email: "a@b.co", passwordSetAt: new Date() }, { ...base, id: "waiting", email: "b@b.co", passwordSetAt: null }, { ...base, id: "lapsed", email: "c@b.co", passwordSetAt: null }],
+      [{ userId: "waiting" }],
+    );
+    const list = await svc.list("r1");
+    assert.deepEqual(list.map((u) => [u.id, u.invitation]), [["has", "none"], ["waiting", "pending"], ["lapsed", "expired"]]);
+    assert.equal(JSON.stringify(list).includes("passwordSetAt"), false);
+    const q = calls.find((c) => c.model === "accountToken")!.args as any;
+    assert.equal(q.where.restaurantId, "r1");
+    assert.equal(q.where.realm, "RESTAURANT");
+    assert.deepEqual(q.where.userId.in.sort(), ["lapsed", "waiting"]);
   });
 });
 

@@ -126,8 +126,8 @@ describe("where accounts are made, a placeholder address is refused and nothing 
 
   it("a restaurant user", async () => {
     const writes: unknown[] = [];
-    const prisma = { restaurant: { findUnique: async () => ({ id: "r1" }) }, restaurantUser: { findFirst: async () => null, create: async (a: unknown) => { writes.push(a); return {}; } } };
-    const svc = new RestaurantUsersService(prisma as never, new PasswordService(), { record: async () => undefined } as never, strict());
+    const prisma = { restaurant: { findUnique: async () => ({ id: "r1", name: "Chez", slug: "chez", locale: "fr" }) }, restaurantUser: { findFirst: async () => null, create: async (a: unknown) => { writes.push(a); return {}; } } };
+    const svc = new RestaurantUsersService(prisma as never, new PasswordService(), { record: async () => undefined } as never, strict(), { sendLink: async () => ({ sent: true }) } as never);
     await assert.rejects(svc.create("r1", { email: "owner@resto-a.test", role: "OWNER" }, { id: "a" }), BadRequestException);
     assert.equal(writes.length, 0);
     await svc.create("r1", { email: "Owner@Gmail.com", role: "OWNER" }, { id: "a" });
@@ -137,7 +137,7 @@ describe("where accounts are made, a placeholder address is refused and nothing 
   it("a platform team member", async () => {
     const writes: unknown[] = [];
     const prisma = { platformUser: { findUnique: async () => null, create: async (a: unknown) => { writes.push(a); return { id: "n", email: "x", role: "SUPPORT" }; } } };
-    const svc = new TeamService(prisma as never, new PasswordService(), { invalidate: () => undefined } as never, { record: async () => undefined } as never, strict());
+    const svc = new TeamService(prisma as never, new PasswordService(), { invalidate: () => undefined } as never, { record: async () => undefined } as never, strict(), { sendLink: async () => ({ sent: true }) } as never);
     await assert.rejects(svc.create({ email: "boss@kiosk.local", role: "SUPPORT" }, { id: "a" }), BadRequestException);
     assert.equal(writes.length, 0);
     await svc.create({ email: "boss@gmail.com", role: "SUPPORT" }, { id: "a" });

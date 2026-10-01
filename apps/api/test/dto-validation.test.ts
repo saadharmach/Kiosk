@@ -8,6 +8,7 @@ import { CreateRestaurantUserDto, UpdateRestaurantUserDto } from "../src/admin/d
 import { UpsertTpapiDto } from "../src/admin/dto/upsert-tpapi.dto.js";
 import { CreateTeamMemberDto, UpdateTeamMemberDto } from "../src/admin/dto/team.dto.js";
 import { ChangePasswordDto } from "../src/auth/dto/change-password.dto.js";
+import { AcceptInviteDto } from "../src/auth/dto/accept-invite.dto.js";
 
 /** The API's own validation (main.ts): a property with no validator is refused, not ignored. */
 const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
@@ -65,5 +66,11 @@ describe("the bodies the platform screens send are accepted by the API's validat
     await refused(UpdateTeamMemberDto, { passwordHash: "x" });
     await check(ChangePasswordDto, { currentPassword: "x", newPassword: "twelve-chars!" });
     await refused(ChangePasswordDto, { currentPassword: "x", newPassword: "eleven-char" });
+  });
+
+  it("choosing a password from an invitation link needs 12+ characters and nothing extra", async () => {
+    await check(AcceptInviteDto, { token: "t".repeat(43), password: "twelve-chars!" });
+    await refused(AcceptInviteDto, { token: "t".repeat(43), password: "eleven-char" });
+    await refused(AcceptInviteDto, { token: "t".repeat(43), password: "twelve-chars!", userId: "someone-else" });
   });
 });

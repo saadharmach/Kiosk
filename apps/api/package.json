@@ -26,6 +26,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "jose": "^6.2.12",
+    "nodemailer": "^10.0.13",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.6.5"
@@ -36,6 +37,9 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/smtp-server": "^3.5.13",
+    "smtp-server": "^3.19.16",
     "tsx": "^4.23.15",
     "typescript": "^6"
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { posState, type PosHealth, type PosState, type Status } from "@/lib/platform";
 
 export const input = "h-10 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3 disabled:opacity-60";
@@ -36,24 +36,6 @@ const POS_LABEL: Record<PosState, [string, string]> = {
 export function PosBadge({ health }: { health: PosHealth | null }) {
   const [label, tone] = POS_LABEL[posState(health)];
   return <span className={`text-sm font-medium ${tone}`}>● {label}</span>;
-}
-
-/** A password the platform shows once. It is not stored anywhere we can read it back from. */
-export function ShownOnce({ title, secret, onDone }: { title: string; secret: string; onDone: () => void }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div role="alert" className="rounded-(--radius-card) border-2 border-amber-400 bg-amber-50 p-4 text-amber-950">
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 text-sm">Copy it now and pass it on. It is shown only this once and cannot be looked up again.</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <code className="rounded bg-white px-3 py-2 font-mono text-lg tracking-wider select-all">{secret}</code>
-        <button className={secondary + " bg-white"} onClick={async () => {
-          try { await navigator.clipboard.writeText(secret); setCopied(true); } catch { /* the code can be selected by hand */ }
-        }}>{copied ? "Copied" : "Copy"}</button>
-        <button className={secondary + " bg-white"} onClick={onDone}>I have copied it</button>
-      </div>
-    </div>
-  );
 }
 
 export const ErrorText = ({ message }: { message: string | null }) =>

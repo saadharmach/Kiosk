@@ -86,17 +86,24 @@ export const runSync = (id: string) => request<SyncRun>(`/admin/restaurants/${id
 
 // ------------------------------------------------------------------------ users
 
+/** none: they have chosen a password. pending: an invitation is out. expired: it ran out and needs sending again. */
+export type Invitation = "none" | "pending" | "expired";
+/** The result of sending an invitation or reset link. The account exists either way. */
+export interface InvitationResult { sent: boolean; error?: string }
+
 export interface RestaurantUser {
   id: string; email: string; fullName: string | null; role: UserRole; isActive: boolean;
-  lastLoginAt: string | null; lockedUntil: string | null; createdAt: string;
+  lastLoginAt: string | null; lockedUntil: string | null; createdAt: string; invitation: Invitation;
 }
 export const listUsers = (id: string) => request<RestaurantUser[]>(`/admin/restaurants/${id}/users`);
 export const createUser = (id: string, body: { email: string; role: UserRole; fullName?: string }) =>
-  request<{ user: RestaurantUser; temporaryPassword: string }>(`/admin/restaurants/${id}/users`, { method: "POST", body: JSON.stringify(body) });
+  request<{ user: RestaurantUser; invitation: InvitationResult }>(`/admin/restaurants/${id}/users`, { method: "POST", body: JSON.stringify(body) });
 export const updateUser = (id: string, userId: string, body: { isActive?: boolean; role?: UserRole; fullName?: string }) =>
   request<RestaurantUser>(`/admin/restaurants/${id}/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) });
 export const resetPassword = (id: string, userId: string) =>
-  request<{ temporaryPassword: string }>(`/admin/restaurants/${id}/users/${userId}/reset-password`, { method: "POST" });
+  request<{ invitation: InvitationResult }>(`/admin/restaurants/${id}/users/${userId}/reset-password`, { method: "POST" });
+export const resendInvitation = (id: string, userId: string) =>
+  request<{ invitation: InvitationResult }>(`/admin/restaurants/${id}/users/${userId}/resend-invitation`, { method: "POST" });
 
 // --------------------------------------------------------------------- activity
 
@@ -110,14 +117,22 @@ export const listActivity = (id: string, page = 1) => request<Page<ActivityItem>
 export type TeamRole = "SUPER_ADMIN" | "SUPPORT";
 export interface TeamMember {
   id: string; email: string; fullName: string | null; role: TeamRole; isActive: boolean;
-  lastLoginAt: string | null; lockedUntil: string | null; mustChangePassword: boolean; createdAt: string;
+  lastLoginAt: string | null; lockedUntil: string | null; mustChangePassword: boolean; createdAt: string; invitation: Invitation;
 }
 export const listTeam = () => request<TeamMember[]>("/admin/team");
 export const createTeamMember = (body: { email: string; role: TeamRole; fullName?: string }) =>
-  request<{ user: TeamMember; temporaryPassword: string }>("/admin/team", { method: "POST", body: JSON.stringify(body) });
+  request<{ user: TeamMember; invitation: InvitationResult }>("/admin/team", { method: "POST", body: JSON.stringify(body) });
 export const updateTeamMember = (id: string, body: { isActive?: boolean; role?: TeamRole; fullName?: string }) =>
   request<TeamMember>(`/admin/team/${id}`, { method: "PATCH", body: JSON.stringify(body) });
-export const resetTeamPassword = (id: string) => request<{ temporaryPassword: string }>(`/admin/team/${id}/reset-password`, { method: "POST" });
+export const resetTeamPassword = (id: string) => request<{ invitation: InvitationResult }>(`/admin/team/${id}/reset-password`, { method: "POST" });
+export const resendTeamInvitation = (id: string) => request<{ invitation: InvitationResult }>(`/admin/team/${id}/resend-invitation`, { method: "POST" });
+
+/** The sentence shown after an invitation or reset link was (or could not be) sent. */
+export function invitationNotice(email: string, what: "invitation" | "reset link", r: InvitationResult): { tone: "ok" | "warn"; text: string } {
+  return r.sent
+    ? { tone: "ok", text: `An ${what === "invitation" ? "invitation" : "email with a reset link"} was sent to ${email}. The link works once.` }
+    : { tone: "warn", text: `The account is saved, but the email to ${email} could not be sent${r.error ? `: ${r.error}` : "."} Use “Resend” once email works.` };
+}
 export const teamActivity = () => request<{ id: string; at: string; action: string; actor: string; target: string | null }[]>("/admin/team/activity");
 
 /** The new-password rule: long enough to matter, and typed the same twice. Returns what is wrong, or null. */

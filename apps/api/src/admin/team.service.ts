@@ -1,5 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Request } from "express";
+import { AccountInviteService, type SendResult } from "../auth/account-invites.service.js";
 import { PasswordService } from "../auth/password.service.js";
 import { PlatformUserDirectory } from "../auth/platform-user-directory.js";
 import { AuditService } from "../common/audit.service.js";
@@ -12,7 +13,7 @@ import { generateTemporaryPassword } from "./temporary-password.js";
 /** Everything about a person that may leave the server. Never the password hash. */
 const PUBLIC = {
   id: true, email: true, fullName: true, role: true, isActive: true,
-  lastLoginAt: true, lockedUntil: true, mustChangePassword: true, createdAt: true,
+  lastLoginAt: true, lockedUntil: true, mustChangePassword: true, createdAt: true, passwordSetAt: true,
 } as const;
 
 type Actor = { id: string };
@@ -26,23 +27,33 @@ export class TeamService {
     private readonly directory: PlatformUserDirectory,
     private readonly audit: AuditService,
     private readonly emailCheck: EmailCheckService,
+    private readonly invites: AccountInviteService,
   ) {}
 
-  list() {
-    return this.prisma.platformUser.findMany({ select: PUBLIC, orderBy: { createdAt: "asc" } });
+  async list() {
+    const users = await this.prisma.platformUser.findMany({ select: PUBLIC, orderBy: { createdAt: "asc" } });
+    const waiting = users.filter((u) => u.passwordSetAt === null).map((u) => u.id);
+    const live = waiting.length
+      ? await this.prisma.accountToken.findMany({ where: { realm: "PLATFORM", userId: { in: waiting }, usedAt: null, expiresAt: { gt: new Date() } }, select: { userId: true } })
+      : [];
+    const hasLink = new Set(live.map((t) => t.userId));
+    return users.map(({ passwordSetAt, ...u }) => ({
+      ...u,
+      /** none: they have a password. pending: an invitation is out. expired: it ran out and needs sending again. */
+      invitation: passwordSetAt !== null ? ("none" as const) : hasLink.has(u.id) ? ("pending" as const) : ("expired" as const),
+    }));
   }
 
-  /** Creates the account with a random password, shown once. They must choose their own at first sign-in. */
+  /** Makes the account and emails a link to choose their own password. Nobody, including us, ever knows one for it. */
   async create(dto: CreateTeamMemberDto, actor: Actor, req?: Request) {
     const email = dto.email.trim().toLowerCase();
     await this.emailCheck.assertReal(email);
     if (await this.prisma.platformUser.findUnique({ where: { email }, select: { id: true } })) {
       throw new ConflictException(`${email} already has a platform account`);
     }
-    const temporaryPassword = generateTemporaryPassword();
     const user = await this.prisma.platformUser
       .create({
-        data: { email, role: dto.role, fullName: dto.fullName?.trim() || null, passwordHash: await this.passwords.hash(temporaryPassword), mustChangePassword: true },
+        data: { email, role: dto.role, fullName: dto.fullName?.trim() || null, passwordHash: await this.passwords.hash(generateTemporaryPassword(32)), passwordSetAt: null },
         select: PUBLIC,
       })
       .catch((e: { code?: string }) => {
@@ -53,7 +64,8 @@ export class TeamService {
       { actorType: "PLATFORM_USER", actorId: actor.id, action: "platform_user.create", entityType: "PlatformUser", entityId: user.id, after: { email: user.email, role: user.role } },
       req,
     );
-    return { user, temporaryPassword };
+    const { passwordSetAt: _p, ...safe } = user;
+    return { user: safe, invitation: await this.sendLink("INVITE", user) };
   }
 
   async update(id: string, dto: UpdateTeamMemberDto, actor: Actor, req?: Request) {
@@ -88,15 +100,17 @@ export class TeamService {
     return after;
   }
 
-  /** A new random password, shown once; the old one stops working, the account unlocks and every session ends. */
+  /**
+   * "Reset password": the old password stops working at once, every session ends, the account unlocks, and the person is
+   * emailed a link to choose a new one. Nobody is shown a password.
+   */
   async resetPassword(id: string, actor: Actor, req?: Request) {
     checkReset(actor.id, id);
     const user = await this.require(id);
-    const temporaryPassword = generateTemporaryPassword();
     await this.prisma.$transaction([
       this.prisma.platformUser.update({
         where: { id },
-        data: { passwordHash: await this.passwords.hash(temporaryPassword), mustChangePassword: true, failedLoginCount: 0, lockedUntil: null },
+        data: { passwordHash: await this.passwords.hash(generateTemporaryPassword(32)), passwordSetAt: null, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null },
       }),
       this.revokeSessions(id),
     ]);
@@ -105,7 +119,22 @@ export class TeamService {
       { actorType: "PLATFORM_USER", actorId: actor.id, action: "platform_user.password_reset", entityType: "PlatformUser", entityId: id, after: { email: user.email } },
       req,
     );
-    return { temporaryPassword };
+    return { invitation: await this.sendLink("RESET", user) };
+  }
+
+  /** The email went missing, or the link ran out: send a fresh one. Only for someone who has not chosen a password yet. */
+  async resendInvitation(id: string, actor: Actor, req?: Request) {
+    const user = await this.require(id);
+    if (user.passwordSetAt !== null) throw new BadRequestException("They have already chosen a password. If they cannot sign in, use Reset password.");
+    await this.audit.record(
+      { actorType: "PLATFORM_USER", actorId: actor.id, action: "platform_user.invite_resent", entityType: "PlatformUser", entityId: id, after: { email: user.email } },
+      req,
+    );
+    return { invitation: await this.sendLink("INVITE", user) };
+  }
+
+  private sendLink(kind: "INVITE" | "RESET", user: { id: string; email: string; fullName: string | null }): Promise<SendResult> {
+    return this.invites.sendLink({ realm: "PLATFORM", kind, user });
   }
 
   /** Who changed the team, newest first. */

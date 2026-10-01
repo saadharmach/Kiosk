@@ -43,6 +43,19 @@ export class RestaurantUsersController {
     return this.users.update(id, userId, dto, { id: user.sub }, req);
   }
 
+  @Post(":userId/resend-invitation")
+  @HttpCode(200)
+  @Roles("SUPER_ADMIN")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  resendInvitation(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Param("userId", new ParseUUIDPipe()) userId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Req() req: Request,
+  ) {
+    return this.users.resendInvitation(id, userId, { id: user.sub }, req);
+  }
+
   @Post(":userId/reset-password")
   @HttpCode(200)
   @Roles("SUPER_ADMIN")

@@ -45,6 +45,8 @@ model PlatformUser {
   lockedUntil      DateTime?
   /// Set when someone else chose the password (a new account, or a reset): the person must pick their own first.
   mustChangePassword Boolean       @default(false)
+  /// When they chose their own password. Null while an invitation is still waiting to be accepted.
+  passwordSetAt    DateTime?
   sessions         PlatformSession[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -111,6 +113,8 @@ model RestaurantUser {
   lastLoginAt  DateTime?
   failedLoginCount Int                @default(0)
   lockedUntil      DateTime?
+  /// When they chose their own password. Null while an invitation is still waiting to be accepted.
+  passwordSetAt    DateTime?
   sessions         RestaurantSession[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -1155,4 +1159,36 @@ model RestaurantSession {
   @@index([restaurantId, userId])
   @@index([userId, expiresAt])
   @@map("restaurant_sessions")
+}
+
+// ======================================================== invitations and resets
+
+enum AccountTokenKind {
+  /// "Choose your password": sent when an account is made for someone.
+  INVITE
+  /// "Choose a new password": sent when the platform resets one.
+  RESET
+}
+
+enum AccountRealm {
+  PLATFORM
+  RESTAURANT
+}
+
+/// A single-use link emailed to a person. Only the SHA-256 of the token is stored, never the token.
+model AccountToken {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  realm        AccountRealm
+  kind         AccountTokenKind
+  /// platform_users.id or restaurant_users.id, depending on the realm.
+  userId       String           @db.Uuid
+  /// Set for the restaurant realm.
+  restaurantId String?          @db.Uuid
+  tokenHash    String           @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime         @default(now())
+
+  @@index([realm, userId])
+  @@map("account_tokens")
 }

@@ -36,6 +36,13 @@ export class TeamController {
     return this.team.update(id, dto, { id: user.sub }, req);
   }
 
+  @Post(":id/resend-invitation")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  resendInvitation(@Param("id", new ParseUUIDPipe()) id: string, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
+    return this.team.resendInvitation(id, { id: user.sub }, req);
+  }
+
   @Post(":id/reset-password")
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

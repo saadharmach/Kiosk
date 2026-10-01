@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createUser, listUsers, resetPassword, updateUser, type RestaurantUser, type UserRole } from "@/lib/platform";
-import { ErrorText, Field, ShownOnce, input, primary, secondary, when } from "./ui";
+import { createUser, invitationNotice, listUsers, resendInvitation, resetPassword, updateUser, type RestaurantUser, type UserRole } from "@/lib/platform";
+import { ErrorText, Field, input, primary, secondary, when } from "./ui";
 
 const ROLES: UserRole[] = ["OWNER", "MANAGER", "STAFF"];
 
 export default function UsersTab({ id, canWrite, onChanged }: { id: string; canWrite: boolean; onChanged: () => void }) {
   const [users, setUsers] = useState<RestaurantUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ email: string; fullName: string; role: UserRole }>({ email: "", fullName: "", role: "MANAGER" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
   useEffect(load, [load]);
 
   const act = async (key: string, fn: () => Promise<void>) => {
-    setBusy(key); setError(null);
+    setBusy(key); setError(null); setNotice(null);
     try { await fn(); load(); onChanged(); } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   };
 
@@ -26,7 +26,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
 
   return (
     <div className="flex flex-col gap-5">
-      {secret ? <ShownOnce title={secret.title} secret={secret.value} onDone={() => setSecret(null)} /> : null}
+      {notice ? <p role="status" className={`rounded-lg p-3 text-sm ${notice.tone === "ok" ? "bg-(--color-surface-2)" : "bg-amber-100 text-amber-950"}`}>{notice.text}</p> : null}
       <ErrorText message={error} />
 
       <div className="flex items-center gap-3">
@@ -41,7 +41,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
             e.preventDefault();
             void act("create", async () => {
               const out = await createUser(id, { email: form.email.trim(), role: form.role, ...(form.fullName.trim() ? { fullName: form.fullName.trim() } : {}) });
-              setSecret({ title: `Temporary password for ${out.user.email}`, value: out.temporaryPassword });
+              setNotice(invitationNotice(out.user.email, "invitation", out.invitation));
               setForm({ email: "", fullName: "", role: "MANAGER" });
               setAdding(false);
             });
@@ -56,9 +56,9 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
               </select>
             </Field>
           </div>
-          <p className="mt-3 text-sm text-(--color-ink-muted)">A random password is made for them and shown once. Pass it on; they can use it to sign in right away.</p>
+          <p className="mt-3 text-sm text-(--color-ink-muted)">They get an email with a link to choose their own password. Opening that link also proves the address is theirs. Nobody, including you, ever sees a password.</p>
           <div className="mt-3 flex gap-3">
-            <button type="submit" disabled={busy !== null} className={primary}>{busy === "create" ? "Adding…" : "Add user"}</button>
+            <button type="submit" disabled={busy !== null} className={primary}>{busy === "create" ? "Sending…" : "Send invitation"}</button>
             <button type="button" className={secondary} onClick={() => setAdding(false)}>Cancel</button>
           </div>
         </form>
@@ -82,16 +82,20 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
                         </select>
                       ) : u.role.toLowerCase()}
                     </td>
-                    <td className="px-4 py-3">{u.isActive ? (locked ? "locked (too many wrong passwords)" : "active") : "switched off"}</td>
+                    <td className="px-4 py-3">{!u.isActive ? "switched off" : u.invitation === "pending" ? "invited: waiting for them to choose a password" : u.invitation === "expired" ? "invitation expired: send it again" : locked ? "locked (too many wrong passwords)" : "active"}</td>
                     <td className="px-4 py-3 text-(--color-ink-muted)">{when(u.lastLoginAt)}</td>
                     <td className="px-4 py-3">
                       {canWrite ? (
                         <div className="flex justify-end gap-2">
-                          <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
-                            if (window.confirm(`Make a new password for ${u.email}? The old one stops working and they are signed out everywhere.`)) {
-                              void act(u.id, async () => { const r = await resetPassword(id, u.id); setSecret({ title: `New temporary password for ${u.email}`, value: r.temporaryPassword }); });
-                            }
-                          }}>Reset password</button>
+                          {u.invitation !== "none" ? (
+                            <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => void act(u.id, async () => { const r = await resendInvitation(id, u.id); setNotice(invitationNotice(u.email, "invitation", r.invitation)); })}>Resend invitation</button>
+                          ) : (
+                            <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
+                              if (window.confirm(`Send ${u.email} a link to choose a new password? Their current password stops working at once and they are signed out everywhere.`)) {
+                                void act(u.id, async () => { const r = await resetPassword(id, u.id); setNotice(invitationNotice(u.email, "reset link", r.invitation)); });
+                              }
+                            }}>Send reset link</button>
+                          )}
                           <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
                             const off = u.isActive;
                             if (!off || window.confirm(`Switch off ${u.email}? They are signed out and cannot sign in until you switch them back on.`)) {

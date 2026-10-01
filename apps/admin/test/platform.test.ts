@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ago, passwordProblem, posState, tabFor, type AttentionKind, type PosHealth } from "../src/lib/platform";
+import { ago, invitationNotice, passwordProblem, posState, tabFor, type AttentionKind, type PosHealth } from "../src/lib/platform";
 
 const health = (over: Partial<PosHealth> = {}): PosHealth => ({ isEnabled: true, lastSuccessAt: null, lastFailureAt: null, lastSyncAt: null, ...over });
 
@@ -45,5 +45,21 @@ describe("the new-password rule", () => {
     assert.match(passwordProblem("eleven-char", "eleven-char", "old")!, /at least 12/);
     assert.match(passwordProblem("twelve-chars!", "twelve-chars?", "old")!, /not the same/);
     assert.match(passwordProblem("twelve-chars!", "twelve-chars!", "twelve-chars!")!, /different/);
+  });
+});
+
+describe("what is said after sending an invitation", () => {
+  it("success: names the address and says the link works once", () => {
+    const n = invitationNotice("sam@chez.co", "invitation", { sent: true });
+    assert.equal(n.tone, "ok");
+    assert.match(n.text, /sent to sam@chez\.co/);
+    assert.match(invitationNotice("sam@chez.co", "reset link", { sent: true }).text, /reset link/);
+  });
+  it("failure: the account is saved, the reason is shown, and resending is offered", () => {
+    const n = invitationNotice("sam@chez.co", "invitation", { sent: false, error: "Email is not set up on this server" });
+    assert.equal(n.tone, "warn");
+    assert.match(n.text, /account is saved/);
+    assert.match(n.text, /Email is not set up on this server/);
+    assert.match(n.text, /Resend/);
   });
 });

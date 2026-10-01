@@ -1,7 +1,9 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { REFRESH_COOKIE, REFRESH_COOKIE_PATH, cookieSecure } from "../config/env.js";
+import { AccountInviteService } from "./account-invites.service.js";
+import { AcceptInviteDto } from "./dto/accept-invite.dto.js";
 import { AuthService } from "./auth.service.js";
 import { AllowWhilePasswordChangeRequired } from "./decorators/allow-while-password-change.decorator.js";
 import { CurrentUser } from "./decorators/current-user.decorator.js";
@@ -12,7 +14,10 @@ import type { AccessTokenPayload } from "./token.service.js";
 
 @Controller("admin/auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly invites: AccountInviteService,
+  ) {}
 
   @Post("login")
   @HttpCode(200)
@@ -37,6 +42,20 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(req.cookies?.[REFRESH_COOKIE]);
     res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+  }
+
+  /** The public "choose your password" page asks who the link is for, before the person types anything. */
+  @Get("accept-invite")
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  previewInvite(@Query("token") token: string) {
+    return this.invites.preview("PLATFORM", token);
+  }
+
+  @Post("accept-invite")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  acceptInvite(@Body() dto: AcceptInviteDto, @Req() req: Request) {
+    return this.invites.accept("PLATFORM", dto.token, dto.password, req);
   }
 
   /** Under admin/auth so the browser sends the session cookie: the current session is the one that survives. */
