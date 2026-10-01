@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -28,7 +28,7 @@ export async function request<T>(path: string, init?: RequestInit, retry = true)
   if (!res.ok) {
     const message =
       (Array.isArray(body?.message) ? body.message.join(", ") : body?.message) ?? `Request failed with ${res.status}`;
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, body?.code);
   }
   return body as T;
 }
@@ -63,5 +63,9 @@ export async function logout() {
   setToken(null);
 }
 
-export interface Me { id: string; email: string; fullName: string | null; role: "SUPER_ADMIN" | "SUPPORT" }
+export interface Me { id: string; email: string; fullName: string | null; role: "SUPER_ADMIN" | "SUPPORT"; mustChangePassword: boolean }
 export const me = () => request<Me>("/admin/auth/me");
+
+/** The person chooses their own password. Their other sessions end; this one carries on. */
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  request<null>("/admin/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });

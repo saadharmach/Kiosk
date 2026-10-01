@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ago, posState, tabFor, type AttentionKind, type PosHealth } from "../src/lib/platform";
+import { ago, passwordProblem, posState, tabFor, type AttentionKind, type PosHealth } from "../src/lib/platform";
 
 const health = (over: Partial<PosHealth> = {}): PosHealth => ({ isEnabled: true, lastSuccessAt: null, lastFailureAt: null, lastSyncAt: null, ...over });
 
@@ -35,5 +35,15 @@ describe("where a finding takes you", () => {
     assert.equal(tabFor("NO_OWNER"), "Users");
     for (const k of ["TILL_FAILING", "SYNC_FAILING", "STALE_SYNC", "NEVER_SYNCED", "NO_TILL", "TILL_DISABLED"] as AttentionKind[]) assert.equal(tabFor(k), "unTill", k);
     for (const k of ["ORDERS_STUCK", "ORDERS_FAILED"] as AttentionKind[]) assert.equal(tabFor(k), "Orders", k);
+  });
+});
+
+describe("the new-password rule", () => {
+  it("at least 12 characters, typed the same twice, and not the old one", () => {
+    assert.equal(passwordProblem("twelve-chars!", "twelve-chars!", "old"), null);
+    assert.match(passwordProblem("short", "short", "old")!, /at least 12/);
+    assert.match(passwordProblem("eleven-char", "eleven-char", "old")!, /at least 12/);
+    assert.match(passwordProblem("twelve-chars!", "twelve-chars?", "old")!, /not the same/);
+    assert.match(passwordProblem("twelve-chars!", "twelve-chars!", "twelve-chars!")!, /different/);
   });
 });

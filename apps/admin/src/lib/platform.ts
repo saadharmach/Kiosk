@@ -105,6 +105,29 @@ export interface ActivityItem {
 }
 export const listActivity = (id: string, page = 1) => request<Page<ActivityItem>>(`/admin/restaurants/${id}/activity?page=${page}`);
 
+// ------------------------------------------------------------------------- team
+
+export type TeamRole = "SUPER_ADMIN" | "SUPPORT";
+export interface TeamMember {
+  id: string; email: string; fullName: string | null; role: TeamRole; isActive: boolean;
+  lastLoginAt: string | null; lockedUntil: string | null; mustChangePassword: boolean; createdAt: string;
+}
+export const listTeam = () => request<TeamMember[]>("/admin/team");
+export const createTeamMember = (body: { email: string; role: TeamRole; fullName?: string }) =>
+  request<{ user: TeamMember; temporaryPassword: string }>("/admin/team", { method: "POST", body: JSON.stringify(body) });
+export const updateTeamMember = (id: string, body: { isActive?: boolean; role?: TeamRole; fullName?: string }) =>
+  request<TeamMember>(`/admin/team/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const resetTeamPassword = (id: string) => request<{ temporaryPassword: string }>(`/admin/team/${id}/reset-password`, { method: "POST" });
+export const teamActivity = () => request<{ id: string; at: string; action: string; actor: string; target: string | null }[]>("/admin/team/activity");
+
+/** The new-password rule: long enough to matter, and typed the same twice. Returns what is wrong, or null. */
+export function passwordProblem(next: string, again: string, current: string): string | null {
+  if (next.length < 12) return "The new password must be at least 12 characters.";
+  if (next !== again) return "The two new passwords are not the same.";
+  if (next === current) return "The new password must be different from the current one.";
+  return null;
+}
+
 // ---------------------------------------------------------------------- overview
 
 export type AttentionKind =

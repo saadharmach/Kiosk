@@ -3,7 +3,9 @@ import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { REFRESH_COOKIE, REFRESH_COOKIE_PATH, cookieSecure } from "../config/env.js";
 import { AuthService } from "./auth.service.js";
+import { AllowWhilePasswordChangeRequired } from "./decorators/allow-while-password-change.decorator.js";
 import { CurrentUser } from "./decorators/current-user.decorator.js";
+import { ChangePasswordDto } from "./dto/change-password.dto.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard.js";
 import type { AccessTokenPayload } from "./token.service.js";
@@ -37,8 +39,19 @@ export class AuthController {
     res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
   }
 
+  /** Under admin/auth so the browser sends the session cookie: the current session is the one that survives. */
+  @Post("change-password")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  @AllowWhilePasswordChangeRequired()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
+    await this.auth.changePassword(user.sub, dto.currentPassword, dto.newPassword, req.cookies?.[REFRESH_COOKIE], req);
+  }
+
   @Get("me")
   @UseGuards(JwtAuthGuard)
+  @AllowWhilePasswordChangeRequired()
   me(@CurrentUser() user: AccessTokenPayload) {
     return this.auth.me(user.sub);
   }

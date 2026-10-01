@@ -1,6 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import type { Request } from "express";
+import { AuditService } from "../common/audit.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { PasswordService } from "./password.service.js";
+import { PlatformUserDirectory } from "./platform-user-directory.js";
 import { TokenService } from "./token.service.js";
 
 const MAX_FAILED = 5;
@@ -16,6 +19,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
+    private readonly directory: PlatformUserDirectory,
+    private readonly audit: AuditService,
   ) {}
 
   async login(email: string, password: string, ctx: SessionContext) {
@@ -86,10 +91,51 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.platformUser.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, fullName: true, role: true, lastLoginAt: true },
+      select: { id: true, email: true, fullName: true, role: true, lastLoginAt: true, mustChangePassword: true },
     });
     if (!user) throw new UnauthorizedException();
     return user;
+  }
+
+  /**
+   * The person chooses their own password. They must know the current one (a stolen access token alone is not
+   * enough), wrong guesses count towards the same lock-out as signing in, every OTHER session is ended, and
+   * the one they are using carries on.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string, currentRefreshToken: string | undefined, req?: Request) {
+    const user = await this.prisma.platformUser.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) throw new UnauthorizedException();
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new BadRequestException("Too many wrong attempts. Try again later.");
+    }
+
+    if (!(await this.passwords.verify(user.passwordHash, currentPassword))) {
+      const failed = user.failedLoginCount + 1;
+      await this.prisma.platformUser.update({
+        where: { id: user.id },
+        data: { failedLoginCount: failed, lockedUntil: failed >= MAX_FAILED ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null },
+      });
+      throw new BadRequestException("The current password is not right");
+    }
+    if (newPassword === currentPassword) throw new BadRequestException("The new password must be different from the current one");
+
+    const keep = currentRefreshToken ? this.tokens.hashRefreshToken(currentRefreshToken) : null;
+    await this.prisma.$transaction([
+      this.prisma.platformUser.update({
+        where: { id: user.id },
+        data: { passwordHash: await this.passwords.hash(newPassword), mustChangePassword: false, failedLoginCount: 0, lockedUntil: null },
+      }),
+      this.prisma.platformSession.updateMany({
+        where: { userId: user.id, revokedAt: null, ...(keep ? { NOT: { tokenHash: keep } } : {}) },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    this.directory.invalidate(user.id);
+
+    await this.audit.record(
+      { actorType: "PLATFORM_USER", actorId: user.id, action: "platform_user.password_change", entityType: "PlatformUser", entityId: user.id },
+      req,
+    );
   }
 
   private async issueSession(userId: string, role: string, ctx: SessionContext) {

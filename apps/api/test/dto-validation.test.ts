@@ -6,6 +6,8 @@ import { CreateRestaurantDto } from "../src/admin/dto/create-restaurant.dto.js";
 import { UpdateRestaurantDto } from "../src/admin/dto/update-restaurant.dto.js";
 import { CreateRestaurantUserDto, UpdateRestaurantUserDto } from "../src/admin/dto/restaurant-user.dto.js";
 import { UpsertTpapiDto } from "../src/admin/dto/upsert-tpapi.dto.js";
+import { CreateTeamMemberDto, UpdateTeamMemberDto } from "../src/admin/dto/team.dto.js";
+import { ChangePasswordDto } from "../src/auth/dto/change-password.dto.js";
 
 /** The API's own validation (main.ts): a property with no validator is refused, not ignored. */
 const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
@@ -52,5 +54,16 @@ describe("the bodies the platform screens send are accepted by the API's validat
     await check(UpsertTpapiDto, { host: "pos.example.com", port: 443, useTls: true, isEnabled: true });
     await check(UpsertTpapiDto, { host: "10.0.0.5", port: 8080, appName: "Kiosk", userName: "u", password: "p", appToken: "t" });
     await refused(UpsertTpapiDto, { host: "bad host!", port: 443 });
+  });
+
+  it("a team member can be added and changed, and a new password must be at least 12 characters", async () => {
+    await check(CreateTeamMemberDto, { email: "a@b.co", role: "SUPPORT", fullName: "Sam" });
+    await check(UpdateTeamMemberDto, { isActive: false });
+    await check(UpdateTeamMemberDto, { role: "SUPER_ADMIN", fullName: "Sam B" });
+    await refused(CreateTeamMemberDto, { email: "a@b.co", role: "OWNER" });
+    await refused(UpdateTeamMemberDto, { email: "new@b.co" });
+    await refused(UpdateTeamMemberDto, { passwordHash: "x" });
+    await check(ChangePasswordDto, { currentPassword: "x", newPassword: "twelve-chars!" });
+    await refused(ChangePasswordDto, { currentPassword: "x", newPassword: "eleven-char" });
   });
 });

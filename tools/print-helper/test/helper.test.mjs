@@ -101,7 +101,7 @@ describe("sendToPrinter", () => {
 });
 
 /** Runs the helper loop against a scripted API and a scripted printer. */
-function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures = 0, status = 200, waitSec = 0, nextDelayMs = 0 } = {}) {
+function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures = 0, status = 200, waitSec = 0, nextDelayMs = 0, intervalMs = 10 } = {}) {
   const log = [];
   const sent = [];
   const requests = [];
@@ -121,7 +121,7 @@ function harness({ jobs = [], failSend = null, apiFailures = [], reportFailures 
     return new Response("{}", { status: 404 });
   };
   const sendImpl = async (args) => { sent.push(args); if (failSend) throw new Error(failSend); };
-  const helper = startHelper({ apiUrl: "https://api.test/", token: "pht_secret", intervalMs: 10, waitSec, log: (l, m) => log.push(`${l} ${m}`), fetchImpl, sendImpl });
+  const helper = startHelper({ apiUrl: "https://api.test/", token: "pht_secret", intervalMs, waitSec, log: (l, m) => log.push(`${l} ${m}`), fetchImpl, sendImpl });
   running.push(helper);
   const reports = () => requests.filter((r) => r.url.endsWith("/result")).map((r) => ({ url: r.url, body: JSON.parse(r.body) }));
   const until = async (cond, ms = 2000) => { const t = Date.now(); while (!cond()) { if (Date.now() - t > ms) throw new Error(`timed out; log: ${log.join(" | ")}`); await new Promise((r) => setTimeout(r, 5)); } };
@@ -212,12 +212,16 @@ describe("the helper loop: waiting for a ticket", () => {
   it("asks again at once after the API held a request open and found nothing", async () => {
     // Each answer takes 1.1s, like a long wait that ended empty. A helper that then pauses for
     // its poll interval would leave a gap in which a ticket sits unprinted.
-    const h = harness({ waitSec: 20, nextDelayMs: 1100 });
+    // A long poll interval, so a helper that wrongly sleeps it after an empty answer is plainly too slow.
+    const h = harness({ waitSec: 20, nextDelayMs: 1100, intervalMs: 3000 });
     const t0 = Date.now();
     await h.until(() => nextRequests(h).length >= 2, 4000);
+    // Measured the moment the second request arrives. (Stopping the helper afterwards waits for the request still
+    // in flight, about another second: counting that made this test fail whenever the machine was busy.)
+    const gap = Date.now() - t0;
     await h.helper.stop();
-    const gap = nextRequests(h).length >= 2 ? Date.now() - t0 : Infinity;
-    assert.ok(gap < 2600, `two requests within ~2.2s, took ${gap}ms`);
+    assert.ok(nextRequests(h).length >= 2, "asked a second time");
+    assert.ok(gap < 2600, `two requests within ~1.1s plus start-up, took ${gap}ms`);
   });
 
   it("paces itself when the API answers straight away, so it cannot spin", async () => {

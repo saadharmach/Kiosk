@@ -10,6 +10,8 @@ interface AuthApi {
   canWrite: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Asks the server who this is now (after choosing a password, say). */
+  reload: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthApi | null>(null);
@@ -40,7 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  return <Ctx.Provider value={{ user, loading, canWrite: user?.role === "SUPER_ADMIN", signIn, signOut }}>{children}</Ctx.Provider>;
+  const reload = useCallback(async () => { setUser(await me()); }, []);
+
+  return <Ctx.Provider value={{ user, loading, canWrite: user?.role === "SUPER_ADMIN", signIn, signOut, reload }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

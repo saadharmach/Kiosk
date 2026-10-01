@@ -3,20 +3,24 @@
 import { useState } from "react";
 import type { RestaurantTab } from "@/lib/platform";
 import { useAuth } from "@/state/auth";
+import ChangePasswordForm from "./ChangePasswordForm";
 import OverviewPage from "./OverviewPage";
 import RestaurantPage from "./RestaurantPage";
 import RestaurantsPage from "./RestaurantsPage";
+import TeamPage from "./TeamPage";
 import { ErrorText, input, primary } from "./ui";
 
 export default function Shell() {
-  const { user, loading, signIn, signOut, canWrite } = useAuth();
+  const { user, loading, signIn, signOut, canWrite, reload } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"overview" | "restaurants">("overview");
+  const [view, setView] = useState<"overview" | "restaurants" | "team" | "account">("overview");
   // A restaurant that is open, and the tab to open it on.
   const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab; filter?: string } | null>(null);
-  const go = (v: "overview" | "restaurants") => { setView(v); setOpen(null); };
+  const go = (v: "overview" | "restaurants" | "team" | "account") => { setView(v); setOpen(null); };
+  // The next person to sign in on this screen starts at the beginning, not on the last person's page.
+  const leave = async () => { await signOut(); setView("overview"); setOpen(null); };
 
   if (loading) return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
 
@@ -50,23 +54,45 @@ export default function Shell() {
     );
   }
 
+  // A password someone else chose (a new account, or a reset) is only good for choosing your own.
+  if (user.mustChangePassword) {
+    return (
+      <main className="grid min-h-dvh place-items-center p-6">
+        <div className="w-full max-w-sm rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-8">
+          <h1 className="text-2xl font-semibold">Choose your password</h1>
+          <p className="mb-6 mt-1 text-sm text-(--color-ink-muted)">You signed in with a temporary password. Choose your own before you continue.</p>
+          <ChangePasswordForm submitLabel="Save my password" onDone={() => void reload()} />
+          <button onClick={leave} className="mt-6 text-sm underline">Sign out</button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-dvh">
       <header className="flex items-center gap-4 border-b border-(--color-line) bg-(--color-surface-2) px-8 py-3">
         <span className="text-lg font-semibold">Platform admin</span>
         <nav className="flex gap-1" aria-label="Sections">
-          {([["overview", "Overview"], ["restaurants", "Restaurants"]] as const).map(([v, label]) => (
+          {([["overview", "Overview"], ["restaurants", "Restaurants"], ["team", "Team"]] as const).filter(([v]) => v !== "team" || canWrite).map(([v, label]) => (
             <button key={v} onClick={() => go(v)} aria-current={view === v ? "page" : undefined}
               className={`rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"}`}>{label}</button>
           ))}
         </nav>
         <div className="ms-auto flex items-center gap-4 text-sm text-(--color-ink-muted)">
           <span>{user.email} · {user.role === "SUPER_ADMIN" ? "super admin" : "support (read-only)"}</span>
-          <button onClick={signOut} className="underline">Sign out</button>
+          <button onClick={() => go("account")} className="underline" aria-current={view === "account" ? "page" : undefined}>Change password</button>
+          <button onClick={leave} className="underline">Sign out</button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl p-8">
-        {open
+        {view === "account" && !open ? (
+          <div>
+            <h1 className="mb-1 text-2xl font-semibold">Change password</h1>
+            <p className="mb-6 text-sm text-(--color-ink-muted)">You will stay signed in here. Any other place you are signed in is signed out.</p>
+            <ChangePasswordForm onDone={() => undefined} />
+          </div>
+        ) : view === "team" && !open && canWrite ? <TeamPage myId={user.id} />
+        : open
           ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} initialFilter={open.filter} onBack={() => setOpen(null)} />
           : view === "overview"
             ? <OverviewPage onOpen={(id, tab, filter) => setOpen({ id, tab, filter })} />
