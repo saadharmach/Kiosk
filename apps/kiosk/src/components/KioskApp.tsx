@@ -207,6 +207,7 @@ function KioskFlow({ slug }: { slug: string }) {
         name={boot.restaurant.name}
         onLocale={setLocale}
         currency={catalog.currency}
+        products={catalog.products}
         orderType={choice.orderType}
         salesAreaId={choice.salesAreaId}
         tableNumber={table}

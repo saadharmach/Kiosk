@@ -52,7 +52,7 @@ type Dict = {
   connectionTitle: string; connectionText: string; connectionInline: string; startOver: string;
   idleTitle: string; idleText: string; keepOrdering: string; discard: string;
   kindMustHave: string; kindFreeOption: string; kindSupplement: string; kindCondiment: string; kindMenuComponent: string;
-  chosenCount: string;
+  chosenCount: string; edit: string; saveChanges: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -83,7 +83,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleTitle: "Êtes-vous toujours là ?", keepOrdering: "Continuer ma commande", discard: "Abandonner et recommencer",
     idleText: "Votre session va se terminer. Touchez ci-dessous pour garder votre commande.",
     kindMustHave: "Option obligatoire", kindFreeOption: "Option gratuite", kindSupplement: "Supplément", kindCondiment: "Condiment",
-    kindMenuComponent: "Composant du menu", chosenCount: "{n} sélectionné(s)",
+    kindMenuComponent: "Composant du menu", chosenCount: "{n} sélectionné(s)", edit: "Modifier", saveChanges: "Enregistrer",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -111,7 +111,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleTitle: "Are you still there?", keepOrdering: "Continue ordering", discard: "Discard and start over",
     idleText: "Your session is about to end. Tap below to keep your order.",
     kindMustHave: "Must-have option", kindFreeOption: "Free option", kindSupplement: "Supplement", kindCondiment: "Condiment",
-    kindMenuComponent: "Component selected inside a menu article", chosenCount: "{n} selected",
+    kindMenuComponent: "Component selected inside a menu article", chosenCount: "{n} selected", edit: "Edit", saveChanges: "Save changes",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -139,7 +139,7 @@ export const STRINGS: Record<Locale, Dict> = {
     idleTitle: "هل ما زلت هنا؟", keepOrdering: "متابعة الطلب", discard: "إلغاء والبدء من جديد",
     idleText: "ستنتهي جلستك قريبًا. اضغط أدناه للاحتفاظ بطلبك.",
     kindMustHave: "خيار إلزامي", kindFreeOption: "خيار مجاني", kindSupplement: "إضافة", kindCondiment: "مرافق",
-    kindMenuComponent: "مكوّن داخل القائمة", chosenCount: "{n} مختار",
+    kindMenuComponent: "مكوّن داخل القائمة", chosenCount: "{n} مختار", edit: "تعديل", saveChanges: "حفظ التعديلات",
   },
 };
 

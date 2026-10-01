@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import type { CatalogOptionGroup, CatalogProduct } from "@/lib/api";
-import { isComplete, isExtra, limits, preselected, toggled } from "@/lib/options";
-import { useCart } from "@/state/cart";
+import { isComplete, isExtra, limits, preselected, previouslyPicked, toggled } from "@/lib/options";
+import { useCart, type CartLine } from "@/state/cart";
 import { Icon } from "./icons";
 
 const CHIP_COLORS: [string, string][] = [
@@ -13,23 +13,33 @@ const CHIP_COLORS: [string, string][] = [
 ];
 
 export default function ProductSheet({
-  product, currency, locale, onClose,
+  product, currency, locale, editing, onClose,
 }: {
   product: CatalogProduct;
+  /** A cart line being changed: the sheet opens with its choices and saves over it. */
+  editing?: CartLine;
   currency: string;
   locale: Locale;
   onClose: () => void;
 }) {
   const t = STRINGS[locale];
   const cart = useCart();
-  const [sizeId, setSizeId] = useState<string | null>(product.sizes[0]?.sizeItemId ?? null);
-  const [qty, setQty] = useState(1);
+  const [sizeId, setSizeId] = useState<string | null>(() => {
+    const was = editing?.sizeItemId;
+    return was && product.sizes.some((s) => s.sizeItemId === was) ? was : (product.sizes[0]?.sizeItemId ?? null);
+  });
+  const [qty, setQty] = useState(editing?.quantity ?? 1);
   const [imageFailed, setImageFailed] = useState(false);
   const photo = product.imageUrl && !imageFailed ? product.imageUrl : null;
   // groupId -> chosen option article ids. A required group with one item is pre-chosen.
-  const [picked, setPicked] = useState<Record<string, string[]>>(() => preselected(product.optionGroups));
+  const [picked, setPicked] = useState<Record<string, string[]>>(() => ({
+    ...preselected(product.optionGroups),
+    ...(editing ? previouslyPicked(product.optionGroups, editing) : {}),
+  }));
   // Supplements and condiments start folded away; a customer opens the ones they want.
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  // (when editing, the ones that already hold choices start open)
+  const [open, setOpen] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(editing ? editing.options.map((o) => [o.optionGroupId, true]) : []));
 
   const size = product.sizes.find((s) => s.sizeItemId === sizeId);
   const chosen = product.optionGroups.flatMap((g) =>
@@ -47,18 +57,17 @@ export default function ProductSheet({
     setPicked((prev) => ({ ...prev, [g.id]: toggled(g, prev[g.id] ?? [], articleId) }));
 
   const addToCart = () => {
-    cart.add(
-      {
-        articleId: product.id,
-        name: product.name,
-        imageUrl: product.imageUrl,
-        sizeItemId: size?.sizeItemId,
-        sizeName: size?.name,
-        options: chosen,
-        unitPrice,
-      },
-      qty,
-    );
+    const line = {
+      articleId: product.id,
+      name: product.name,
+      imageUrl: product.imageUrl,
+      sizeItemId: size?.sizeItemId,
+      sizeName: size?.name,
+      options: chosen,
+      unitPrice,
+    };
+    if (editing) cart.replace(editing.key, line, qty);
+    else cart.add(line, qty);
     onClose();
   };
 
@@ -225,7 +234,7 @@ export default function ProductSheet({
           </div>
           <button onClick={addToCart} disabled={!canAdd}
             className="min-h-28 max-w-2xl flex-1 rounded-full bg-(--color-brand) px-8 font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
-            {t.add} · <span className="tabular-nums">{money(unitPrice * qty, currency, locale)}</span>
+            {editing ? t.saveChanges : t.add} · <span className="tabular-nums">{money(unitPrice * qty, currency, locale)}</span>
           </button>
         </div>
       </div>

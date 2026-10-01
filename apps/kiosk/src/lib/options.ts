@@ -1,3 +1,4 @@
+import type { CartLine } from "@/state/cart";
 import type { CatalogOptionGroup, OptionKind } from "./api";
 
 /** The order unTill's kinds are listed in, on the sheet and in the cart. */
@@ -46,4 +47,19 @@ export function preselected(groups: CatalogOptionGroup[]): Record<string, string
   return Object.fromEntries(
     groups.filter((g) => limits(g).min > 0 && g.items.length === 1).map((g) => [g.id, [g.items[0]!.articleId]]),
   );
+}
+
+/**
+ * The choices an existing cart line holds, for reopening it. A choice or group that has left the menu
+ * since is dropped; groups the line never had are left out so their defaults still apply.
+ */
+export function previouslyPicked(groups: CatalogOptionGroup[], line: Pick<CartLine, "options">): Record<string, string[]> {
+  const picked: Record<string, string[]> = {};
+  for (const g of groups) {
+    const ids = line.options
+      .filter((o) => o.optionGroupId === g.id && g.items.some((i) => i.articleId === o.articleId))
+      .map((o) => o.articleId);
+    if (ids.length > 0) picked[g.id] = ids;
+  }
+  return picked;
 }

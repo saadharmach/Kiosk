@@ -33,6 +33,8 @@ interface CartApi {
   add: (line: Omit<CartLine, "key" | "quantity">, qty?: number) => void;
   setQty: (key: string, qty: number) => void;
   remove: (key: string) => void;
+  /** Saves an edited line in place of the line `oldKey`. */
+  replace: (oldKey: string, line: Omit<CartLine, "key" | "quantity">, qty: number) => void;
   clear: () => void;
 }
 
@@ -45,6 +47,21 @@ const keyOf = (l: Omit<CartLine, "key" | "quantity">) =>
     l.sizeItemId ?? "",
     ...l.options.map((o) => `${o.optionGroupId}:${o.articleId}`).sort(),
   ].join("|");
+
+/**
+ * Puts an edited line where the old one was. If the edit makes it identical to another line, the
+ * two merge (quantities add) rather than showing the same dish twice.
+ */
+export function replaceLine(
+  lines: CartLine[], oldKey: string, line: Omit<CartLine, "key" | "quantity">, qty: number,
+): CartLine[] {
+  const key = keyOf(line);
+  const twin = lines.find((l) => l.key === key && l.key !== oldKey);
+  const merged = twin ? twin.quantity + qty : qty;
+  return lines
+    .filter((l) => !(twin && l.key === oldKey))
+    .map((l) => (l.key === oldKey || (twin && l.key === key) ? { ...line, key, quantity: merged } : l));
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -71,6 +88,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             : prev.map((l) => (l.key === key ? { ...l, quantity: qty } : l)),
         ),
       remove: (key) => setLines((prev) => prev.filter((l) => l.key !== key)),
+      replace: (oldKey, line, qty) => setLines((prev) => replaceLine(prev, oldKey, line, qty)),
       clear: () => setLines([]),
     }),
     [lines],

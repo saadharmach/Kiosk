@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
-import { ApiError, createOrder, isConnectionError, priceCart, type PlacedOrder, type WireCartLine } from "@/lib/api";
-import { useCart } from "@/state/cart";
+import { ApiError, createOrder, isConnectionError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
+import { useCart, type CartLine } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
+import ProductSheet from "../ProductSheet";
 
 /** Cart thumbnail that quietly disappears if the image cannot be loaded. */
 function Thumb({ src }: { src: string }) {
@@ -18,13 +19,15 @@ function Thumb({ src }: { src: string }) {
 }
 
 export default function CartScreen({
-  slug, locale, name, currency, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced,
+  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced,
 }: {
   slug: string;
   locale: Locale;
   name: string;
   onLocale: (l: Locale) => void;
   currency: string;
+  /** The menu, so a line can be reopened in its product sheet. */
+  products: CatalogProduct[];
   orderType: string;
   salesAreaId: string;
   tableNumber: number | null;
@@ -36,6 +39,13 @@ export default function CartScreen({
   const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ line: CartLine; product: CatalogProduct } | null>(null);
+
+  /** Only a dish with something to choose can be edited, and only if it is still on the menu. */
+  const productFor = (l: CartLine) => {
+    const p = products.find((x) => x.id === l.articleId);
+    return p && (p.sizes.length > 0 || p.optionGroups.length > 0) ? p : null;
+  };
 
   // One id for this cart. Reused on every retry so a repeated tap or a dropped
   // response can never produce two orders.
@@ -137,6 +147,12 @@ export default function CartScreen({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
+                    {productFor(l) ? (
+                      <button onClick={() => setEditing({ line: l, product: productFor(l)! })} aria-label={t.edit}
+                        className="flex size-20 items-center justify-center rounded-full bg-(--color-brand-soft) text-(--color-brand-deep)">
+                        <Icon name="edit" className="size-9" />
+                      </button>
+                    ) : null}
                     <button onClick={() => cart.setQty(l.key, l.quantity - 1)} aria-label="−"
                       className="flex size-20 items-center justify-center rounded-full border-2 border-slate-300 bg-(--color-page)">
                       <Icon name="minus" className="size-8" strokeWidth={2.4} />
@@ -179,6 +195,11 @@ export default function CartScreen({
           </div>
         </>
       )}
+
+      {editing ? (
+        <ProductSheet product={editing.product} editing={editing.line} currency={currency} locale={locale}
+          onClose={() => setEditing(null)} />
+      ) : null}
     </main>
   );
 }
