@@ -11,7 +11,8 @@
     "create-restaurant-user": "tsx src/cli/create-restaurant-user.ts",
     "set-tpapi-credentials": "tsx src/cli/set-tpapi-credentials.ts",
     "test": "tsx --test test/*.test.ts",
-    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "mail:test": "tsx --env-file-if-exists=../../.env src/cli/send-test-email.ts"
   },
   "dependencies": {
     "@kiosk/db": "workspace:*",

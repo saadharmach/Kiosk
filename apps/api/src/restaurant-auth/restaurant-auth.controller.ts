@@ -8,6 +8,7 @@ import {
 } from "../config/env.js";
 import { AccountInviteService } from "../auth/account-invites.service.js";
 import { AcceptInviteDto } from "../auth/dto/accept-invite.dto.js";
+import { RestaurantForgotPasswordDto } from "../auth/dto/forgot-password.dto.js";
 import { RestaurantLoginDto } from "./dto/restaurant-login.dto.js";
 import { RestaurantAuthService } from "./restaurant-auth.service.js";
 import { RestaurantAuthGuard } from "./guards/restaurant-auth.guard.js";
@@ -25,6 +26,15 @@ export class RestaurantAuthController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   previewInvite(@Query("token") token: string) {
     return this.invites.preview("RESTAURANT", token);
+  }
+
+  /** Always the same answer, whether or not the restaurant or the address exists. */
+  @Post("forgot-password")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async forgotPassword(@Body() dto: RestaurantForgotPasswordDto) {
+    await this.invites.requestReset("RESTAURANT", dto.email, dto.slug);
+    return { ok: true };
   }
 
   @Post("accept-invite")

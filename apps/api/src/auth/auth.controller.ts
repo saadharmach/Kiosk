@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import { REFRESH_COOKIE, REFRESH_COOKIE_PATH, cookieSecure } from "../config/env.js";
 import { AccountInviteService } from "./account-invites.service.js";
 import { AcceptInviteDto } from "./dto/accept-invite.dto.js";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto.js";
 import { AuthService } from "./auth.service.js";
 import { AllowWhilePasswordChangeRequired } from "./decorators/allow-while-password-change.decorator.js";
 import { CurrentUser } from "./decorators/current-user.decorator.js";
@@ -49,6 +50,15 @@ export class AuthController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   previewInvite(@Query("token") token: string) {
     return this.invites.preview("PLATFORM", token);
+  }
+
+  /** Always the same answer, whether or not the address has an account. */
+  @Post("forgot-password")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.invites.requestReset("PLATFORM", dto.email);
+    return { ok: true };
   }
 
   @Post("accept-invite")

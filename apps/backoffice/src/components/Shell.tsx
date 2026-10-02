@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ForgotPassword from "./ForgotPassword";
 import { useAuth } from "@/state/auth";
 import ProductsPage from "./ProductsPage";
 import CategoriesPage from "./CategoriesPage";
@@ -14,12 +15,17 @@ const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders"
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
   const [form, setForm] = useState({ slug: "", email: "", password: "" });
+  const [forgot, setForgot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [section, setSection] = useState<(typeof SECTIONS)[number]>("Products");
 
   if (loading) {
     return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
+  }
+
+  if (!user && forgot) {
+    return <main className="grid min-h-dvh place-items-center p-6"><ForgotPassword onBack={() => setForgot(false)} /></main>;
   }
 
   if (!user) {
@@ -63,6 +69,7 @@ export default function Shell() {
             className="h-11 w-full rounded-lg bg-(--color-brand) font-medium text-(--color-brand-ink) disabled:opacity-50">
             {busy ? "Signing in…" : "Sign in"}
           </button>
+          <button type="button" onClick={() => setForgot(true)} className="mt-4 text-sm underline">Forgot your password?</button>
         </form>
       </main>
     );

@@ -8,9 +8,14 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PasswordService } from "./password.service.js";
 import { PlatformUserDirectory } from "./platform-user-directory.js";
 
+/** A second request for the same account inside this window is quietly ignored: nobody's inbox can be flooded. */
+export const FORGOT_COOLDOWN_MS = 2 * 60_000;
+
 export interface LinkTarget {
   realm: TokenRealm;
   kind: TokenKind;
+  /** The person asked for this themselves ("Forgot password?"): the email says their current password still works. */
+  selfService?: boolean;
   user: { id: string; email: string; fullName?: string | null };
   /** Required for the restaurant realm: whose back office the person is joining. */
   restaurant?: { id: string; name: string; slug: string; locale?: string | null };
@@ -47,7 +52,7 @@ export class AccountInviteService {
     const link = `${base(t.realm, env)}/accept-invite?token=${encodeURIComponent(token)}`;
     const mail = inviteEmail({
       locale: t.realm === "RESTAURANT" ? mailLocale(t.restaurant?.locale) : "en",
-      kind: t.kind, name: t.user.fullName, service: t.restaurant?.name ?? "the Kiosk platform admin", link, hours: TTL_HOURS[t.kind],
+      kind: t.selfService ? "FORGOT" : t.kind, name: t.user.fullName, service: t.restaurant?.name ?? "the Kiosk platform admin", link, hours: TTL_HOURS[t.kind],
     });
     try {
       await this.mailer.send({ to: t.user.email, ...mail });
@@ -56,6 +61,47 @@ export class AccountInviteService {
       this.logger.error(`Could not email ${t.kind.toLowerCase()} to ${t.user.email}: ${e instanceof Error ? e.message : String(e)}`);
       return { sent: false, error: e instanceof MailNotConfiguredError ? e.message : `The email could not be sent (${(e instanceof Error ? e.message : String(e)).slice(0, 160)}).` };
     }
+  }
+
+  /**
+   * "Forgot password?". Always looks the same from outside, whether or not the address has an account, and the work after
+   * the lookup runs in the background so the time it takes gives nothing away either. The person's current password is
+   * NOT touched: it keeps working until they use the link (otherwise anyone could lock them out by asking). A person who
+   * never chose a password is sent a fresh invitation instead. Pass `wait` only in tests, to see the background work finish.
+   */
+  async requestReset(realm: TokenRealm, email: string, slug?: string, wait = false, now = Date.now()): Promise<void> {
+    const address = email.trim().toLowerCase();
+    let target: LinkTarget | null = null;
+    let waitingForFirstPassword = false;
+
+    if (realm === "PLATFORM") {
+      const u = await this.prisma.platformUser.findUnique({ where: { email: address }, select: { id: true, email: true, fullName: true, isActive: true, passwordSetAt: true } });
+      if (u?.isActive) { target = { realm, kind: "RESET", selfService: true, user: u }; waitingForFirstPassword = u.passwordSetAt === null; }
+    } else {
+      const r = slug ? await this.prisma.restaurant.findUnique({ where: { slug }, select: { id: true, name: true, slug: true, locale: true, status: true } }) : null;
+      const u = r && r.status === "ACTIVE"
+        ? await this.prisma.restaurantUser.findFirst({ where: { restaurantId: r.id, email: address }, select: { id: true, email: true, fullName: true, isActive: true, passwordSetAt: true } })
+        : null;
+      if (r && u?.isActive) { target = { realm, kind: "RESET", selfService: true, user: u, restaurant: r }; waitingForFirstPassword = u.passwordSetAt === null; }
+    }
+    if (!target) return;
+
+    const work = (async () => {
+      const recent = await this.prisma.accountToken.findFirst({
+        where: { realm, userId: target!.user.id, usedAt: null, createdAt: { gt: new Date(now - FORGOT_COOLDOWN_MS) } },
+        select: { id: true },
+      });
+      if (recent) return;   // a link was sent a moment ago and has not been used: it is on its way
+      const link: LinkTarget = waitingForFirstPassword ? { ...target!, kind: "INVITE", selfService: false } : target!;
+      await this.sendLink(link);
+      await this.audit.record({
+        restaurantId: target!.restaurant?.id ?? null, actorType: realm === "PLATFORM" ? "PLATFORM_USER" : "RESTAURANT_USER", actorId: target!.user.id,
+        action: `${realm === "PLATFORM" ? "platform_user" : "restaurant_user"}.password_forgot_requested`,
+        entityType: realm === "PLATFORM" ? "PlatformUser" : "RestaurantUser", entityId: target!.user.id,
+      });
+    })().catch((e) => this.logger.error(`Forgot-password email failed: ${e instanceof Error ? e.message : String(e)}`));
+
+    if (wait) await work;
   }
 
   /** What the "choose your password" page shows before the person types anything. Does not use the link up. */

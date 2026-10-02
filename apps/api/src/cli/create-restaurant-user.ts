@@ -28,6 +28,8 @@ const user = await prisma.restaurantUser.upsert({
     passwordHash: await hash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 }),
     fullName: nameParts.join(" ") || null,
     role: "OWNER",
+    // The operator chose this password on the command line: it is a real one, not an invitation still waiting.
+    passwordSetAt: new Date(),
   },
   select: { id: true, email: true, role: true },
 });

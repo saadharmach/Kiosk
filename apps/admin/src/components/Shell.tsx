@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { RestaurantTab } from "@/lib/platform";
 import { useAuth } from "@/state/auth";
 import ChangePasswordForm from "./ChangePasswordForm";
+import ForgotPassword from "./ForgotPassword";
 import OverviewPage from "./OverviewPage";
 import RestaurantPage from "./RestaurantPage";
 import RestaurantsPage from "./RestaurantsPage";
@@ -15,6 +16,7 @@ export default function Shell() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
   const [view, setView] = useState<"overview" | "restaurants" | "team" | "account">("overview");
   // A restaurant that is open, and the tab to open it on.
   const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab; filter?: string } | null>(null);
@@ -23,6 +25,10 @@ export default function Shell() {
   const leave = async () => { await signOut(); setView("overview"); setOpen(null); };
 
   if (loading) return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
+
+  if (!user && forgot) {
+    return <main className="grid min-h-dvh place-items-center p-6"><ForgotPassword onBack={() => setForgot(false)} /></main>;
+  }
 
   if (!user) {
     return (
@@ -49,6 +55,7 @@ export default function Shell() {
 
           <div className="mb-4"><ErrorText message={error} /></div>
           <button type="submit" disabled={busy} className={primary + " w-full"}>{busy ? "Signing in…" : "Sign in"}</button>
+          <button type="button" onClick={() => setForgot(true)} className="mt-4 text-sm underline">Forgot your password?</button>
         </form>
       </main>
     );
