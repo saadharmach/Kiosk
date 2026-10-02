@@ -13,8 +13,8 @@ export class KioskController {
 
   @Get("bootstrap")
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  bootstrap(@Param("slug") slug: string) {
-    return this.catalogService.bootstrap(slug);
+  bootstrap(@Param("slug") slug: string, @Query("borne") borne?: string) {
+    return this.catalogService.bootstrap(slug, borne);
   }
 
    @Get("catalog")

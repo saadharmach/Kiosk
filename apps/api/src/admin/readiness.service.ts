@@ -22,18 +22,19 @@ export class ReadinessService {
     });
     if (!restaurant) throw new NotFoundException("Restaurant not found");
 
-    const [departments, articles, prices, salesAreas, mappings, owners, printer, placedOrders] = await Promise.all([
+    const [departments, articles, prices, salesAreas, mappings, owners, printers, kiosks, placedOrders] = await Promise.all([
       this.prisma.tpapiDepartment.count({ where: { restaurantId } }),
       this.prisma.tpapiArticle.count({ where: { restaurantId, isActive: true, isPresent: true } }),
       this.prisma.tpapiArticlePrice.count({ where: { restaurantId } }),
       this.prisma.tpapiSalesArea.findMany({ where: { restaurantId }, select: { untillId: true, tableRanges: true } }),
       this.prisma.orderTypeMapping.findMany({ where: { restaurantId, isEnabled: true } }),
       this.prisma.restaurantUser.count({ where: { restaurantId, isActive: true, role: "OWNER" } }),
-      this.prisma.printer.findFirst({
+      this.prisma.printer.findMany({
         where: { restaurantId },
         orderBy: { createdAt: "asc" },
-        select: { isEnabled: true, address: true, helperTokenHash: true, lastSeenAt: true },
+        select: { kioskId: true, isEnabled: true, address: true, helperTokenHash: true, lastSeenAt: true },
       }),
+      this.prisma.kiosk.findMany({ where: { restaurantId, isEnabled: true }, orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
       this.prisma.order.count({ where: { restaurantId, status: { in: ["CONFIRMED", "PAID"] } } }),
     ]);
 
@@ -45,6 +46,11 @@ export class ReadinessService {
       return { type, configured: isOrderTypeConfigured({ askTable: type === "EAT_IN" ? (s?.askTableForEatIn ?? true) : false, mapping, area }) };
     });
 
+    const factsOf = (p: (typeof printers)[number] | null) => p ? {
+      enabled: p.isEnabled, hasAddress: Boolean(p.address), helperIssued: Boolean(p.helperTokenHash),
+      helperOnline: Boolean(p.lastSeenAt && now - p.lastSeenAt.getTime() < HELPER_ONLINE_SEC * 1000),
+    } : null;
+
     const t = restaurant.tpapi;
     const facts: ReadinessFacts = {
       status: restaurant.status,
@@ -55,10 +61,8 @@ export class ReadinessService {
       menu: { departments, articles, prices },
       orderTypes,
       activeOwners: owners,
-      printer: printer ? {
-        enabled: printer.isEnabled, hasAddress: Boolean(printer.address), helperIssued: Boolean(printer.helperTokenHash),
-        helperOnline: Boolean(printer.lastSeenAt && now - printer.lastSeenAt.getTime() < HELPER_ONLINE_SEC * 1000),
-      } : null,
+      printer: factsOf(printers.find((p) => p.kioskId === null) ?? null),
+      bornes: kiosks.map((k) => ({ name: k.name, printer: factsOf(printers.find((p) => p.kioskId === k.id) ?? null) })),
       hasLogo: Boolean(restaurant.logoPath),
       placedOrders,
     };

@@ -6,6 +6,8 @@ import { BrandingController } from "../restaurant/branding.controller.js";
 import { BrandingService } from "../restaurant/branding.service.js";
 import { CatalogAdminController } from "../restaurant/catalog-admin.controller.js";
 import { CatalogAdminService } from "../restaurant/catalog-admin.service.js";
+import { KiosksController } from "../restaurant/kiosks.controller.js";
+import { KiosksService } from "../restaurant/kiosks.service.js";
 import { RestaurantController } from "../restaurant/restaurant.controller.js";
 import { RestaurantOrdersController } from "../restaurant/restaurant-orders.controller.js";
 import { RestaurantOrdersService } from "../restaurant/restaurant-orders.service.js";
@@ -33,6 +35,7 @@ import { PrintingModule } from "../printing/printing.module.js";
     OrderPrintController,
     SettingsController,
     SuggestionsController,
+    KiosksController,
   ],
   providers: [
     RestaurantAuthService,
@@ -43,6 +46,7 @@ import { PrintingModule } from "../printing/printing.module.js";
     BrandingService,
     SettingsService,
     SuggestionsService,
+    KiosksService,
     StorageService,
   ],
 })

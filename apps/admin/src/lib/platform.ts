@@ -176,6 +176,8 @@ export type OrderStatus = "DRAFT" | "PENDING" | "SENT" | "CONFIRMED" | "PAID" | 
 export interface OrderRow {
   id: string; reference: string; status: OrderStatus; orderType: string; tableNumber: number | null;
   itemCount: number; total: number; currency: string; createdAt: string; sentAt: string | null; tpapiLastError: string | null;
+  /** Which borne took it, when the restaurant has several. */
+  borne?: { name: string; code: string } | null;
 }
 export interface OrderItem {
   lineNumber: number; parentLineNumber: number | null; kind: string; articleName: string; displayName: string | null;
@@ -183,6 +185,7 @@ export interface OrderItem {
 }
 export interface OrderDetail {
   id: string; reference: string; status: OrderStatus; orderType: string; tableNumber: number | null; currency: string;
+  borne?: { name: string; code: string } | null;
   total: number; itemCount: number; createdAt: string; sentAt: string | null; confirmedAt: string | null;
   tpapi: { attempts: number; returnCode: number | null; lastError: string | null; correlationId: string | null };
   items: OrderItem[];

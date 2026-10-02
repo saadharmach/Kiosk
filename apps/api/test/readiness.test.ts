@@ -118,6 +118,42 @@ describe("the go-live checklist", () => {
     it("a helper that is simply not running right now is only a warning", () => assert.equal(get(printer({ helperOnline: false }), "PRINTER").state, "warning"));
   });
 
+  describe("bornes and their printers", () => {
+    const ok = { enabled: true, hasAddress: true, helperIssued: true, helperOnline: true };
+    const bornes = (...b: [string, ReadinessFacts["printer"]][]) => ({ bornes: b.map(([name, printer]) => ({ name, printer })) });
+    const printerCheck = (f: ReadinessFacts) => get(f, "PRINTER");
+
+    it("every borne has a working printer: done, and it says how many", () => {
+      const c = printerCheck(ready(bornes(["Entrée", ok], ["Terrasse", ok])));
+      assert.equal(c.state, "done");
+      assert.match(c.detail, /All 2 bornes/);
+    });
+    it("a borne whose helper is not running right now is a warning naming it, not a blocker", () => {
+      const c = printerCheck(ready(bornes(["Entrée", ok], ["Terrasse", { ...ok, helperOnline: false }])));
+      assert.equal(c.state, "warning");
+      assert.match(c.detail, /helper for Terrasse is not running/);
+    });
+    it("a borne with no printer, or an unfinished one: the default printer takes over (warning), and with none it is a to-do", () => {
+      const a = printerCheck(ready({ ...bornes(["Entrée", ok], ["Terrasse", null]), printer: ok }));
+      assert.equal(a.state, "warning");
+      assert.match(a.detail, /Terrasse has no working printer.*go to the default printer/);
+      const b = printerCheck(ready({ ...bornes(["Entrée", { ...ok, helperIssued: false }]), printer: null }));
+      assert.equal(b.state, "todo");
+      assert.match(b.detail, /Entrée has no working printer, and there is no default printer/);
+    });
+    it("several without printers are named together, in the plural", () => {
+      const c = printerCheck(ready({ ...bornes(["A", null], ["B", null]), printer: null }));
+      assert.match(c.detail, /A, B have no working printer/);
+    });
+    it("no bornes at all behaves exactly as before: the default printer alone", () => {
+      assert.equal(printerCheck(ready({ bornes: [] })).state, "done");
+      assert.equal(printerCheck(ready({ bornes: [], printer: null })).state, "todo");
+    });
+    it("a printer is never required to go live, with or without bornes", () => {
+      assert.equal(evaluateReadiness(ready({ ...bornes(["A", null]), printer: null }), NOW).ready, true);
+    });
+  });
+
   it("the proof: no confirmed order yet is a to-do, but never a blocker", () => {
     const f = ready({ placedOrders: 0 });
     assert.equal(get(f, "TEST_ORDER").state, "todo");
@@ -143,7 +179,7 @@ describe("is an order type really set up (shared with the kiosk)", () => {
 });
 
 describe("ReadinessService reads only this restaurant's data", () => {
-  function setup(over: { printerSeen?: Date | null; mappings?: Record<string, unknown>[] } = {}) {
+  function setup(over: { printerSeen?: Date | null; mappings?: Record<string, unknown>[]; bornes?: { id: string; name: string }[]; printers?: Record<string, unknown>[] } = {}) {
     const calls: Call[] = [];
     const prisma = {
       restaurant: { findUnique: async (a: any) => (a.where.id === "r1" ? {
@@ -157,7 +193,8 @@ describe("ReadinessService reads only this restaurant's data", () => {
       tpapiSalesArea: model([{ untillId: 100n, tableRanges: [{ FromTable: 1, ToTable: 12 }] }], calls, "tpapiSalesArea"),
       orderTypeMapping: model(over.mappings ?? [{ orderType: "EAT_IN", salesAreaId: 100n }], calls, "orderTypeMapping"),
       restaurantUser: { count: async (a: any) => { calls.push({ model: "restaurantUser", op: "count", args: a }); return 1; } },
-      printer: { findFirst: async (a: any) => { calls.push({ model: "printer", op: "findFirst", args: a }); return { isEnabled: true, address: "192.168.0.109", helperTokenHash: "h", lastSeenAt: over.printerSeen ?? null }; } },
+      printer: { findMany: async (a: any) => { calls.push({ model: "printer", op: "findMany", args: a }); return over.printers ?? [{ kioskId: null, isEnabled: true, address: "192.168.0.109", helperTokenHash: "h", lastSeenAt: over.printerSeen ?? null }]; } },
+      kiosk: { findMany: async (a: any) => { calls.push({ model: "kiosk", op: "findMany", args: a }); return over.bornes ?? []; } },
       order: { count: async (a: any) => { calls.push({ model: "order", op: "count", args: a }); return 2; } },
     };
     return { svc: new ReadinessService(prisma as never), calls };
@@ -175,6 +212,20 @@ describe("ReadinessService reads only this restaurant's data", () => {
   it("the print helper counts as running only if it was seen in the last 40 seconds", async () => {
     assert.equal((await setup({ printerSeen: ago(30_000) }).svc.get("r1", NOW)).checks.find((c) => c.key === "PRINTER")!.state, "done");
     assert.equal((await setup({ printerSeen: ago(60_000) }).svc.get("r1", NOW)).checks.find((c) => c.key === "PRINTER")!.state, "warning");
+  });
+
+  it("with bornes, each enabled borne's own printer is looked at, and the default printer is the one with no borne", async () => {
+    const seen = new Date(NOW - 5_000);
+    const { svc, calls } = setup({
+      bornes: [{ id: "k1", name: "Entrée" }, { id: "k2", name: "Terrasse" }],
+      printers: [{ kioskId: null, isEnabled: true, address: "a", helperTokenHash: "h", lastSeenAt: seen }, { kioskId: "k1", isEnabled: true, address: "b", helperTokenHash: "h", lastSeenAt: seen }],
+    });
+    const r = await svc.get("r1", NOW);
+    const c = r.checks.find((x) => x.key === "PRINTER")!;
+    assert.equal(c.state, "warning");
+    assert.match(c.detail, /Terrasse has no working printer.*default printer/);
+    assert.equal((calls.find((x) => x.model === "kiosk")!.args as any).where.restaurantId, "r1");
+    assert.equal((calls.find((x) => x.model === "kiosk")!.args as any).where.isEnabled, true);   // switched-off bornes are not expected to print
   });
 
   it("only orders the till confirmed count as proof", async () => {

@@ -19,7 +19,7 @@ function Thumb({ src }: { src: string }) {
 }
 
 export default function CartScreen({
-  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, onLocale, onBack, onPlaced, onUnavailable,
+  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, borneCode, onLocale, onBack, onPlaced, onUnavailable,
 }: {
   slug: string;
   locale: Locale;
@@ -31,6 +31,8 @@ export default function CartScreen({
   orderType: string;
   salesAreaId: string;
   tableNumber: number | null;
+  /** Which borne this is, so the ticket prints on its own printer. */
+  borneCode?: string;
   onBack: () => void;
   onPlaced: (order: PlacedOrder) => void;
   /** The restaurant was switched off while the customer was ordering: the cart is kept, the kiosk shows its calm screen. */
@@ -92,6 +94,7 @@ export default function CartScreen({
         salesAreaId,
         locale,
         ...(tableNumber !== null ? { tableNumber } : {}),
+        ...(borneCode ? { borneCode } : {}),
         displayedTotalCents: Math.round(serverTotal * 100),
         lines: wire(),
       });

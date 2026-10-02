@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable } from "./availability.js";
+import { requireOrderable, resolveBorne } from "./availability.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
@@ -26,12 +26,15 @@ export class OrdersService {
     requireOrderable(restaurant);
     const restaurantId = restaurant.id;
 
-    // ---- idempotency: the same clientOrderId always returns the same order
-    const existing = await this.prisma.order.findFirst({
-      where: { restaurantId, clientRequestId: dto.clientOrderId },
-      include: { items: true },
-    });
+    // ---- idempotency: the same clientOrderId always returns the same order. (Which borne this is, is looked up at the
+    // same time; a switched-off borne only matters if this turns out to be a new order.)
+    const [existing, borne] = await Promise.all([
+      this.prisma.order.findFirst({ where: { restaurantId, clientRequestId: dto.clientOrderId }, include: { items: true } }),
+      resolveBorne(this.prisma, restaurantId, restaurant.name, dto.borneCode).then((b) => ({ b }), (e: unknown) => ({ e })),
+    ]);
     if (existing) return this.present(existing);
+    if ("e" in borne) throw borne.e;
+    const borneInfo = borne.b;
 
     this.assertOrderTypeEnabled(restaurant.settings, dto.orderType);
 
@@ -75,11 +78,13 @@ export class OrdersService {
       });
       const seq = counter.lastSequence;
       const mmdd = `${String(businessDate.getUTCMonth() + 1).padStart(2, "0")}${String(businessDate.getUTCDate()).padStart(2, "0")}`;
-      const reference = `K0-${mmdd}-${String(seq).padStart(3, "0")}`;
+      // The borne's code leads the reference (K2-1002-014), so staff see which machine an order came from. K0: no borne.
+      const reference = `${borneInfo?.code ?? "K0"}-${mmdd}-${String(seq).padStart(3, "0")}`;
 
       const created = await tx.order.create({
         data: {
           restaurantId,
+          kioskId: borneInfo?.id ?? null,
           clientRequestId: dto.clientOrderId,
           reference,
           businessDate,

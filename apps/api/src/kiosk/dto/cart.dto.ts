@@ -55,6 +55,10 @@ export class CreateOrderDto extends PriceCartDto {
   @IsOptional() @IsString() @MaxLength(80)
   customerName?: string;
 
+  /** Which borne this is (K1, K2...), from the address the kiosk page was opened with. */
+  @IsOptional() @Matches(/^[A-Za-z0-9]{1,4}$/, { message: "borneCode must be 1 to 4 letters or digits" })
+  borneCode?: string;
+
   /** What the kiosk displayed. Used only to detect a price change. */
   @IsOptional() @IsInt() @Min(0)
   displayedTotalCents?: number;

@@ -920,7 +920,8 @@ model Printer {
   printJobs        PrintJob[]
 
   @@index([restaurantId, status])
-  @@index([kioskId])
+  /// A borne has at most one printer. (Printers with no borne are the restaurant's default: any number of nulls is allowed.)
+  @@unique([kioskId])
   @@map("printers")
 }
 

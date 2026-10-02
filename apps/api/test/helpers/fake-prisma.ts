@@ -13,6 +13,8 @@ export const D = (n: number) => ({ toNumber: () => n });
 export function matches(row: Row, where: Row | undefined): boolean {
   if (!where) return true;
   for (const [key, cond] of Object.entries(where)) {
+    // "is null": a row without the value (or with null) matches, anything else does not.
+    if (cond === null) { if (row[key] !== null && row[key] !== undefined) return false; continue; }
     if (!(key in row)) continue;
     const value = row[key];
     if (cond && typeof cond === "object" && "in" in (cond as Row)) {

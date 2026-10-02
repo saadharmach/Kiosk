@@ -82,6 +82,7 @@ export class RestaurantOrdersService {
           createdAt: true,
           sentAt: true,
           tpapiLastError: true,
+          kiosk: { select: { name: true, code: true } },
         },
       }),
     ]);
@@ -91,14 +92,14 @@ export class RestaurantOrdersService {
       pageSize,
       total,
       pages: Math.max(1, Math.ceil(total / pageSize)),
-      orders: rows.map((r) => ({ ...r, total: Number(r.total) })),
+      orders: rows.map(({ kiosk, ...r }) => ({ ...r, total: Number(r.total), borne: kiosk ? { name: kiosk.name, code: kiosk.code } : null })),
     };
   }
 
   async detail(restaurantId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, restaurantId },
-      include: { items: { orderBy: [{ lineNumber: "asc" }, { id: "asc" }] } },
+      include: { items: { orderBy: [{ lineNumber: "asc" }, { id: "asc" }] }, kiosk: { select: { name: true, code: true } } },
     });
     if (!order) throw new NotFoundException("Order not found");
 
@@ -110,6 +111,7 @@ export class RestaurantOrdersService {
       status: order.status,
       allowedTransitions: OrderStatusService.allowedFrom(order.status as OrderStatusName),
       orderType: order.orderType,
+      borne: order.kiosk ? { name: order.kiosk.name, code: order.kiosk.code } : null,
       salesAreaId: order.salesAreaId,
       tableNumber: order.tableNumber,
       tablePart: order.tablePart,

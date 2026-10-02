@@ -41,7 +41,8 @@ const STATUS_CLASS: Record<PrintJobRow["status"], string> = {
   FAILED: "text-(--color-danger)",
 };
 
-export default function PrinterPage({ slug }: { slug: string }) {
+/** The printer settings, helper and recent tickets: the restaurant's default printer, or one borne's when `kioskId` is given. */
+export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?: string }) {
   const [view, setView] = useState<PrinterView | null>(null);
   const [form, setForm] = useState<SavePrinterBody>(EMPTY);
   const [dirty, setDirty] = useState(false);
@@ -65,13 +66,13 @@ export default function PrinterPage({ slug }: { slug: string }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [p, j] = await Promise.all([getPrinter(slug), listPrintJobs(slug)]);
+      const [p, j] = await Promise.all([getPrinter(slug, kioskId), listPrintJobs(slug, kioskId)]);
       adopt(p);
       setJobs(j);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [slug, adopt]);
+  }, [slug, kioskId, adopt]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -102,7 +103,7 @@ export default function PrinterPage({ slug }: { slug: string }) {
   };
 
   const save = () => run(async () => {
-    const res = await savePrinter(slug, { ...form, name: form.name.trim(), address: form.address.trim() });
+    const res = await savePrinter(slug, { ...form, name: form.name.trim(), address: form.address.trim() }, kioskId);
     formTouched.current = false;
     setDirty(false);
     adopt(res);
@@ -112,12 +113,12 @@ export default function PrinterPage({ slug }: { slug: string }) {
   const generateToken = () => run(async () => {
     if (view?.configured && view.helper.tokenIssuedAt &&
         !window.confirm("This replaces the current token. The helper at the restaurant stops printing until you give it the new one. Continue?")) return;
-    setToken((await issuePrinterToken(slug)).token);
+    setToken((await issuePrinterToken(slug, kioskId)).token);
     await refresh();
   });
 
   const sendTest = () => run(async () => {
-    await testPrint(slug);
+    await testPrint(slug, kioskId);
     setNotice("Test ticket queued. It prints as soon as the helper picks it up.");
     await refresh();
   });

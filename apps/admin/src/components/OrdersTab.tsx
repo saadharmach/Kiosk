@@ -152,7 +152,7 @@ export default function OrdersTab({ id, canWrite, initialFilter }: { id: string;
                     <td className="px-4 py-3 font-medium">{o.reference}{o.tpapiLastError ? <div className="max-w-xs truncate text-xs font-normal text-(--color-danger)" title={o.tpapiLastError}>{o.tpapiLastError}</div> : null}</td>
                     <td className="px-4 py-3"><StatusPill s={o.status} /></td>
                     <td className="px-4 py-3 whitespace-nowrap text-(--color-ink-muted)">{when(o.createdAt)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{o.orderType.toLowerCase().replace("_", " ")}{o.tableNumber !== null ? ` · ${o.tableNumber}` : ""}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{o.orderType.toLowerCase().replace("_", " ")}{o.tableNumber !== null ? ` · ${o.tableNumber}` : ""}{o.borne ? <div className="text-xs text-(--color-ink-muted)">{o.borne.name}</div> : null}</td>
                     <td className="px-4 py-3">{o.itemCount}</td>
                     <td className="px-4 py-3 tabular-nums">{money(o.total, o.currency)}</td>
                     <td className="px-4 py-3 text-end"><button aria-expanded={openId === o.id} className={secondary + " h-8"} onClick={() => setOpenId(openId === o.id ? null : o.id)}>{openId === o.id ? "Close" : "Details"}</button></td>

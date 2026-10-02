@@ -17,6 +17,8 @@ export interface Check {
   tab?: FixTab;
 }
 
+export interface PrinterFacts { enabled: boolean; hasAddress: boolean; helperIssued: boolean; helperOnline: boolean }
+
 export interface ReadinessFacts {
   status: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   till: {
@@ -31,8 +33,10 @@ export interface ReadinessFacts {
   /** Only the order types the restaurant has switched on. */
   orderTypes: { type: "EAT_IN" | "TAKE_AWAY" | "DELIVERY"; configured: boolean }[];
   activeOwners: number;
-  /** null: no printer at all. */
-  printer: { enabled: boolean; hasAddress: boolean; helperIssued: boolean; helperOnline: boolean } | null;
+  /** The restaurant's default printer (the one with no borne). null: none. */
+  printer: PrinterFacts | null;
+  /** The bornes that take orders, each with its own printer (or none). Empty: the restaurant has no bornes. */
+  bornes?: { name: string; printer: PrinterFacts | null }[];
   hasLogo: boolean;
   /** Orders that reached the till and were confirmed there. */
   placedOrders: number;
@@ -92,14 +96,34 @@ export function evaluateReadiness(f: ReadinessFacts, now = Date.now()) {
     : { key: "OWNER", label: "An owner can sign in", required: true, state: "todo", detail: "No active owner yet. Add one on the Users tab and pass on the temporary password.", tab: "Users" });
 
   // ---- recommended: tickets, logo, and proof that an order really goes through
-  const p = f.printer;
+  // One printer, or (when the restaurant has bornes) one per borne with the default printer as the safety net.
+  type Verdict = "none" | "unfinished" | "offline" | "ok";
+  const verdictOf = (p: PrinterFacts | null): Verdict =>
+    !p ? "none" : !p.enabled || !p.hasAddress || !p.helperIssued ? "unfinished" : !p.helperOnline ? "offline" : "ok";
+  const bornes = f.bornes ?? [];
   let printer: Pick<Check, "state" | "detail">;
-  if (!p) printer = { state: "todo", detail: "No ticket printer yet. The restaurant sets one up in its back office, under Printer." };
-  else if (!p.enabled || !p.hasAddress) printer = { state: "todo", detail: "A printer exists but is switched off or has no address." };
-  else if (!p.helperIssued) printer = { state: "todo", detail: "The printer is set up but the print helper has no secret yet, so nothing can print." };
-  else if (!p.helperOnline) printer = { state: "warning", detail: "Set up. The print helper is not running right now, so tickets wait until it starts." };
-  else printer = { state: "done", detail: "Set up, and the print helper is running." };
-  add({ key: "PRINTER", label: "Ticket printer", required: false, ...printer });
+  if (bornes.length === 0) {
+    const v = verdictOf(f.printer);
+    const p = f.printer;
+    printer =
+      v === "none" ? { state: "todo", detail: "No ticket printer yet. The restaurant sets one up in its back office, under Bornes." }
+      : v === "unfinished" ? { state: "todo", detail: !p!.enabled || !p!.hasAddress ? "A printer exists but is switched off or has no address." : "The printer is set up but the print helper has no secret yet, so nothing can print." }
+      : v === "offline" ? { state: "warning", detail: "Set up. The print helper is not running right now, so tickets wait until it starts." }
+      : { state: "done", detail: "Set up, and the print helper is running." };
+  } else {
+    const rescue = verdictOf(f.printer) === "ok" || verdictOf(f.printer) === "offline";   // the default printer can take over
+    const lacking = bornes.filter((b) => ["none", "unfinished"].includes(verdictOf(b.printer)));
+    const silent = bornes.filter((b) => verdictOf(b.printer) === "offline");
+    const names = (l: typeof bornes) => l.map((b) => b.name).join(", ");
+    if (lacking.length > 0) {
+      printer = rescue
+        ? { state: "warning", detail: `${names(lacking)} ${lacking.length === 1 ? "has" : "have"} no working printer set up, so ${lacking.length === 1 ? "its" : "their"} tickets go to the default printer.` }
+        : { state: "todo", detail: `${names(lacking)} ${lacking.length === 1 ? "has" : "have"} no working printer, and there is no default printer to take over. The restaurant sets them up in its back office, under Bornes.` };
+    } else if (silent.length > 0) {
+      printer = { state: "warning", detail: `Every borne has a printer. The print helper for ${names(silent)} is not running right now, so tickets wait until it starts.` };
+    } else printer = { state: "done", detail: `All ${bornes.length} bornes have a printer, and each print helper is running.` };
+  }
+  add({ key: "PRINTER", label: "Ticket printers", required: false, ...printer });
 
   add(f.hasLogo
     ? { key: "LOGO", label: "Logo", required: false, state: "done", detail: "The kiosk shows the restaurant's logo." }

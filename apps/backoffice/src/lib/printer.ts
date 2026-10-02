@@ -44,19 +44,24 @@ export interface SavePrinterBody {
   codepage: CodePage;
 }
 
-export const getPrinter = (slug: string) => request<PrinterView>(`/restaurant/${slug}/printer`);
+/** The restaurant's default printer, or one borne's printer when `kioskId` is given. */
+const base = (slug: string, kioskId?: string | null) =>
+  kioskId ? `/restaurant/${slug}/kiosks/${kioskId}/printer` : `/restaurant/${slug}/printer`;
 
-export const savePrinter = (slug: string, body: SavePrinterBody) =>
-  request<PrinterView>(`/restaurant/${slug}/printer`, { method: "PUT", body: JSON.stringify(body) });
+export const getPrinter = (slug: string, kioskId?: string | null) => request<PrinterView>(base(slug, kioskId));
+
+export const savePrinter = (slug: string, body: SavePrinterBody, kioskId?: string | null) =>
+  request<PrinterView>(base(slug, kioskId), { method: "PUT", body: JSON.stringify(body) });
 
 /** The token is only ever returned here, once. */
-export const issuePrinterToken = (slug: string) =>
-  request<{ token: string }>(`/restaurant/${slug}/printer/token`, { method: "POST" });
+export const issuePrinterToken = (slug: string, kioskId?: string | null) =>
+  request<{ token: string }>(`${base(slug, kioskId)}/token`, { method: "POST" });
 
-export const testPrint = (slug: string) =>
-  request<{ id: string }>(`/restaurant/${slug}/printer/test`, { method: "POST" });
+export const testPrint = (slug: string, kioskId?: string | null) =>
+  request<{ id: string }>(`${base(slug, kioskId)}/test`, { method: "POST" });
 
-export const listPrintJobs = (slug: string) => request<PrintJobRow[]>(`/restaurant/${slug}/printer/jobs?limit=15`);
+export const listPrintJobs = (slug: string, kioskId?: string | null) =>
+  request<PrintJobRow[]>(`${base(slug, kioskId)}/jobs?limit=15`);
 
 export const reprintOrder = (slug: string, orderId: string) =>
   request<{ id: string }>(`/restaurant/${slug}/orders/${orderId}/print`, { method: "POST" });

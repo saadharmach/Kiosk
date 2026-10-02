@@ -9,6 +9,8 @@ export interface TicketData {
   printedAt: string;
   /** "Sur place", "À emporter", "Livraison". */
   orderType: string;
+  /** Which borne took the order, when the restaurant has several: staff see where the customer is. */
+  borneName?: string | null;
   /** The line above the big number, e.g. "POSEZ CE NUMÉRO SUR VOTRE TABLE". */
   headline: string;
   /** The number the customer needs: a stand or table number, or the reference. */
@@ -72,6 +74,7 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
     reference: pr(source.reference),
     printedAt: pr(source.printedAt),
     orderType: pr(source.orderType),
+    borneName: source.borneName ? pr(source.borneName) : null,
     headline: pr(source.headline),
     bigText: pr(source.bigText),
     currency: pr(source.currency),
@@ -99,6 +102,7 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
     p.line(pair("", data.printedAt, width));
   }
   p.line(data.orderType);
+  if (data.borneName) for (const l of wrap(`Borne : ${data.borneName}`, width)) p.line(l);
   p.line(rule);
 
   // The number the customer must not lose takes the middle of the ticket.

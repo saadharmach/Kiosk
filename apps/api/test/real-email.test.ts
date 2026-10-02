@@ -66,9 +66,10 @@ describe("does the domain have a mail server", () => {
   });
   it("a lookup that never answers is given up on after a few seconds", async () => {
     const hang: MailResolver = { resolveMx: () => new Promise(() => undefined), resolve4: () => new Promise(() => undefined), resolve6: () => new Promise(() => undefined) };
-    const t0 = Date.now();
+    // performance.now() is a steady clock: the wall clock can jump (WSL re-syncs it), which made this test fail at random.
+    const t0 = performance.now();
     assert.deepEqual(await checkRealEmail("sam@slow.com", hang), { ok: true, checked: false });
-    assert.ok(Date.now() - t0 < 6000);
+    assert.ok(performance.now() - t0 < 6000);
   });
   it("placeholder domains are refused without asking the network at all", async () => {
     const { r, calls } = resolver({});

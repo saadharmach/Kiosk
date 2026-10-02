@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
+import { readBorne } from "@/lib/borne";
 import { api, getCatalog, isConnectionError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
 import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
@@ -43,6 +44,10 @@ function KioskFlow({ slug }: { slug: string }) {
   // `unavailable` marks a restaurant that is switched off: a calm screen, not an error, and `name` is its name.
   const [error, setError] = useState<{ message: string; connection: boolean; unavailable: boolean; name?: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Which borne this machine is (K1, K2...), from the address it was opened with. undefined: not read yet. Read once the page
+  // is in the browser (it is not available while the server builds the page).
+  const [borne, setBorne] = useState<string | null | undefined>(undefined);
+  useEffect(() => { setBorne(readBorne(slug, window.location.search)); }, [slug]);
   const [locale, setLocale] = useState<Locale>("fr");
   const [screen, setScreen] = useState<Screen>("WELCOME");
   const [choice, setChoice] = useState<OrderTypeOption | null>(null);
@@ -65,7 +70,8 @@ function KioskFlow({ slug }: { slug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    api.bootstrap(slug).then(
+    if (borne === undefined) return;   // wait until we know which borne this is
+    api.bootstrap(slug, borne).then(
       (d) => {
         if (cancelled) return;
         setBoot(d);
@@ -74,7 +80,7 @@ function KioskFlow({ slug }: { slug: string }) {
       (e) => !cancelled && setError(toKioskError(e)),
     );
     return () => { cancelled = true; };
-  }, [slug, attempt]);
+  }, [slug, attempt, borne]);
 
   // A switched-off restaurant may be switched back on while nobody is standing here, so look again every
   // minute without any flicker, and carry on by itself as soon as it answers.
@@ -82,14 +88,14 @@ function KioskFlow({ slug }: { slug: string }) {
   useEffect(() => {
     if (!unavailable) return;
     const timer = setInterval(() => {
-      api.bootstrap(slug).then((d) => {
+      api.bootstrap(slug, borne).then((d) => {
         setBoot(d);
         if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
         setError(null);
       }, () => undefined);
     }, 60_000);
     return () => clearInterval(timer);
-  }, [unavailable, slug]);
+  }, [unavailable, slug, borne]);
 
   // Load the menu as soon as the order type resolves the sales area, so the
   // customer never waits on a spinner after choosing their table.
@@ -241,6 +247,7 @@ function KioskFlow({ slug }: { slug: string }) {
         tableNumber={table}
         onBack={() => setScreen("MENU")}
         onPlaced={(o) => { setOrder(o); setScreen("TICKET"); }}
+        borneCode={borne ?? undefined}
         onUnavailable={(e) => setError(toKioskError(e))}
       />
     );

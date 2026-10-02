@@ -214,11 +214,11 @@ describe("the helper loop: waiting for a ticket", () => {
     // its poll interval would leave a gap in which a ticket sits unprinted.
     // A long poll interval, so a helper that wrongly sleeps it after an empty answer is plainly too slow.
     const h = harness({ waitSec: 20, nextDelayMs: 1100, intervalMs: 3000 });
-    const t0 = Date.now();
+    const t0 = performance.now();   // a steady clock: the wall clock can jump (WSL re-syncs it)
     await h.until(() => nextRequests(h).length >= 2, 4000);
     // Measured the moment the second request arrives. (Stopping the helper afterwards waits for the request still
     // in flight, about another second: counting that made this test fail whenever the machine was busy.)
-    const gap = Date.now() - t0;
+    const gap = performance.now() - t0;
     await h.helper.stop();
     assert.ok(nextRequests(h).length >= 2, "asked a second time");
     assert.ok(gap < 2600, `two requests within ~1.1s plus start-up, took ${gap}ms`);

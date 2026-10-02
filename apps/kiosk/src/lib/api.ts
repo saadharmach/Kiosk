@@ -58,6 +58,8 @@ export interface OrderTypeOption {
 }
 
 export interface Bootstrap {
+  /** Which borne this machine is, as the restaurant named it (null when it is not one of its bornes). */
+  borne?: { code: string; name: string } | null;
   restaurant: {
     slug: string;
     name: string;
@@ -88,7 +90,8 @@ export interface Bootstrap {
 }
 
 export const api = {
-  bootstrap: (slug: string) => request<Bootstrap>(`/kiosk/${slug}/bootstrap`),
+  bootstrap: (slug: string, borne?: string | null) =>
+    request<Bootstrap>(`/kiosk/${slug}/bootstrap${borne ? `?borne=${encodeURIComponent(borne)}` : ""}`),
 };
 
 export function tableInRanges(n: number, ranges: TableRange[]): boolean {
@@ -233,6 +236,8 @@ export const createOrder = (
     locale?: string;
     tableNumber?: number;
     displayedTotalCents?: number;
+    /** Which borne placed the order (its code): the ticket prints on that borne's printer. */
+    borneCode?: string;
     lines: WireCartLine[];
   },
 ) => request<PlacedOrder>(`/kiosk/${slug}/orders`, { method: "POST", body: JSON.stringify(body) });

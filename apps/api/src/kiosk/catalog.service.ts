@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable } from "./availability.js";
+import { requireOrderable, resolveBorne } from "./availability.js";
 import { StorageService } from "../common/storage.service.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
 import { allowedGroups } from "./option-kinds.js";
@@ -18,12 +18,14 @@ export class CatalogService {
   ) {}
 
   /** Branding, settings and the zones a customer can choose from. */
-  async bootstrap(slug: string) {
+  async bootstrap(slug: string, borneCode?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true } } },
     });
     requireOrderable(restaurant);
+    // Which borne is asking, if it says so. Unknown: none. Switched off: the calm unavailable answer.
+    const borne = borneCode && /^[A-Za-z0-9]{1,4}$/.test(borneCode) ? await resolveBorne(this.prisma, restaurant.id, restaurant.name, borneCode) : null;
 
     const salesAreas = await this.prisma.tpapiSalesArea.findMany({
       where: { restaurantId: restaurant.id },
@@ -66,6 +68,7 @@ export class CatalogService {
       });
 
     return {
+      borne: borne ? { code: borne.code, name: borne.name } : null,
       restaurant: {
         slug: restaurant.slug,
         name: restaurant.name,

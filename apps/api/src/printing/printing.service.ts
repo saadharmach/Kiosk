@@ -21,6 +21,8 @@ const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 export interface LoadedOrder {
   id: string;
   restaurantId: string;
+  /** The borne that took the order, if the restaurant has bornes. */
+  kioskId?: string | null;
   reference: string;
   orderType: string;
   tableNumber: number | null;
@@ -39,6 +41,23 @@ export interface LoadedOrder {
   }[];
 }
 
+/** What the back office shows about a printer: its settings, whether its helper is alive, and the last problem. */
+export function summarizePrinter(p: Printer | null, now = Date.now()) {
+  const config = readPrinterConfig(p?.config);
+  if (!p) return { configured: false as const, config };
+  const online = Boolean(p.lastSeenAt && now - p.lastSeenAt.getTime() < HELPER_ONLINE_SEC * 1000);
+  return {
+    configured: true as const,
+    name: p.name,
+    address: p.address,
+    port: p.port,
+    isEnabled: p.isEnabled,
+    config,
+    helper: { tokenIssuedAt: p.helperTokenIssuedAt, online, lastSeenAt: p.lastSeenAt },
+    lastError: p.lastErrorMessage ? { message: p.lastErrorMessage, at: p.lastErrorAt } : null,
+  };
+}
+
 const ORDER_TYPE_FR: Record<string, string> = { EAT_IN: "Sur place", TAKE_AWAY: "À emporter", DELIVERY: "Livraison" };
 
 @Injectable()
@@ -52,37 +71,23 @@ export class PrintingService {
 
   // ---------------------------------------------------------------- settings
 
-  /** A restaurant has one ticket printer. */
-  private findPrinter(restaurantId: string) {
+  /**
+   * A borne's printer is the one linked to it (at most one). The restaurant's default printer is the one linked to no
+   * borne: it prints for orders that came from no borne, and stands in for a borne that has no working printer.
+   */
+  private findPrinter(restaurantId: string, kioskId: string | null = null) {
     return this.prisma.printer.findFirst({
-      where: { restaurantId, kind: "RECEIPT", connection: "NETWORK" },
+      where: { restaurantId, kioskId, kind: "RECEIPT", connection: "NETWORK" },
       orderBy: { createdAt: "asc" },
     });
   }
 
-  async get(restaurantId: string) {
-    const p = await this.findPrinter(restaurantId);
-    const config = readPrinterConfig(p?.config);
-    if (!p) return { configured: false as const, config };
-    const online = Boolean(p.lastSeenAt && Date.now() - p.lastSeenAt.getTime() < HELPER_ONLINE_SEC * 1000);
-    return {
-      configured: true as const,
-      name: p.name,
-      address: p.address,
-      port: p.port,
-      isEnabled: p.isEnabled,
-      config,
-      helper: {
-        tokenIssuedAt: p.helperTokenIssuedAt,
-        online,
-        lastSeenAt: p.lastSeenAt,
-      },
-      lastError: p.lastErrorMessage ? { message: p.lastErrorMessage, at: p.lastErrorAt } : null,
-    };
+  async get(restaurantId: string, kioskId: string | null = null) {
+    return summarizePrinter(await this.findPrinter(restaurantId, kioskId));
   }
 
-  async save(restaurantId: string, dto: SavePrinterDto) {
-    const existing = await this.findPrinter(restaurantId);
+  async save(restaurantId: string, dto: SavePrinterDto, kioskId: string | null = null) {
+    const existing = await this.findPrinter(restaurantId, kioskId);
     const config: PrinterConfig = readPrinterConfig({
       ...readPrinterConfig(existing?.config),
       ...(dto.autoPrint !== undefined ? { autoPrint: dto.autoPrint } : {}),
@@ -101,14 +106,14 @@ export class PrintingService {
       // Scoped by the restaurant id as well as the printer id.
       await this.prisma.printer.updateMany({ where: { id: existing.id, restaurantId }, data });
     } else {
-      await this.prisma.printer.create({ data: { ...data, restaurantId, kind: "RECEIPT", connection: "NETWORK" } });
+      await this.prisma.printer.create({ data: { ...data, restaurantId, kioskId, kind: "RECEIPT", connection: "NETWORK" } });
     }
-    return this.get(restaurantId);
+    return this.get(restaurantId, kioskId);
   }
 
   /** The secret the helper signs in with. Shown once; only its hash is kept. */
-  async issueToken(restaurantId: string) {
-    const printer = await this.findPrinter(restaurantId);
+  async issueToken(restaurantId: string, kioskId: string | null = null) {
+    const printer = await this.findPrinter(restaurantId, kioskId);
     if (!printer) throw new BadRequestException("Save the printer's address first, then generate the helper token.");
     const token = `pht_${randomBytes(32).toString("base64url")}`;
     await this.prisma.printer.updateMany({
@@ -118,9 +123,10 @@ export class PrintingService {
     return { token };
   }
 
-  listJobs(restaurantId: string, limit = 20) {
+  /** `kioskId` undefined: every ticket of the restaurant. null: the default printer's. An id: that borne's. */
+  listJobs(restaurantId: string, limit = 20, kioskId?: string | null) {
     return this.prisma.printJob.findMany({
-      where: { restaurantId },
+      where: { restaurantId, ...(kioskId !== undefined ? { printer: { kioskId } } : {}) },
       orderBy: { createdAt: "desc" },
       take: Math.min(50, Math.max(1, limit)),
       select: {
@@ -146,8 +152,11 @@ export class PrintingService {
     return job;
   }
 
-  async enqueueTest(restaurantId: string) {
-    const printer = await this.findPrinter(restaurantId);
+  async enqueueTest(restaurantId: string, kioskId: string | null = null) {
+    const [printer, kiosk] = await Promise.all([
+      this.findPrinter(restaurantId, kioskId),
+      kioskId ? this.prisma.kiosk.findFirst({ where: { id: kioskId, restaurantId }, select: { name: true } }) : null,
+    ]);
     if (!printer) throw new BadRequestException("Save the printer's address first.");
     const restaurant = await this.prisma.restaurant.findUniqueOrThrow({
       where: { id: restaurantId }, select: { name: true, timezone: true, settings: { select: { ticketFooterText: true } } },
@@ -157,6 +166,7 @@ export class PrintingService {
       reference: "TEST",
       printedAt: formatLocal(new Date(), restaurant.timezone),
       orderType: "Ticket de test",
+      borneName: kiosk?.name ?? null,
       headline: "VOTRE NUMÉRO DE COMMANDE",
       bigText: "123",
       lines: [
@@ -184,14 +194,27 @@ export class PrintingService {
       const orderP = loaded ? this.scoped(loaded, restaurantId) : this.loadOrder(restaurantId, orderId);
       const namesP = orderP.then((o) => this.frenchNames(restaurantId, o));
       namesP.catch(() => undefined); // if we return early, a later failure here must not go unhandled
-      const [printer, order, restaurant] = await Promise.all([
-        this.findPrinter(restaurantId),
-        orderP,
-        this.prisma.restaurant.findUniqueOrThrow({
-          where: { id: restaurantId },
-          select: { name: true, timezone: true, settings: { select: { ticketFooterText: true, askTableForEatIn: true } } },
-        }),
-      ]);
+      const restaurantP = this.prisma.restaurant.findUniqueOrThrow({
+        where: { id: restaurantId },
+        select: { name: true, timezone: true, settings: { select: { ticketFooterText: true, askTableForEatIn: true } } },
+      });
+      // Which printer? The borne's own, or the restaurant's default when the borne has none that is switched on. When the
+      // caller already has the order (the kiosk has just created it) the borne is known at once and everything is fetched
+      // together; for a reprint the order has to be read first.
+      const printersFor = (kioskId: string | null) =>
+        Promise.all([
+          kioskId ? this.findPrinter(restaurantId, kioskId) : null,
+          this.findPrinter(restaurantId, null),
+          kioskId ? this.prisma.kiosk.findFirst({ where: { id: kioskId, restaurantId }, select: { name: true } }) : null,
+        ]);
+      const early = loaded ? printersFor(loaded.kioskId ?? null) : null;
+      early?.catch(() => undefined);
+      const [order, restaurant] = await Promise.all([orderP, restaurantP]);
+      const [bornePrinter, defaultPrinter, kiosk] = await (early ?? printersFor(order.kioskId ?? null));
+      const printer = bornePrinter?.isEnabled ? bornePrinter : defaultPrinter;
+      if (order.kioskId && printer === defaultPrinter && printer) {
+        this.logger.warn(`Order ${order.reference}: its borne has no printer switched on, so the ticket goes to the restaurant's default printer`);
+      }
 
       if (!printer || !printer.isEnabled) {
         if (automatic) return null;
@@ -199,7 +222,7 @@ export class PrintingService {
       }
       if (automatic && !readPrinterConfig(printer.config).autoPrint) return null;
 
-      const data = this.ticketData(order, restaurant, await namesP);
+      const data = { ...this.ticketData(order, restaurant, await namesP), borneName: kiosk?.name ?? null };
       return await this.enqueue(printer, "TICKET", orderId, data);
     } catch (e) {
       if (!automatic) throw e;

@@ -38,7 +38,8 @@ export class PrinterController {
 
   @Get("jobs")
   jobs(@Tenant() tenant: TenantCtx, @Query("limit") limit?: string) {
-    return this.printing.listJobs(tenant.restaurantId, Number(limit) || 20);
+    // The default printer's own tickets (those of the bornes are on each borne's page).
+    return this.printing.listJobs(tenant.restaurantId, Number(limit) || 20, null);
   }
 }
 
