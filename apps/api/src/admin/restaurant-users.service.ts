@@ -146,6 +146,30 @@ export class RestaurantUsersService {
     return { invitation: await this.sendLink("RESET", user, restaurant) };
   }
 
+  /**
+   * Removes a person from a restaurant for good: their account, sessions and waiting links go, and their address is free to
+   * use again. Only after they have been switched off, so it takes two deliberate steps. What they did stays in the history.
+   */
+  async remove(restaurantId: string, userId: string, actor: Actor, req?: Request) {
+    await this.requireRestaurant(restaurantId);
+    const user = await this.requireUser(restaurantId, userId);
+    if (user.isActive) throw new BadRequestException("Switch them off first. A person can only be deleted after they have been switched off.");
+
+    await this.prisma.$transaction([
+      this.prisma.accountToken.deleteMany({ where: { realm: "RESTAURANT", restaurantId, userId } }),
+      this.prisma.restaurantUser.deleteMany({ where: { id: userId, restaurantId } }),   // their sessions go with them
+    ]);
+    await this.audit.record(
+      {
+        restaurantId, actorType: "PLATFORM_USER", actorId: actor.id,
+        action: "restaurant_user.delete", entityType: "RestaurantUser", entityId: userId,
+        before: { email: user.email, role: user.role },
+      },
+      req,
+    );
+    return { removed: true };
+  }
+
   /** The email went missing, or the link ran out: send a fresh one. Only for someone who has not chosen a password yet. */
   async resendInvitation(restaurantId: string, userId: string, actor: Actor, req?: Request) {
     const restaurant = await this.requireRestaurant(restaurantId);

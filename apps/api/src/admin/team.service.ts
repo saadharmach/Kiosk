@@ -7,7 +7,7 @@ import { AuditService } from "../common/audit.service.js";
 import { EmailCheckService } from "../common/real-email.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { CreateTeamMemberDto, UpdateTeamMemberDto } from "./dto/team.dto.js";
-import { checkReset, checkTeamChange, type TeamRole } from "./team-rules.js";
+import { checkRemove, checkReset, checkTeamChange, type TeamRole } from "./team-rules.js";
 import { generateTemporaryPassword } from "./temporary-password.js";
 
 /** Everything about a person that may leave the server. Never the password hash. */
@@ -137,12 +137,33 @@ export class TeamService {
     return this.invites.sendLink({ realm: "PLATFORM", kind, user });
   }
 
+  /**
+   * Removes a person for good: their account, sessions and waiting links go, and their address is free to use again.
+   * What they did stays in the history, under their name as it was.
+   */
+  async remove(id: string, actor: Actor, req?: Request) {
+    const user = await this.require(id);
+    const others = await this.prisma.platformUser.count({ where: { role: "SUPER_ADMIN", isActive: true, id: { not: id } } });
+    checkRemove(actor.id, { id, role: user.role as TeamRole, isActive: user.isActive }, others);
+
+    await this.prisma.$transaction([
+      this.prisma.accountToken.deleteMany({ where: { realm: "PLATFORM", userId: id } }),
+      this.prisma.platformUser.delete({ where: { id } }),   // their sessions go with them
+    ]);
+    this.directory.invalidate(id);
+    await this.audit.record(
+      { actorType: "PLATFORM_USER", actorId: actor.id, action: "platform_user.delete", entityType: "PlatformUser", entityId: id, before: { email: user.email, role: user.role } },
+      req,
+    );
+    return { removed: true };
+  }
+
   /** Who changed the team, newest first. */
   async activity(take = 30) {
     const rows = await this.prisma.auditLog.findMany({
       where: { entityType: "PlatformUser" },
       orderBy: { createdAt: "desc" }, take,
-      select: { id: true, createdAt: true, actorId: true, action: true, entityId: true },
+      select: { id: true, createdAt: true, actorId: true, action: true, entityId: true, before: true, after: true },
     });
     const ids = [...new Set(rows.flatMap((r) => [r.actorId, r.entityId]).filter((x): x is string => Boolean(x)))];
     const people = await this.prisma.platformUser.findMany({ where: { id: { in: ids } }, select: { id: true, email: true } });
@@ -150,7 +171,8 @@ export class TeamService {
     return rows.map((r) => ({
       id: r.id, at: r.createdAt, action: r.action,
       actor: (r.actorId ? emailOf.get(r.actorId) : undefined) ?? "someone who has since been removed",
-      target: (r.entityId ? emailOf.get(r.entityId) : undefined) ?? null,
+      // A person who has been deleted is no longer in the table: the history kept their address.
+      target: (r.entityId ? emailOf.get(r.entityId) : undefined) ?? ((r.before as { email?: string } | null)?.email ?? (r.after as { email?: string } | null)?.email ?? null),
     }));
   }
 

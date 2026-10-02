@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createUser, invitationNotice, listUsers, resendInvitation, resetPassword, updateUser, type RestaurantUser, type UserRole } from "@/lib/platform";
+import { createUser, deleteUser, invitationNotice, listUsers, resendInvitation, resetPassword, updateUser, type RestaurantUser, type UserRole } from "@/lib/platform";
 import { ErrorText, Field, input, primary, secondary, when } from "./ui";
 
 const ROLES: UserRole[] = ["OWNER", "MANAGER", "STAFF"];
@@ -102,6 +102,15 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
                               void act(u.id, async () => { await updateUser(id, u.id, { isActive: !off }); });
                             }
                           }}>{u.isActive ? "Switch off" : "Switch on"}</button>
+                          {!u.isActive ? (
+                            <button className={secondary + " h-9 text-(--color-danger)"} disabled={busy !== null} onClick={() => {
+                              const lastOwner = u.role === "OWNER" && users.filter((x) => x.role === "OWNER").length === 1;
+                              const warn = lastOwner ? `\n\n${u.email} is this restaurant's ONLY owner: after this nobody will be able to manage it until you add another owner.` : "";
+                              if (window.confirm(`Delete ${u.email} permanently?\n\nTheir account is removed and cannot be brought back (you could invite the address again later as a new account). What they did stays in the history.${warn}`)) {
+                                void act(u.id, async () => { await deleteUser(id, u.id); setNotice({ tone: "ok", text: `${u.email} was deleted.` }); });
+                              }
+                            }}>Delete</button>
+                          ) : null}
                         </div>
                       ) : null}
                     </td>

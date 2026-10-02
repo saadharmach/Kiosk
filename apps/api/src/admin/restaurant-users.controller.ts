@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
@@ -41,6 +41,19 @@ export class RestaurantUsersController {
     @Req() req: Request,
   ) {
     return this.users.update(id, userId, dto, { id: user.sub }, req);
+  }
+
+  /** Permanent. Only for someone who has been switched off. */
+  @Delete(":userId")
+  @Roles("SUPER_ADMIN")
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  remove(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Param("userId", new ParseUUIDPipe()) userId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Req() req: Request,
+  ) {
+    return this.users.remove(id, userId, { id: user.sub }, req);
   }
 
   @Post(":userId/resend-invitation")

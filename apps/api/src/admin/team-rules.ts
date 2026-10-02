@@ -31,3 +31,15 @@ export function checkTeamChange(
 export function checkReset(actorId: string, targetId: string): void {
   if (actorId === targetId) throw new BadRequestException("To change your own password, use Change password.");
 }
+
+/**
+ * Deleting a person for good: never yourself, only after they have been switched off (two deliberate steps), and
+ * never in a way that leaves the platform without an active super admin.
+ */
+export function checkRemove(actorId: string, target: Member, activeSuperAdminsOtherThanTarget: number): void {
+  if (target.id === actorId) throw new BadRequestException("You cannot delete yourself. Ask another super admin to do it.");
+  if (target.isActive) throw new BadRequestException("Switch them off first. A person can only be deleted after they have been switched off.");
+  if (target.role === "SUPER_ADMIN" && activeSuperAdminsOtherThanTarget < 1) {
+    throw new ConflictException("There must always be at least one active super admin.");
+  }
+}

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
@@ -34,6 +34,13 @@ export class TeamController {
   @Patch(":id")
   update(@Param("id", new ParseUUIDPipe()) id: string, @Body() dto: UpdateTeamMemberDto, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
     return this.team.update(id, dto, { id: user.sub }, req);
+  }
+
+  /** Permanent. Only for someone who has been switched off, and never yourself. */
+  @Delete(":id")
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  remove(@Param("id", new ParseUUIDPipe()) id: string, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
+    return this.team.remove(id, { id: user.sub }, req);
   }
 
   @Post(":id/resend-invitation")

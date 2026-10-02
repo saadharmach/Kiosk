@@ -171,6 +171,43 @@ describe("resending an invitation", () => {
   });
 });
 
+describe("deleting a restaurant user for good", () => {
+  const off = { id: "u1", restaurantId: "r1", email: "gone@b.co", role: "OWNER", isActive: false, passwordSetAt: new Date() };
+
+  function withDeletes(users: Record<string, unknown>[]) {
+    const m = setup(users);
+    const prisma = (m.svc as any).prisma;
+    prisma.accountToken.deleteMany = (a: any) => ({ op: "deleteTokens", args: a });
+    prisma.restaurantUser.deleteMany = (a: any) => ({ op: "deleteUser", args: a });
+    return m;
+  }
+
+  it("removes the account and its waiting links together, scoped to this restaurant, and audits it with their address", async () => {
+    const { svc, writes, audits } = withDeletes([off]);
+    assert.deepEqual(await svc.remove("r1", "u1", ACTOR), { removed: true });
+    const ops = writes.filter((w) => ["deleteTokens", "deleteUser"].includes(w.op));
+    assert.deepEqual(ops.map((w) => w.op), ["deleteTokens", "deleteUser"]);
+    assert.deepEqual(ops[0]!.args.where, { realm: "RESTAURANT", restaurantId: "r1", userId: "u1" });
+    assert.deepEqual(ops[1]!.args.where, { id: "u1", restaurantId: "r1" });
+    assert.equal(audits[0].action, "restaurant_user.delete");
+    assert.equal(audits[0].restaurantId, "r1");
+    assert.deepEqual(audits[0].before, { email: "gone@b.co", role: "OWNER" });
+  });
+
+  it("only someone who has been switched off: two deliberate steps", async () => {
+    const { svc, writes } = withDeletes([{ ...off, isActive: true }]);
+    await assert.rejects(svc.remove("r1", "u1", ACTOR), /Switch them off first/);
+    assert.equal(writes.filter((w) => w.op === "deleteUser").length, 0);
+  });
+
+  it("a user of another restaurant cannot be deleted through this one, and an unknown restaurant is not found", async () => {
+    const { svc, writes } = withDeletes([{ ...off, restaurantId: "r2" }]);
+    await assert.rejects(svc.remove("r1", "u1", ACTOR), NotFoundException);
+    await assert.rejects(svc.remove("nope", "u1", ACTOR), NotFoundException);
+    assert.equal(writes.filter((w) => w.op === "deleteUser").length, 0);
+  });
+});
+
 describe("listing", () => {
   it("never returns a password hash and stays inside the restaurant", async () => {
     const { svc, calls } = setup([{ id: "u1", restaurantId: "r1", email: "a@b.test", role: "OWNER", passwordSetAt: new Date() }]);

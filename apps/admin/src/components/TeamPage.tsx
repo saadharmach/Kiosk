@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  createTeamMember, invitationNotice, listTeam, resendTeamInvitation, resetTeamPassword, teamActivity, updateTeamMember,
+  createTeamMember, deleteTeamMember, invitationNotice, listTeam, resendTeamInvitation, resetTeamPassword, teamActivity, updateTeamMember,
   type TeamMember, type TeamRole,
 } from "@/lib/platform";
 import { ErrorText, Field, input, primary, secondary, when } from "./ui";
@@ -109,6 +109,13 @@ export default function TeamPage({ myId }: { myId: string }) {
                             void act(m.id, async () => { await updateTeamMember(m.id, { isActive: !m.isActive }); });
                           }
                         }}>{m.isActive ? "Switch off" : "Switch on"}</button>
+                      ) : null}
+                      {!me && !m.isActive ? (
+                        <button className={secondary + " h-9 text-(--color-danger)"} disabled={busy !== null} onClick={() => {
+                          if (window.confirm(`Delete ${m.email} permanently?\n\nTheir account is removed and cannot be brought back (you could invite the address again later as a new account). What they did stays in the history.`)) {
+                            void act(m.id, async () => { await deleteTeamMember(m.id); setNotice({ tone: "ok", text: `${m.email} was deleted.` }); });
+                          }
+                        }}>Delete</button>
                       ) : null}
                     </div>
                   </td>

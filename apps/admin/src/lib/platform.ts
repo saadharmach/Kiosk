@@ -102,6 +102,8 @@ export const updateUser = (id: string, userId: string, body: { isActive?: boolea
   request<RestaurantUser>(`/admin/restaurants/${id}/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) });
 export const resetPassword = (id: string, userId: string) =>
   request<{ invitation: InvitationResult }>(`/admin/restaurants/${id}/users/${userId}/reset-password`, { method: "POST" });
+export const deleteUser = (id: string, userId: string) =>
+  request<{ removed: boolean }>(`/admin/restaurants/${id}/users/${userId}`, { method: "DELETE" });
 export const resendInvitation = (id: string, userId: string) =>
   request<{ invitation: InvitationResult }>(`/admin/restaurants/${id}/users/${userId}/resend-invitation`, { method: "POST" });
 
@@ -125,6 +127,7 @@ export const createTeamMember = (body: { email: string; role: TeamRole; fullName
 export const updateTeamMember = (id: string, body: { isActive?: boolean; role?: TeamRole; fullName?: string }) =>
   request<TeamMember>(`/admin/team/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const resetTeamPassword = (id: string) => request<{ invitation: InvitationResult }>(`/admin/team/${id}/reset-password`, { method: "POST" });
+export const deleteTeamMember = (id: string) => request<{ removed: boolean }>(`/admin/team/${id}`, { method: "DELETE" });
 export const resendTeamInvitation = (id: string) => request<{ invitation: InvitationResult }>(`/admin/team/${id}/resend-invitation`, { method: "POST" });
 
 /** The sentence shown after an invitation or reset link was (or could not be) sent. */

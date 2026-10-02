@@ -6,7 +6,7 @@ import { Reflector } from "@nestjs/core";
 import { PasswordService } from "../src/auth/password.service.js";
 import { PlatformUserDirectory, STANDING_TTL_MS } from "../src/auth/platform-user-directory.js";
 import { AllowWhilePasswordChangeRequired } from "../src/auth/decorators/allow-while-password-change.decorator.js";
-import { checkReset, checkTeamChange, type Member } from "../src/admin/team-rules.js";
+import { checkRemove, checkReset, checkTeamChange, type Member } from "../src/admin/team-rules.js";
 import { TeamService } from "../src/admin/team.service.js";
 
 Object.assign(process.env, {
@@ -49,6 +49,16 @@ describe("what a platform admin may not do to the team", () => {
   });
 });
 
+describe("deleting a team member for good", () => {
+  it("never yourself, only after switching off, and never the last super admin", () => {
+    assert.throws(() => checkRemove("a", sa("a", { isActive: false }), 2), /cannot delete yourself/);
+    assert.throws(() => checkRemove("a", sa("b"), 2), /Switch them off first/);
+    assert.throws(() => checkRemove("a", sa("b", { isActive: false }), 0), ConflictException);
+    assert.doesNotThrow(() => checkRemove("a", sa("b", { isActive: false }), 1));
+    assert.doesNotThrow(() => checkRemove("a", { id: "s", role: "SUPPORT", isActive: false }, 0));
+  });
+});
+
 describe("TeamService", () => {
   function setup(users: any[], liveLinks: { userId: string }[] = []) {
     const writes: { op: string; args: any }[] = [];
@@ -61,12 +71,13 @@ describe("TeamService", () => {
       platformUser: {
         findMany: async (a: any) => { writes.push({ op: "findMany", args: a }); return rows; },
         findUnique: async (a: any) => rows.find((r) => (a.where.id ? r.id === a.where.id : r.email === a.where.email)) ?? null,
-        count: async (a: any) => rows.filter((r) => r.role === a.where.role && r.isActive === a.where.isActive).length,
+        count: async (a: any) => rows.filter((r) => r.role === a.where.role && r.isActive === a.where.isActive && r.id !== a.where.id?.not).length,
         create: async (a: any) => { writes.push({ op: "create", args: a }); return { id: "new", isActive: true, lastLoginAt: null, lockedUntil: null, createdAt: new Date(), ...a.data, passwordHash: undefined }; },
         update: (a: any) => ({ op: "update", args: a }),
+        delete: (a: any) => ({ op: "deleteUser", args: a }),
       },
       platformSession: { updateMany: (a: any) => ({ op: "revokeSessions", args: a }) },
-      accountToken: { findMany: async () => liveLinks },
+      accountToken: { findMany: async () => liveLinks, deleteMany: (a: any) => ({ op: "deleteTokens", args: a }) },
       auditLog: { findMany: async () => [{ id: "a1", createdAt: new Date(), actorId: "gone", action: "platform_user.create", entityId: "u1" }] },
       $transaction: async (ops: any[]) => { writes.push(...ops); return []; },
     };
@@ -166,6 +177,37 @@ describe("TeamService", () => {
     const list = await svc.list();
     assert.deepEqual(list.map((u) => [u.id, u.invitation]), [["has", "none"], ["waiting", "pending"], ["lapsed", "expired"]]);
     assert.equal(JSON.stringify(list).includes("passwordSetAt"), false);
+  });
+
+  it("removing someone deletes their account and waiting links together, frees nothing else, and is audited with their address", async () => {
+    const { svc, writes, audits, invalidated } = setup([{ id: "admin", role: "SUPER_ADMIN", email: "me@x.co" }, { id: "u1", role: "SUPPORT", email: "gone@x.co", isActive: false }]);
+    assert.deepEqual(await svc.remove("u1", actor), { removed: true });
+    assert.deepEqual(writes.filter((w) => ["deleteTokens", "deleteUser"].includes(w.op)).map((w) => w.op), ["deleteTokens", "deleteUser"]);
+    assert.deepEqual(writes.find((w) => w.op === "deleteTokens")!.args.where, { realm: "PLATFORM", userId: "u1" });
+    assert.deepEqual(writes.find((w) => w.op === "deleteUser")!.args.where, { id: "u1" });
+    assert.deepEqual(invalidated, ["u1"]);
+    assert.equal(audits[0].action, "platform_user.delete");
+    assert.deepEqual(audits[0].before, { email: "gone@x.co", role: "SUPPORT" });
+  });
+
+  it("refuses someone who is still switched on, yourself, the last super admin and an unknown member, writing nothing", async () => {
+    const { svc, writes } = setup([{ id: "admin", role: "SUPER_ADMIN", email: "me@x.co" }, { id: "on", role: "SUPPORT", email: "on@x.co", isActive: true }, { id: "lone", role: "SUPER_ADMIN", email: "lone@x.co", isActive: false }]);
+    await assert.rejects(svc.remove("on", actor), /Switch them off first/);
+    await assert.rejects(svc.remove("admin", actor), BadRequestException);
+    await assert.rejects(svc.remove("nope", actor), NotFoundException);
+    // actor is not in the table as an active super admin: the one switched-off super admin would be the last
+    const solo = setup([{ id: "lone", role: "SUPER_ADMIN", email: "lone@x.co", isActive: false }]);
+    await assert.rejects(solo.svc.remove("lone", { id: "someone" }), ConflictException);
+    assert.equal([...writes, ...solo.writes].filter((w) => ["deleteTokens", "deleteUser"].includes(w.op)).length, 0);
+  });
+
+  it("the team's activity still names a deleted person, from the address the history kept", async () => {
+    const { svc } = setup([{ id: "u1", email: "still@x.co" }]);
+    (svc as any).prisma.auditLog.findMany = async () => [{ id: "a1", createdAt: new Date(), actorId: "u1", action: "platform_user.delete", entityId: "gone-id", before: { email: "gone@x.co", role: "SUPPORT" } }];
+    const [a] = await svc.activity();
+    assert.equal(a!.target, "gone@x.co");
+    (svc as any).prisma.auditLog.findMany = async () => [{ id: "a2", createdAt: new Date(), actorId: "u1", action: "platform_user.create", entityId: "gone-id", before: null, after: { email: "gone@x.co", role: "SUPPORT" } }];
+    assert.equal((await svc.activity())[0]!.target, "gone@x.co");   // even the entry from when they were created
   });
 
   it("the team's activity names who did what, even for someone since removed", async () => {
@@ -304,7 +346,7 @@ describe("changing your own password", () => {
 });
 
 describe("who may reach what", () => {
-  it("the whole team screen is SUPER_ADMIN only, reading included", () => {
+  it("the whole team screen is SUPER_ADMIN only, reading included, deleting too", () => {
     assert.deepEqual(Reflect.getMetadata(ROLES_KEY, TeamController), ["SUPER_ADMIN"]);
   });
   it("only change-password and who-am-I are open to someone who has not chosen a password yet", () => {

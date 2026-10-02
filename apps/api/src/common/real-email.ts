@@ -57,8 +57,14 @@ export async function checkRealEmail(email: string, resolver: MailResolver = dns
   if (offline) return { ok: false, ...offline };
 
   const domain = domainOf(email);
-  const withTimeout = <T>(p: Promise<T>): Promise<T> =>
-    Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(Object.assign(new Error("lookup timed out"), { code: "ETIMEOUT" })), LOOKUP_TIMEOUT_MS).unref?.())]);
+  // A normal timer that is cleared the moment the lookup answers, so nothing is left behind.
+  const withTimeout = <T>(p: Promise<T>): Promise<T> => {
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error("lookup timed out"), { code: "ETIMEOUT" })), LOOKUP_TIMEOUT_MS);
+    });
+    return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+  };
   const noMail = { ok: false as const, reason: "no_mail_server" as const, message: `${domain} cannot receive email. Check the spelling of the address.` };
 
   try {
