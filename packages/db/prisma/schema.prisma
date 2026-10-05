@@ -74,11 +74,11 @@ model Restaurant {
   city         String?
   country      String?
 
-  /// Storage path of the logo in Supabase Storage (not a public URL).
+  /// Storage path of the logo in the media folder (not a public URL).
   logoPath     String?
   primaryColor String?          @db.VarChar(9)
 
-  /// Welcome-screen photos (offers, adverts), shown in turn: paths in Supabase Storage, like logoPath. At most 5.
+  /// Welcome-screen photos (offers, adverts), shown in turn: paths in the media folder, like logoPath. At most 5.
   welcomeImagePaths String[]    @default([])
   /// { fr, en, ar } line under the restaurant name on the welcome screen.
   tagline       Json?
@@ -508,7 +508,7 @@ model ProductPresentation {
    /// { "fr": "…", "en": "…", "ar": "…" }. A new language is data, not a migration.
   displayName  Json?
   description  Json?
-  /// Path in Supabase Storage, not a public URL.
+  /// Path in the media folder, not a public URL.
   imagePath    String?
   isVisible    Boolean  @default(true)
   sortOrder    Int      @default(0)

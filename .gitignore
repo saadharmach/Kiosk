@@ -28,3 +28,7 @@ apps/admin/next-env.d.ts
 .testenv
 .logs/
 apps/admin/tsconfig.tsbuildinfo
+
+# Photos and logos uploaded in development (MEDIA_DIR)
+.media/
+apps/api/.media/
