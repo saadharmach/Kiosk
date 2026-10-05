@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsIn, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
 
 export class TaglineDto {
   @IsOptional() @IsString() @MaxLength(120) fr?: string;
@@ -18,8 +18,9 @@ export class UpdateBrandingDto {
   @IsOptional() @IsString() @MaxLength(300)
   logoPath?: string | null;
 
-  @IsOptional() @IsString() @MaxLength(300)
-  heroImagePath?: string | null;
+  /** The whole list, in the order they are shown. [] removes them all. */
+  @IsOptional() @IsArray() @ArrayMaxSize(5) @IsString({ each: true }) @MaxLength(300, { each: true })
+  welcomeImagePaths?: string[];
 }
 
 export class SignBrandingUploadDto {

@@ -78,8 +78,8 @@ model Restaurant {
   logoPath     String?
   primaryColor String?          @db.VarChar(9)
 
-  /// Welcome-screen hero photo: a path in Supabase Storage, like logoPath.
-  heroImagePath String?
+  /// Welcome-screen photos (offers, adverts), shown in turn: paths in Supabase Storage, like logoPath. At most 5.
+  welcomeImagePaths String[]    @default([])
   /// { fr, en, ar } line under the restaurant name on the welcome screen.
   tagline       Json?
 

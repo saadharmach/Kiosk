@@ -68,7 +68,8 @@ export interface Bootstrap {
     logoPath: string | null;
     /** Public URLs; null until the restaurant uploads them. */
     logoUrl: string | null;
-    heroImageUrl: string | null;
+    /** Welcome-screen photos (offers, adverts), shown in turn. */
+    welcomeImageUrls: string[];
     /** Only the languages that have text. */
     tagline: Partial<Record<"fr" | "en" | "ar", string>>;
     primaryColor: string | null;
@@ -145,6 +146,8 @@ export interface CatalogCategory {
   id: string;
   groupName: string | null;
   name: string;
+  /** The category's photo, set in the back office. */
+  imageUrl?: string | null;
   sortOrder: number;
   visible: boolean;
 }

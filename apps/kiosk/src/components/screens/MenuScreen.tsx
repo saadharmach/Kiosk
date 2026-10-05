@@ -16,6 +16,15 @@ const CHIP_COLORS: [string, string][] = [
   ["#fde9d2", "#7c2d12"], ["#dcfce7", "#14532d"], ["#ede9fe", "#4c1d95"],
 ];
 
+/** A category's photo; a missing or broken one leaves a flat gap, so the list stays aligned. */
+function CategoryPhoto({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <span className="block h-24 w-full shrink-0 bg-(--color-surface-2)" />;
+  // Decorative: the name below carries the meaning.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" onError={() => setFailed(true)} className="h-24 w-full shrink-0 object-cover" />;
+}
+
 function AllergenChip({ a }: { a: CatalogAllergen }) {
   const [bg, fg] = CHIP_COLORS[a.number % CHIP_COLORS.length];
   return (
@@ -62,6 +71,8 @@ export default function MenuScreen({
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [catalog.categories, sellable]);
 
+  // All-or-nothing, as for products: a list where only some categories have a photo reads as broken.
+  const categoryPhotos = showImages && departments.some((c) => c.imageUrl);
   // Departments only: unTill's Group and Category levels are not shown on the kiosk.
   const [categoryId, setCategoryId] = useState<string | null>(departments[0]?.id ?? null);
   const category = departments.find((c) => c.id === categoryId) ?? null;
@@ -102,20 +113,21 @@ export default function MenuScreen({
         ) : null} />
 
       <div className="flex min-h-0 flex-1">
-        <nav aria-label="Categories" className="w-52 shrink-0 overflow-y-auto bg-(--color-line) px-3 py-7 pb-44">
+        <nav aria-label="Categories" className={`w-52 shrink-0 overflow-y-auto bg-(--color-line) px-3 py-7 ${offer ? "pb-[26rem]" : "pb-44"}`}>
           <div className="flex flex-col gap-3">
             {departments.map((c) => (
               <button key={c.id} onClick={() => setCategoryId(c.id)} aria-pressed={c.id === categoryId}
-                className={`min-h-20 rounded-3xl px-5 text-start font-display text-2xl leading-tight font-semibold break-words ${
+                className={`flex min-h-20 flex-col overflow-hidden rounded-3xl text-start font-display text-2xl leading-tight font-semibold break-words ${
                   c.id === categoryId ? "bg-(--color-brand) text-(--color-brand-ink)" : "bg-(--color-surface)"
                 }`}>
-                {c.name}
+                {categoryPhotos ? <CategoryPhoto src={c.imageUrl ?? null} /> : null}
+                <span className={`px-5 ${categoryPhotos ? "py-3" : "my-auto py-2"}`}>{c.name}</span>
               </button>
             ))}
           </div>
         </nav>
 
-        <section className="min-w-0 flex-1 overflow-y-auto px-4 pt-9 pb-44">
+        <section className={`min-w-0 flex-1 overflow-y-auto px-4 pt-9 ${offer ? "pb-[26rem]" : "pb-44"}`}>
           <div className="flex items-baseline justify-between gap-4">
             <h1 className="font-display text-6xl leading-tight font-bold">{category?.name}</h1>
             <span className="shrink-0 text-2xl font-medium text-(--color-ink-muted)">

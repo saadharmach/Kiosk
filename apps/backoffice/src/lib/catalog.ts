@@ -34,6 +34,7 @@ export interface AdminCategory {
   untillId: string;
   posName: string;
   displayName: I18n | null;
+  imageUrl: string | null;
   isVisible: boolean;
   sortOrder: number;
 }
@@ -107,3 +108,16 @@ export const updateCategory = (
     method: "PATCH",
     body: JSON.stringify(body),
   });
+/** Sign, upload straight to storage, then record the path on the category. */
+export async function uploadCategoryImage(slug: string, scope: AdminCategory["scope"], untillId: string, file: File) {
+  const base = `/restaurant/${slug}/catalog/categories/${scope.toLowerCase()}/${untillId}`;
+  const { uploadUrl, path } = await request<{ uploadUrl: string; path: string }>(`${base}/image/sign`, {
+    method: "POST", body: JSON.stringify({ contentType: file.type }),
+  });
+  const res = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+  if (!res.ok) throw new Error(`Upload failed with ${res.status}`);
+  await request(`${base}`, { method: "PATCH", body: JSON.stringify({ imagePath: path }) });
+}
+
+export const clearCategoryImage = (slug: string, scope: AdminCategory["scope"], untillId: string) =>
+  request<{ imagePath: null }>(`/restaurant/${slug}/catalog/categories/${scope.toLowerCase()}/${untillId}/image`, { method: "DELETE" });

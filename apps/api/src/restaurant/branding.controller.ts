@@ -7,9 +7,9 @@ import { SignBrandingUploadDto, UpdateBrandingDto } from "./dto/branding.dto.js"
 
 interface TenantCtx { restaurantId: string; slug: string }
 
-enum Kind { logo = "logo", hero = "hero" }
+enum Kind { logo = "logo", welcome = "welcome" }
 
-/** The restaurant's logo, welcome photo and tagline. */
+/** The restaurant's logo, welcome-screen photos and tagline. */
 @Controller("restaurant/:slug/branding")
 @UseGuards(RestaurantAuthGuard, TenantGuard)
 export class BrandingController {

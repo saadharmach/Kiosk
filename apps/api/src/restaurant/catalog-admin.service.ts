@@ -165,6 +165,7 @@ export class CatalogAdminService {
         displayName: (p?.displayName ?? null) as I18n | null,
         description: (p?.description ?? null) as I18n | null,
         imagePath: p?.imagePath ?? null,
+        imageUrl: this.storage.publicUrl(p?.imagePath ?? null),
         color: p?.color ?? null,
         isVisible: p?.isVisible ?? true,
         sortOrder: p?.sortOrder ?? order,
@@ -190,10 +191,10 @@ export class CatalogAdminService {
         ? await this.prisma.tpapiGroup.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } })
         : await this.prisma.tpapiDepartment.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } });
     if (!exists) throw new NotFoundException(`No such ${scope.toLowerCase()} in this restaurant's catalog`);
-        // Only a path this restaurant's own signed upload produced. Otherwise one
+    // Only a path this restaurant's own signed category upload produced. Otherwise one
     // tenant could reference another's file, or a typo becomes a broken tile.
-    if (dto.imagePath && !dto.imagePath.startsWith(`restaurants/${restaurantId}/`)) {
-      throw new BadRequestException("imagePath must come from a signed upload for this restaurant");
+    if (dto.imagePath && (!dto.imagePath.startsWith(`restaurants/${restaurantId}/categories/`) || dto.imagePath.includes(".."))) {
+      throw new BadRequestException("imagePath must come from a signed category upload for this restaurant");
     }
     const existing = await this.prisma.categoryPresentation.findUnique({
       where: { restaurantId_scope_untillId: { restaurantId, scope, untillId: id } },
@@ -211,11 +212,36 @@ export class CatalogAdminService {
       ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
     };
 
-    return this.prisma.categoryPresentation.upsert({
+    const saved = await this.prisma.categoryPresentation.upsert({
       where: { restaurantId_scope_untillId: { restaurantId, scope, untillId: id } },
       create: { restaurantId, scope, untillId: id, ...data },
       update: data,
     });
+    // A replaced photo is deleted once nothing points at it; a failed delete only leaves an orphan.
+    if (dto.imagePath !== undefined && existing?.imagePath && existing.imagePath !== (dto.imagePath || null)) {
+      await this.storage.remove(existing.imagePath);
+    }
+    return saved;
+  }
+
+  async signCategoryImage(restaurantId: string, scope: "GROUP" | "DEPARTMENT", untillId: string, contentType: string) {
+    const id = BigInt(untillId);
+    const exists =
+      scope === "GROUP"
+        ? await this.prisma.tpapiGroup.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } })
+        : await this.prisma.tpapiDepartment.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } });
+    if (!exists) throw new NotFoundException(`No such ${scope.toLowerCase()} in this restaurant's catalog`);
+    return this.storage.signUpload({ restaurantId, kind: "categories", ownerId: `${scope.toLowerCase()}-${untillId}`, contentType });
+  }
+
+  /** Clears the record first: a visible broken image is worse than an orphan file. */
+  async clearCategoryImage(restaurantId: string, scope: "GROUP" | "DEPARTMENT", untillId: string) {
+    const where = { restaurantId_scope_untillId: { restaurantId, scope, untillId: BigInt(untillId) } };
+    const existing = await this.prisma.categoryPresentation.findUnique({ where, select: { imagePath: true } });
+    if (!existing?.imagePath) return { imagePath: null };
+    await this.prisma.categoryPresentation.update({ where, data: { imagePath: null } });
+    await this.storage.remove(existing.imagePath);
+    return { imagePath: null };
   }
 
   listAllergens(restaurantId: string) {

@@ -6,7 +6,7 @@ import { BrandingService } from "../src/restaurant/branding.service.js";
 const RID = "11111111-1111-4111-8111-111111111111";
 
 function setup(before: Record<string, unknown> = {}, sizes: Record<string, number | null> = {}) {
-  const row: Record<string, unknown> = { id: RID, logoPath: null, heroImagePath: null, tagline: null, primaryColor: null, ...before };
+  const row: Record<string, unknown> = { id: RID, logoPath: null, welcomeImagePaths: [] as string[], tagline: null, primaryColor: null, ...before };
   const updates: { where: Record<string, unknown>; data: Record<string, unknown> }[] = [];
   const removed: string[] = [];
   const prisma = {
@@ -29,7 +29,7 @@ function setup(before: Record<string, unknown> = {}, sizes: Record<string, numbe
 }
 
 const logo = (name = "a.png") => `restaurants/${RID}/branding/logo/${name}`;
-const hero = (name = "h.jpg") => `restaurants/${RID}/branding/hero/${name}`;
+const welcome = (name = "w.jpg") => `restaurants/${RID}/branding/welcome/${name}`;
 const bad = (p: Promise<unknown>, re: RegExp) =>
   assert.rejects(p, (e: { getStatus?: () => number; message: string }) => { assert.equal(e.getStatus?.(), 400); assert.match(e.message, re); return true; });
 
@@ -41,11 +41,11 @@ describe("BrandingService: images", () => {
   });
 
   it("rejects a path that belongs to another restaurant", () =>
-    bad(setup().svc.update(RID, { heroImagePath: "restaurants/22222222-2222-4222-8222-222222222222/branding/hero/x.png" }), /signed hero upload/));
+    bad(setup().svc.update(RID, { welcomeImagePaths: ["restaurants/22222222-2222-4222-8222-222222222222/branding/welcome/x.png"] }), /signed welcome upload/));
 
-  it("rejects a logo path used as the hero, and the other way round", async () => {
-    await bad(setup().svc.update(RID, { heroImagePath: logo() }), /signed hero upload/);
-    await bad(setup().svc.update(RID, { logoPath: hero() }), /signed logo upload/);
+  it("rejects a logo path used as a welcome photo, and the other way round", async () => {
+    await bad(setup().svc.update(RID, { welcomeImagePaths: [logo()] }), /signed welcome upload/);
+    await bad(setup().svc.update(RID, { logoPath: welcome() }), /signed logo upload/);
   });
 
   it("rejects a path that tries to climb out of the folder", () =>
@@ -63,11 +63,11 @@ describe("BrandingService: images", () => {
     assert.deepEqual(removed, [logo("old.png")]);
   });
 
-  it("clears an image and deletes its file", async () => {
-    const { svc, removed, row } = setup({ heroImagePath: hero("old.jpg") });
-    await svc.update(RID, { heroImagePath: null });
-    assert.equal(row.heroImagePath, null);
-    assert.deepEqual(removed, [hero("old.jpg")]);
+  it("clears the logo and deletes its file", async () => {
+    const { svc, removed, row } = setup({ logoPath: logo("old.png") });
+    await svc.update(RID, { logoPath: null });
+    assert.equal(row.logoPath, null);
+    assert.deepEqual(removed, [logo("old.png")]);
   });
 
   it("does not delete the file when the same path is saved again", async () => {
@@ -77,10 +77,10 @@ describe("BrandingService: images", () => {
   });
 
   it("leaves a field alone when it is not sent", async () => {
-    const { svc, row, removed } = setup({ logoPath: logo("keep.png"), heroImagePath: hero("keep.jpg") });
+    const { svc, row, removed } = setup({ logoPath: logo("keep.png"), welcomeImagePaths: [welcome("keep.jpg")] });
     await svc.update(RID, { tagline: { fr: "x" } });
     assert.equal(row.logoPath, logo("keep.png"));
-    assert.equal(row.heroImagePath, hero("keep.jpg"));
+    assert.deepEqual(row.welcomeImagePaths, [welcome("keep.jpg")]);
     assert.deepEqual(removed, []);
   });
 
@@ -88,6 +88,52 @@ describe("BrandingService: images", () => {
     const { svc, updates } = setup();
     await svc.update(RID, { logoPath: logo() });
     assert.deepEqual(updates[0]!.where, { id: RID });
+  });
+});
+
+describe("BrandingService: welcome photos (offers, adverts)", () => {
+  it("saves the list in the order given and returns each photo's public URL", async () => {
+    const { svc, row } = setup();
+    const r = await svc.update(RID, { welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] });
+    assert.deepEqual(row.welcomeImagePaths, [welcome("a.jpg"), welcome("b.jpg")]);
+    assert.deepEqual(r.welcomeImages.map((w) => w.url), [`https://cdn.test/${welcome("a.jpg")}`, `https://cdn.test/${welcome("b.jpg")}`]);
+  });
+  it("adding one keeps the others; a removed one is deleted from storage, a kept one is not", async () => {
+    const { svc, removed, row } = setup({ welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] });
+    await svc.update(RID, { welcomeImagePaths: [welcome("b.jpg"), welcome("c.jpg")] });
+    assert.deepEqual(row.welcomeImagePaths, [welcome("b.jpg"), welcome("c.jpg")]);
+    assert.deepEqual(removed, [welcome("a.jpg")]);
+  });
+  it("reordering checks nothing new and deletes nothing", async () => {
+    // Sizes say "not uploaded" for both: reordering must not ask storage again.
+    const { svc, removed } = setup({ welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] }, { [welcome("a.jpg")]: null, [welcome("b.jpg")]: null });
+    await svc.update(RID, { welcomeImagePaths: [welcome("b.jpg"), welcome("a.jpg")] });
+    assert.deepEqual(removed, []);
+  });
+  it("a photo kept from before still counts, even from the old single-photo folder", async () => {
+    const old = `restaurants/${RID}/branding/hero/old.jpg`;
+    const { svc, row } = setup({ welcomeImagePaths: [old] });
+    await svc.update(RID, { welcomeImagePaths: [old, welcome("new.jpg")] });
+    assert.deepEqual(row.welcomeImagePaths, [old, welcome("new.jpg")]);
+  });
+  it("an empty list removes them all", async () => {
+    const { svc, removed, row } = setup({ welcomeImagePaths: [welcome("a.jpg")] });
+    await svc.update(RID, { welcomeImagePaths: [] });
+    assert.deepEqual(row.welcomeImagePaths, []);
+    assert.deepEqual(removed, [welcome("a.jpg")]);
+  });
+  it("at most 5, no duplicates, and each new one must really be uploaded", async () => {
+    await bad(setup().svc.update(RID, { welcomeImagePaths: ["1", "2", "3", "4", "5", "6"].map((n) => welcome(`${n}.jpg`)) }), /At most 5/);
+    await bad(setup().svc.update(RID, { welcomeImagePaths: [welcome("a.jpg"), welcome("a.jpg")] }), /twice/);
+    await bad(setup({}, { [welcome("none.jpg")]: null }).svc.update(RID, { welcomeImagePaths: [welcome("none.jpg")] }), /not uploaded/);
+    await bad(setup({}, { [welcome("tiny.jpg")]: 8 }).svc.update(RID, { welcomeImagePaths: [welcome("tiny.jpg")] }), /too small/);
+  });
+  it("a path that climbs out of the folder is refused", () =>
+    bad(setup().svc.update(RID, { welcomeImagePaths: [`restaurants/${RID}/branding/welcome/../../products/1/x.png`] }), /signed welcome upload/));
+  it("nothing is deleted when saving fails", async () => {
+    const { svc, removed } = setup({ welcomeImagePaths: [welcome("a.jpg")] }, { [welcome("none.jpg")]: null });
+    await assert.rejects(svc.update(RID, { welcomeImagePaths: [welcome("none.jpg")] }));
+    assert.deepEqual(removed, []);
   });
 });
 

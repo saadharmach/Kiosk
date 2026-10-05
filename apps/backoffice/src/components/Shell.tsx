@@ -10,7 +10,8 @@ import SettingsPage from "./SettingsPage";
 import OrdersPage from "./OrdersPage";
 import BornesPage from "./BornesPage";
 import SuggestionsPage from "./SuggestionsPage";
-const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Settings"] as const;
+import BrandingPage from "./BrandingPage";
+const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Branding", "Settings"] as const;
 
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
@@ -107,6 +108,7 @@ export default function Shell() {
           : section === "Allergens" && slug ? <AllergensPage slug={slug} />
           : section === "Orders" && slug ? <OrdersPage slug={slug} />
           : section === "Bornes" && slug ? <BornesPage slug={slug} />
+          : section === "Branding" && slug ? <BrandingPage slug={slug} />
           : section === "Settings" && slug ? <SettingsPage slug={slug} />
           : <p className="text-(--color-ink-muted)">Coming in the next step.</p>}
         </main>

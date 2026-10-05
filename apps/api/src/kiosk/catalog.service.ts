@@ -76,7 +76,7 @@ export class CatalogService {
         locale: restaurant.locale,
         logoPath: restaurant.logoPath,
         logoUrl: this.storage.publicUrl(restaurant.logoPath),
-        heroImageUrl: this.storage.publicUrl(restaurant.heroImagePath),
+        welcomeImageUrls: restaurant.welcomeImagePaths.map((p) => this.storage.publicUrl(p)).filter((u): u is string => Boolean(u)),
         tagline: readLocalizedMap(restaurant.tagline),
         primaryColor: restaurant.primaryColor,
       },

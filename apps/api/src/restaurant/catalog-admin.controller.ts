@@ -12,6 +12,18 @@ import {
 
 interface TenantCtx { restaurantId: string; slug: string }
 
+function scopeOf(scope: string): "GROUP" | "DEPARTMENT" {
+  const s = scope.toUpperCase();
+  if (s !== "GROUP" && s !== "DEPARTMENT") throw new BadRequestException("scope must be GROUP or DEPARTMENT");
+  return s;
+}
+
+/** unTill ids are numbers; anything else is a bad request, not a crash in BigInt(). */
+function idOf(untillId: string): string {
+  if (!/^\d{1,19}$/.test(untillId)) throw new BadRequestException("untillId must be a number");
+  return untillId;
+}
+
 @Controller("restaurant/:slug/catalog")
 @UseGuards(RestaurantAuthGuard, TenantGuard)
 export class CatalogAdminController {
@@ -50,11 +62,23 @@ export class CatalogAdminController {
     @Param("untillId") untillId: string,
     @Body() dto: UpdateCategoryPresentationDto,
   ) {
-    const s = scope.toUpperCase();
-    if (s !== "GROUP" && s !== "DEPARTMENT") {
-      throw new BadRequestException("scope must be GROUP or DEPARTMENT");
-    }
-    return this.catalog.upsertCategory(tenant.restaurantId, s, untillId, dto);
+    return this.catalog.upsertCategory(tenant.restaurantId, scopeOf(scope), idOf(untillId), dto);
+  }
+
+  @Post("categories/:scope/:untillId/image/sign")
+  @HttpCode(200)
+  signCategoryImage(
+    @Tenant() tenant: TenantCtx,
+    @Param("scope") scope: string,
+    @Param("untillId") untillId: string,
+    @Body() dto: SignImageUploadDto,
+  ) {
+    return this.catalog.signCategoryImage(tenant.restaurantId, scopeOf(scope), idOf(untillId), dto.contentType);
+  }
+
+  @Delete("categories/:scope/:untillId/image")
+  clearCategoryImage(@Tenant() tenant: TenantCtx, @Param("scope") scope: string, @Param("untillId") untillId: string) {
+    return this.catalog.clearCategoryImage(tenant.restaurantId, scopeOf(scope), idOf(untillId));
   }
 
   @Get("allergens")
