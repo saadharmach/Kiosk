@@ -53,7 +53,7 @@ export default function WelcomeScreen({
         {tagline ? <p className="-mt-4 max-w-4xl text-4xl leading-snug text-slate-400">{tagline}</p> : null}
 
         {photos.length ? (
-          <span className="relative block h-104 w-4xl max-w-full overflow-hidden rounded-[2.75rem] shadow-2xl">
+          <span className="relative block aspect-[2/1] w-full max-w-[62.5rem] overflow-hidden rounded-[2.75rem] shadow-2xl">
             {photos.map((src, i) => (
               // Decorative: the name and prompt carry the meaning. All are kept loaded, so the change is a fade, not a blank.
               // eslint-disable-next-line @next/next/no-img-element
