@@ -1,0 +1,25 @@
+[Unit]
+Description=Kiosk API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=kiosk
+Group=kiosk
+WorkingDirectory=/opt/kiosk/current/api
+EnvironmentFile=/etc/kiosk/kiosk.env
+ExecStart=/usr/local/bin/node dist/main.js
+Restart=always
+RestartSec=3
+# A runaway never takes the whole server down with it.
+MemoryHigh=500M
+MemoryMax=700M
+# Only what it needs: its photo folder is the one place it may write.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/kiosk/media
+
+[Install]
+WantedBy=multi-user.target

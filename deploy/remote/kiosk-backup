@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Nightly copy of the kiosk database (run by kiosk-backup.timer). Keeps the last 14.
+set -euo pipefail
+DIR=/var/backups/kiosk
+stamp=$(date +%Y-%m-%d_%H%M)
+sudo -u postgres pg_dump -Fc kiosk > "$DIR/kiosk-$stamp.dump.part"
+mv "$DIR/kiosk-$stamp.dump.part" "$DIR/kiosk-$stamp.dump"
+chown postgres:postgres "$DIR/kiosk-$stamp.dump" && chmod 640 "$DIR/kiosk-$stamp.dump"
+ls -1t "$DIR"/kiosk-*.dump | tail -n +15 | xargs -r rm -f
+echo "Backup written: $DIR/kiosk-$stamp.dump ($(du -h "$DIR/kiosk-$stamp.dump" | cut -f1))"

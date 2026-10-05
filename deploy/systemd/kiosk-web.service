@@ -1,0 +1,26 @@
+[Unit]
+Description=Kiosk web app (the screens customers use)
+After=network-online.target kiosk-api.service
+Wants=network-online.target
+
+[Service]
+User=kiosk
+Group=kiosk
+WorkingDirectory=/opt/kiosk/current/kiosk/apps/kiosk
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+EnvironmentFile=/etc/kiosk/kiosk-web.env
+ExecStart=/usr/local/bin/node server.js
+Restart=always
+RestartSec=3
+MemoryHigh=300M
+MemoryMax=450M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Next keeps a small cache next to the app.
+ReadWritePaths=/opt/kiosk/current/kiosk/apps/kiosk/.next/cache
+
+[Install]
+WantedBy=multi-user.target

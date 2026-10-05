@@ -1,0 +1,7 @@
+[Unit]
+Description=Kiosk database backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kiosk-backup
