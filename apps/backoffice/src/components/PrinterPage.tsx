@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getPrinter, issuePrinterToken, listPrintJobs, savePrinter, testPrint,
+  getPrinter, issuePairingCode, issuePrinterToken, listPrintJobs, savePrinter, testPrint,
   type CodePage, type PrintJobRow, type PrinterView, type SavePrinterBody,
 } from "@/lib/printer";
 
@@ -51,6 +51,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
   const formTouched = useRef(false);
 
   const adopt = useCallback((v: PrinterView) => {
@@ -81,6 +82,19 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
     const id = setInterval(() => { refresh().catch(() => undefined); }, 5000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  // The helper trades the code for its secret: once the server no longer has a waiting code, ours is spent.
+  const waiting = view?.configured ? view.helper.pairingPending : false;
+  // (Only after the server has first reported it waiting: right after issuing, the page still holds the older status.)
+  const sawWaiting = useRef(false);
+  useEffect(() => {
+    if (waiting) sawWaiting.current = true;
+    else if (pairing && sawWaiting.current && new Date(pairing.expiresAt).getTime() > Date.now()) {
+      sawWaiting.current = false;
+      setPairing(null);
+      setNotice("The helper used the code. It is set up and will show as Online in a moment.");
+    }
+  }, [waiting, pairing]);
 
   const edit = (patch: Partial<SavePrinterBody>) => {
     formTouched.current = true;
@@ -114,6 +128,14 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
     if (view?.configured && view.helper.tokenIssuedAt &&
         !window.confirm("This replaces the current token. The helper at the restaurant stops printing until you give it the new one. Continue?")) return;
     setToken((await issuePrinterToken(slug, kioskId)).token);
+    await refresh();
+  });
+
+  const getCode = () => run(async () => {
+    if (view?.configured && view.helper.tokenIssuedAt &&
+        !window.confirm("The helper that is already set up keeps working until the new code is used. Running the setup replaces its secret. Continue?")) return;
+    sawWaiting.current = false;
+    setPairing(await issuePairingCode(slug, kioskId));
     await refresh();
   });
 
@@ -228,38 +250,71 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
         </div>
       </section>
 
-      {/* ---- helper token */}
+      {/* ---- helper setup */}
       <section className={card}>
         <h2 className="mb-1 text-lg font-medium">Print helper</h2>
         <p className="mb-3 text-sm text-(--color-ink-muted)">
           A small program on a computer at the restaurant (on the same network as the printer). It fetches new tickets and
-          sends them to the printer. It signs in with a secret token.
+          sends them to the printer. Setting it up takes one command, with a code from here.
         </p>
-        <button type="button" className={secondary} disabled={busy || !configured} onClick={generateToken}>
-          {configured && helper?.tokenIssuedAt ? "Generate a new token" : "Generate token"}
+        <button type="button" className={primary} disabled={busy || !configured} onClick={getCode}>
+          {pairing ? "Get a new code" : "Set up the helper"}
         </button>
+        {!configured ? <p className={hint}>Save the printer's address first.</p> : null}
         {configured && helper?.tokenIssuedAt ? (
-          <p className={hint}>A token was created {ago(helper.tokenIssuedAt)}. It cannot be shown again.</p>
+          <p className={hint}>A helper was set up {ago(helper.tokenIssuedAt)}. Setting it up again replaces its secret.</p>
         ) : null}
 
-        {token ? (
+        {pairing ? (
           <div className="mt-4 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
-            <p className="mb-2 text-sm font-medium">Copy this token now. It is shown only once.</p>
-            <code className="block overflow-x-auto rounded bg-(--color-surface-2) p-2 text-sm select-all">{token}</code>
+            <p className="text-sm">Your setup code (works once, until {new Date(pairing.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}):</p>
+            <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{pairing.code}</p>
+            <ol className="list-decimal space-y-1 pl-5 text-sm">
+              <li>On the restaurant computer, put the <code>tools/print-helper</code> folder and install <b>Node.js 20 or newer</b> (nodejs.org).</li>
+              <li>Open a terminal in that folder (on Windows: PowerShell with <i>Run as administrator</i>) and run:</li>
+            </ol>
+            <pre className="mt-2 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs select-all">
+{`node src/cli.mjs setup ${typeof window !== "undefined" ? window.location.origin : ""} ${pairing.code}`}
+            </pre>
             <div className="mt-2 flex items-center gap-3">
-              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(token).then(() => setNotice("Token copied."))}>
-                Copy
+              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(
+                `node src/cli.mjs setup ${window.location.origin} ${pairing.code}`).then(() => setNotice("Command copied."))}>
+                Copy the command
               </button>
-              <button type="button" className="underline" onClick={() => setToken(null)}>I have saved it</button>
+              <button type="button" className="underline" onClick={() => setPairing(null)}>Hide</button>
             </div>
-            <p className={`${hint} mt-3`}>On the restaurant computer, run the helper with:</p>
-            <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs">
+            <p className={`${hint} mt-3`}>
+              It saves its settings, checks that the computer can reach the printer, starts itself at every boot and queues a test
+              ticket. This page shows <b>Online</b> when it works. To add another borne's printer to the same computer, run it again
+              with that printer's own code.
+            </p>
+          </div>
+        ) : null}
+
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm text-(--color-ink-muted)">Set up by hand with a token instead</summary>
+          <button type="button" className={`${secondary} mt-3`} disabled={busy || !configured} onClick={generateToken}>
+            {configured && helper?.tokenIssuedAt ? "Generate a new token" : "Generate token"}
+          </button>
+          {token ? (
+            <div className="mt-4 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
+              <p className="mb-2 text-sm font-medium">Copy this token now. It is shown only once.</p>
+              <code className="block overflow-x-auto rounded bg-(--color-surface-2) p-2 text-sm select-all">{token}</code>
+              <div className="mt-2 flex items-center gap-3">
+                <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(token).then(() => setNotice("Token copied."))}>
+                  Copy
+                </button>
+                <button type="button" className="underline" onClick={() => setToken(null)}>I have saved it</button>
+              </div>
+              <p className={`${hint} mt-3`}>On the restaurant computer, run the helper with:</p>
+              <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs">
 {`KIOSK_API_URL=${typeof window !== "undefined" ? window.location.origin : ""}
 PRINT_HELPER_TOKEN=${token}
 node tools/print-helper/src/cli.mjs`}
-            </pre>
-          </div>
-        ) : null}
+              </pre>
+            </div>
+          ) : null}
+        </details>
       </section>
 
       {/* ---- recent jobs */}

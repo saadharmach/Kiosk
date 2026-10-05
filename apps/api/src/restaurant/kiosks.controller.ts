@@ -60,6 +60,14 @@ export class KiosksController {
     return this.printing.issueToken(t.restaurantId, id);
   }
 
+  /** A one-time setup code for this borne's helper. */
+  @Post(":id/printer/pairing")
+  @HttpCode(200)
+  async pairing(@Tenant() t: TenantCtx, @Param("id", new ParseUUIDPipe()) id: string) {
+    await this.kiosks.require(t.restaurantId, id);
+    return this.printing.issuePairingCode(t.restaurantId, id);
+  }
+
   @Post(":id/printer/test")
   @HttpCode(200)
   async test(@Tenant() t: TenantCtx, @Param("id", new ParseUUIDPipe()) id: string) {

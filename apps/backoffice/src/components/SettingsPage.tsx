@@ -86,6 +86,9 @@ export default function SettingsPage({ slug }: { slug: string }) {
       const changed: OrderTypePatch[] = [];
       orderTypes.forEach((d, i) => {
         if (JSON.stringify(d) === JSON.stringify(saved.orderTypes[i])) return;
+        if (!d.salesAreaId) {
+          throw new Error(`${ORDER_TYPE_LABEL[d.orderType]}: first choose its Sales area (the first box of its card), then save. If you do not want to offer it, untick \"Offered on the kiosk\" and leave it as it was.`);
+        }
         changed.push({
           orderType: d.orderType,
           isEnabled: d.isEnabled,

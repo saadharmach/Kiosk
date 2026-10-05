@@ -8,6 +8,7 @@ import { useCart, type CartLine } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
 import ProductSheet from "../ProductSheet";
+import { newId } from "../../lib/uuid";
 
 /** Cart thumbnail that quietly disappears if the image cannot be loaded. */
 function Thumb({ src }: { src: string }) {
@@ -53,7 +54,7 @@ export default function CartScreen({
 
   // One id for this cart. Reused on every retry so a repeated tap or a dropped
   // response can never produce two orders.
-  const clientOrderId = useRef<string>(crypto.randomUUID());
+  const clientOrderId = useRef<string>(newId());
 
   const wire = (): WireCartLine[] =>
     cart.lines.map((l) => ({

@@ -37,3 +37,8 @@ export class JobResultDto {
   @IsOptional() @IsString() @MaxLength(500)
   error?: string;
 }
+
+export class PairDto {
+  @IsString() @MaxLength(40)
+  code!: string;
+}

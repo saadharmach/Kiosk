@@ -8,6 +8,8 @@ import { CreateRestaurantUserDto, UpdateRestaurantUserDto } from "../src/admin/d
 import { UpsertTpapiDto } from "../src/admin/dto/upsert-tpapi.dto.js";
 import { CreateTeamMemberDto, UpdateTeamMemberDto } from "../src/admin/dto/team.dto.js";
 import { ChangePasswordDto } from "../src/auth/dto/change-password.dto.js";
+import { RestaurantLoginDto } from "../src/restaurant-auth/dto/restaurant-login.dto.js";
+import { RestaurantForgotPasswordDto } from "../src/auth/dto/forgot-password.dto.js";
 import { AcceptInviteDto } from "../src/auth/dto/accept-invite.dto.js";
 
 /** The API's own validation (main.ts): a property with no validator is refused, not ignored. */
@@ -72,5 +74,20 @@ describe("the bodies the platform screens send are accepted by the API's validat
     await check(AcceptInviteDto, { token: "t".repeat(43), password: "twelve-chars!" });
     await refused(AcceptInviteDto, { token: "t".repeat(43), password: "eleven-char" });
     await refused(AcceptInviteDto, { token: "t".repeat(43), password: "twelve-chars!", userId: "someone-else" });
+  });
+});
+
+describe("the restaurant address typed at sign-in is not case sensitive", () => {
+  it("a capitalised or padded address still signs in, as the lowercase one", async () => {
+    const got = (await check(RestaurantLoginDto, { slug: " Resto-A ", email: "a@b.co", password: "long-enough-1" })) as { slug: string };
+    assert.equal(got.slug, "resto-a");
+  });
+  it("the same for Forgot password", async () => {
+    const got = (await check(RestaurantForgotPasswordDto, { slug: "Resto-A", email: "a@b.co" })) as { slug: string };
+    assert.equal(got.slug, "resto-a");
+  });
+  it("a really invalid address is still refused", async () => {
+    await refused(RestaurantLoginDto, { slug: "resto a!", email: "a@b.co", password: "long-enough-1" });
+    await refused(RestaurantLoginDto, { slug: 12, email: "a@b.co", password: "long-enough-1" });
   });
 });

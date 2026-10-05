@@ -912,6 +912,11 @@ model Printer {
   helperTokenHash     String?        @unique
   helperTokenIssuedAt DateTime?
 
+  /// SHA-256 of a one-time setup code the restaurant gets in the back office. The helper trades it for a token
+  /// (and it is gone after that, or after 15 minutes). Only one is live per printer: a new one replaces the old.
+  pairingCodeHash     String?        @unique
+  pairingExpiresAt    DateTime?
+
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

@@ -46,7 +46,7 @@ export default function Shell() {
           <p className="mb-6 mt-1 text-sm text-(--color-ink-muted)">For the platform team. Restaurants sign in to their own back office.</p>
 
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="email">Email</label>
-          <input id="email" type="email" required value={form.email} autoComplete="username" className={input + " mb-4"}
+          <input id="email" type="email" required value={form.email} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} className={input + " mb-4"}
             onChange={(e) => setForm({ ...form, email: e.target.value })} />
 
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="password">Password</label>

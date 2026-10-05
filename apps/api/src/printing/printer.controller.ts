@@ -30,6 +30,13 @@ export class PrinterController {
     return this.printing.issueToken(tenant.restaurantId);
   }
 
+  /** A one-time setup code for the helper: the easy way to give it its secret. */
+  @Post("pairing")
+  @HttpCode(200)
+  pairing(@Tenant() tenant: TenantCtx) {
+    return this.printing.issuePairingCode(tenant.restaurantId);
+  }
+
   @Post("test")
   @HttpCode(200)
   test(@Tenant() tenant: TenantCtx) {

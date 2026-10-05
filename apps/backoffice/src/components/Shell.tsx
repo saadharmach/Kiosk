@@ -37,9 +37,12 @@ export default function Shell() {
             setBusy(true);
             setError(null);
             try {
-              await signIn(form.slug.trim(), form.email.trim(), form.password);
+              // Phone keyboards capitalise the first letter; the restaurant address and the email are never case sensitive.
+              await signIn(form.slug.trim().toLowerCase(), form.email.trim().toLowerCase(), form.password);
             } catch (err) {
-              setError((err as Error).message);
+              // The API gives one answer for every kind of mismatch, on purpose; say what to check.
+              const m = (err as Error).message;
+              setError(m === "Invalid credentials" ? "Wrong restaurant address, email or password. Check all three: the address is the short one (like resto-a), not the restaurant's name." : m);
             } finally {
               setBusy(false);
             }
@@ -48,13 +51,14 @@ export default function Shell() {
         >
           <h1 className="mb-6 text-2xl font-semibold">Back office</h1>
 
-          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="slug">Restaurant</label>
-          <input id="slug" required value={form.slug} autoComplete="organization"
+          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="slug">Restaurant address</label>
+          <input id="slug" required value={form.slug} autoComplete="organization" autoCapitalize="none" autoCorrect="off" spellCheck={false}
             onChange={(e) => setForm({ ...form, slug: e.target.value })}
-            className="mb-4 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
+            className="mb-1 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
+          <p className="mb-4 text-xs text-(--color-ink-muted)">The short address of your restaurant (for example resto-a), not its display name. Ask the platform admin if you do not know it.</p>
 
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="email">Email</label>
-          <input id="email" type="email" required value={form.email} autoComplete="username"
+          <input id="email" type="email" required value={form.email} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="mb-4 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
 

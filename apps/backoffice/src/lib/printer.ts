@@ -18,7 +18,7 @@ export type PrinterView =
       port: number | null;
       isEnabled: boolean;
       config: PrinterConfig;
-      helper: { tokenIssuedAt: string | null; online: boolean; lastSeenAt: string | null };
+      helper: { tokenIssuedAt: string | null; online: boolean; lastSeenAt: string | null; pairingPending: boolean };
       lastError: { message: string; at: string | null } | null;
     };
 
@@ -56,6 +56,10 @@ export const savePrinter = (slug: string, body: SavePrinterBody, kioskId?: strin
 /** The token is only ever returned here, once. */
 export const issuePrinterToken = (slug: string, kioskId?: string | null) =>
   request<{ token: string }>(`${base(slug, kioskId)}/token`, { method: "POST" });
+
+/** A one-time setup code for the helper (valid 15 minutes, works once). Returned here only, once. */
+export const issuePairingCode = (slug: string, kioskId?: string | null) =>
+  request<{ code: string; expiresAt: string }>(`${base(slug, kioskId)}/pairing`, { method: "POST" });
 
 export const testPrint = (slug: string, kioskId?: string | null) =>
   request<{ id: string }>(`${base(slug, kioskId)}/test`, { method: "POST" });

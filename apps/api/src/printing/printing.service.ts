@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma, type Printer } from "@prisma/client";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { pickLocalized } from "../common/locale.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { SavePrinterDto } from "./dto.js";
@@ -16,6 +16,23 @@ const RECHECK_MS = 3000;
 const HELPER_ONLINE_SEC = 40;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** A setup code is good for this long, once. */
+export const PAIRING_TTL_MIN = 15;
+/** No 0/O, 1/I/L: the code is read off a screen and typed on another computer. */
+const PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const PAIRING_LENGTH = 8;
+
+export function newPairingCode(): string {
+  const raw = Array.from({ length: PAIRING_LENGTH }, () => PAIRING_ALPHABET[randomInt(PAIRING_ALPHABET.length)]).join("");
+  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
+}
+
+/** Case, dashes and spaces do not matter when typing a code. Returns null when it cannot be a code. */
+export function normalizePairingCode(input: string): string | null {
+  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return raw.length === PAIRING_LENGTH && [...raw].every((c) => PAIRING_ALPHABET.includes(c)) ? raw : null;
+}
 
 /** The parts of an order the ticket needs. Prisma's Decimal columns are read with Number(). */
 export interface LoadedOrder {
@@ -53,7 +70,11 @@ export function summarizePrinter(p: Printer | null, now = Date.now()) {
     port: p.port,
     isEnabled: p.isEnabled,
     config,
-    helper: { tokenIssuedAt: p.helperTokenIssuedAt, online, lastSeenAt: p.lastSeenAt },
+    helper: {
+      tokenIssuedAt: p.helperTokenIssuedAt, online, lastSeenAt: p.lastSeenAt,
+      /** A setup code was issued and is still waiting to be used. */
+      pairingPending: Boolean(p.pairingCodeHash && p.pairingExpiresAt && p.pairingExpiresAt.getTime() > now),
+    },
     lastError: p.lastErrorMessage ? { message: p.lastErrorMessage, at: p.lastErrorAt } : null,
   };
 }
@@ -123,6 +144,56 @@ export class PrintingService {
     return { token };
   }
 
+  /**
+   * A one-time code for setting up the helper without copying a secret by hand. Shown once; only its hash is kept.
+   * A newer code replaces an older unused one.
+   */
+  async issuePairingCode(restaurantId: string, kioskId: string | null = null) {
+    const printer = await this.findPrinter(restaurantId, kioskId);
+    if (!printer) throw new BadRequestException("Save the printer's address first, then set up the helper.");
+    const code = newPairingCode();
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MIN * 60_000);
+    await this.prisma.printer.updateMany({
+      where: { id: printer.id, restaurantId },
+      data: { pairingCodeHash: sha256(normalizePairingCode(code)!), pairingExpiresAt: expiresAt },
+    });
+    return { code, expiresAt };
+  }
+
+  /**
+   * The helper trades its setup code for the printer's secret. The code works once and only before it expires; a
+   * wrong, used or expired one all get the same answer, so nothing can be learned by guessing. This replaces the
+   * printer's current secret, exactly as "generate a new token" does.
+   */
+  async redeemPairingCode(input: string) {
+    const bad = () => new BadRequestException("This setup code is not valid (it may have expired or been used). Get a new one in the back office.");
+    const code = normalizePairingCode(input);
+    if (!code) throw bad();
+    const hash = sha256(code);
+    const printer = await this.prisma.printer.findUnique({ where: { pairingCodeHash: hash } });
+    if (!printer) throw bad();
+    const token = `pht_${randomBytes(32).toString("base64url")}`;
+    // One atomic step, scoped to the printer's restaurant: two helpers racing with the same code cannot both win.
+    const won = await this.prisma.printer.updateMany({
+      where: { id: printer.id, restaurantId: printer.restaurantId, pairingCodeHash: hash, pairingExpiresAt: { gt: new Date() } },
+      data: { pairingCodeHash: null, pairingExpiresAt: null, helperTokenHash: sha256(token), helperTokenIssuedAt: new Date() },
+    });
+    if (won.count !== 1) throw bad();
+    const [restaurant, kiosk] = await Promise.all([
+      this.prisma.restaurant.findUniqueOrThrow({ where: { id: printer.restaurantId }, select: { name: true } }),
+      printer.kioskId
+        ? this.prisma.kiosk.findFirst({ where: { id: printer.kioskId, restaurantId: printer.restaurantId }, select: { name: true } })
+        : null,
+    ]);
+    return {
+      token,
+      printerId: printer.id,
+      label: kiosk ? `${restaurant.name} - ${kiosk.name}` : restaurant.name,
+      host: printer.address,
+      port: printer.port,
+    };
+  }
+
   /** `kioskId` undefined: every ticket of the restaurant. null: the default printer's. An id: that borne's. */
   listJobs(restaurantId: string, limit = 20, kioskId?: string | null) {
     return this.prisma.printJob.findMany({
@@ -153,14 +224,20 @@ export class PrintingService {
   }
 
   async enqueueTest(restaurantId: string, kioskId: string | null = null) {
-    const [printer, kiosk] = await Promise.all([
-      this.findPrinter(restaurantId, kioskId),
-      kioskId ? this.prisma.kiosk.findFirst({ where: { id: kioskId, restaurantId }, select: { name: true } }) : null,
-    ]);
+    const printer = await this.findPrinter(restaurantId, kioskId);
     if (!printer) throw new BadRequestException("Save the printer's address first.");
-    const restaurant = await this.prisma.restaurant.findUniqueOrThrow({
-      where: { id: restaurantId }, select: { name: true, timezone: true, settings: { select: { ticketFooterText: true } } },
-    });
+    return this.queueTest(printer);
+  }
+
+  /** The test ticket for a printer we already have (the helper asks for one for its own printer after setup). */
+  async queueTest(printer: Printer) {
+    const { restaurantId, kioskId } = printer;
+    const [kiosk, restaurant] = await Promise.all([
+      kioskId ? this.prisma.kiosk.findFirst({ where: { id: kioskId, restaurantId }, select: { name: true } }) : null,
+      this.prisma.restaurant.findUniqueOrThrow({
+        where: { id: restaurantId }, select: { name: true, timezone: true, settings: { select: { ticketFooterText: true } } },
+      }),
+    ]);
     return this.enqueue(printer, "TEST", null, {
       restaurantName: restaurant.name,
       reference: "TEST",

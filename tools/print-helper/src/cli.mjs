@@ -1,40 +1,36 @@
 #!/usr/bin/env node
-import fs from "node:fs";
-import { sendToPrinter, startHelper } from "./helper.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { readConfigFile, resolveSettings } from "./config.mjs";
+import { sendToPrinter } from "./helper.mjs";
+import { installService, uninstallService } from "./service.mjs";
+import { runSetup } from "./setup.mjs";
+import { supervise } from "./supervisor.mjs";
 
-const DEFAULT_CONFIG = new URL("../helper.config.json", import.meta.url);
+const CLI = fileURLToPath(import.meta.url);
+const DIR = path.resolve(path.dirname(CLI), "..");
+const DEFAULT_CONFIG = path.join(DIR, "helper.config.json");
 
 const HELP = `Kiosk print helper
 
 Runs at the restaurant and prints customer tickets on the network printer.
 
-Settings come from helper.config.json (next to package.json) or from environment variables.
-An environment variable wins over the file.
-
-  apiUrl        / KIOSK_API_URL         address of the kiosk API, e.g. https://api.example.com
-  token         / PRINT_HELPER_TOKEN    the secret shown once in the back office (Printer > Print helper)
-  pollIntervalMs / POLL_INTERVAL_MS     how often to ask for tickets (default 2000)
+  node src/cli.mjs setup <API address> <setup code>
+        First-time setup of one printer (both are shown in the back office, printer > "Set up the helper").
+        Saves the settings, checks the printer, starts the helper at boot, queues a test ticket.
+        Run it again with another code to add another borne's printer to the same helper.
+        --no-service  do not register the start at boot      --no-test  do not queue a test ticket
 
   node src/cli.mjs                       run the helper
-  node src/cli.mjs --config FILE         use another config file
+  node src/cli.mjs install-service       start at boot (without pairing again)
+  node src/cli.mjs uninstall-service     stop starting at boot
+  node src/cli.mjs --config FILE         use another settings file (to run or set up; the start at boot always uses the default one)
   node src/cli.mjs --printer HOST[:PORT] print a self-test page straight to a printer, no API needed
-`;
 
-/** Reads the config file if there is one. A file that exists but cannot be read is an error, not silence. */
-function readConfigFile(path) {
-  let text;
-  try {
-    text = fs.readFileSync(path, "utf8");
-  } catch (e) {
-    if (e.code === "ENOENT") return { file: null, values: {} };
-    throw new Error(`Cannot read ${path}: ${e.message}`);
-  }
-  try {
-    return { file: path, values: JSON.parse(text) };
-  } catch (e) {
-    throw new Error(`${path} is not valid JSON: ${e.message}`);
-  }
-}
+Settings live in helper.config.json (next to package.json); setup writes it. The older form still works:
+apiUrl + token, or the environment variables KIOSK_API_URL and PRINT_HELPER_TOKEN (they win over the file),
+POLL_INTERVAL_MS (default 2000).
+`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
@@ -66,29 +62,48 @@ if (i !== -1) {
 }
 
 const ci = args.indexOf("--config");
-let config;
+const configPath = ci !== -1 ? args[ci + 1] : DEFAULT_CONFIG;
+if (ci !== -1 && !configPath) { console.error("Usage: --config FILE"); process.exit(2); }
+
+const command = args.find((a, n) => !a.startsWith("--") && args[n - 1] !== "--config");
+
+if (command === "setup") {
+  const [, apiUrl, code] = args.filter((a, n) => !a.startsWith("--") && args[n - 1] !== "--config");
+  process.exit(await runSetup({
+    apiUrl, code, configPath: path.resolve(configPath), cli: CLI, dir: DIR,
+    service: !args.includes("--no-service"), test: !args.includes("--no-test"),
+  }));
+}
+if (command === "install-service" || command === "uninstall-service") {
+  const r = command === "install-service" ? installService({ cli: CLI, dir: DIR }) : uninstallService({});
+  console.log(r.message);
+  process.exit(r.ok ? 0 : 1);
+}
+if (command) {
+  console.error(`Unknown command "${command}". Run with --help.`);
+  process.exit(2);
+}
+
+let settings;
 try {
-  config = readConfigFile(ci !== -1 ? args[ci + 1] : DEFAULT_CONFIG);
-  if (ci !== -1 && !config.file) throw new Error(`Config file not found: ${args[ci + 1]}`);
+  const file = readConfigFile(configPath);
+  if (ci !== -1 && !file.file) throw new Error(`Config file not found: ${configPath}`);
+  settings = resolveSettings(file.values);
 } catch (e) {
   console.error(e.message);
   process.exit(2);
 }
-
-const apiUrl = process.env.KIOSK_API_URL || config.values.apiUrl;
-const token = process.env.PRINT_HELPER_TOKEN || config.values.token;
-const intervalMs = Number(process.env.POLL_INTERVAL_MS || config.values.pollIntervalMs) || 2000;
-if (!apiUrl || !token) {
-  console.error("The API address and the token are both required: set them in helper.config.json or as KIOSK_API_URL and PRINT_HELPER_TOKEN. Run with --help for details.");
+if (!settings.apiUrl || settings.printers.length === 0) {
+  console.error("Nothing to do yet: run the setup command from the back office (node src/cli.mjs setup <API address> <code>), or set the API address and the token in helper.config.json. Run with --help for details.");
   process.exit(2);
 }
-if (!/^https?:\/\//i.test(apiUrl)) {
-  console.error(`The API address must start with http:// or https:// (got "${apiUrl}")`);
+if (!/^https?:\/\//i.test(settings.apiUrl)) {
+  console.error(`The API address must start with http:// or https:// (got "${settings.apiUrl}")`);
   process.exit(2);
 }
 
-log("INFO", `Print helper started, talking to ${apiUrl}`);
-const helper = startHelper({ apiUrl, token, intervalMs, log });
+log("INFO", `Print helper started, talking to ${settings.apiUrl}`);
+const helper = supervise({ configPath, log });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
@@ -97,5 +112,5 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     process.exit(0);
   });
 }
-// The loop catches its own errors; this is only the last line of defence.
+// The loops catch their own errors; this is only the last line of defence.
 process.on("unhandledRejection", (e) => log("ERROR", `Unhandled: ${e?.message ?? e}`));

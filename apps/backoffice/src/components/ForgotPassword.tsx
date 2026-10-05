@@ -35,9 +35,9 @@ export default function ForgotPassword({ onBack }: { onBack: () => void }) {
         >
           <p className="mb-6 mt-1 text-sm text-(--color-ink-muted)">Enter your restaurant and your email and we will send you a link to choose a new password.</p>
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="forgot-slug">Restaurant</label>
-          <input id="forgot-slug" required value={f.slug} autoComplete="organization" className={input + " mb-4"} onChange={(e) => setF({ ...f, slug: e.target.value })} />
+          <input id="forgot-slug" required value={f.slug} autoComplete="organization" autoCapitalize="none" autoCorrect="off" spellCheck={false} className={input + " mb-4"} onChange={(e) => setF({ ...f, slug: e.target.value })} />
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="forgot-email">Email</label>
-          <input id="forgot-email" type="email" required autoComplete="username" value={f.email} className={input + " mb-6"} onChange={(e) => setF({ ...f, email: e.target.value })} />
+          <input id="forgot-email" type="email" required autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={f.email} className={input + " mb-6"} onChange={(e) => setF({ ...f, email: e.target.value })} />
           {error ? <p role="alert" className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
           <button type="submit" disabled={busy} className="h-11 w-full rounded-lg bg-(--color-brand) font-medium text-(--color-brand-ink) disabled:opacity-50">{busy ? "Sending…" : "Send me a link"}</button>
           <button type="button" onClick={onBack} className="mt-4 text-sm underline">Back to sign in</button>

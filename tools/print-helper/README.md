@@ -31,16 +31,64 @@ node src/cli.mjs --printer 192.168.1.50
 Use the printer's IP (add `:PORT` if it is not 9100). The printer should print "Kiosk print helper. The printer is
 reachable." and cut. If it does not, fix that before going further (see Troubleshooting).
 
-## 2. Set up the printer in the back office
+## 2. Save the printer in the back office
 
-1. Back office > **Printer**.
-2. Enter the printer's **address** and **port**, leave *automatic printing* on, choose the *character set*, **Save**.
-3. Click **Generate token** and **copy it now**. It is shown only once.
-4. Click **Print a test ticket**. It waits in the queue until the helper is running.
+Back office > **Bornes**. Open the borne (or the **Default printer**), enter the printer's **address** and **port**, leave
+*automatic printing* on, choose the *character set*, **Save printer**.
 
-## 3. Configure the helper
+Each borne has its own printer and its own helper secret, so tickets from a borne print where that borne is. The
+*Default printer* takes orders from a machine with no borne, and from a borne whose own printer is missing or off.
 
-In the helper folder, copy `helper.config.example.json` to `helper.config.json` and fill it in:
+## 3. Set up the helper with one command
+
+1. In the back office, under that printer's **Print helper**, click **Set up the helper**. A code like `K7QF-92XM` appears
+   (it works once and expires after 15 minutes), with the exact command to run.
+2. On the restaurant computer, in the helper folder, run that command:
+
+```
+node src/cli.mjs setup https://your-back-office-address K7QF-92XM
+```
+
+On Windows run it in PowerShell opened with **Run as administrator** (needed to start at boot). It does everything:
+
+- trades the code for the printer's secret (the secret is never shown on screen),
+- writes `helper.config.json` (readable by its owner only),
+- checks that this computer can reach the printer,
+- registers the start at boot and starts the helper (Windows: a scheduled task; Linux: a systemd user service),
+- queues a test ticket.
+
+The back office shows the helper as **Online** and the test ticket prints within a few seconds. Lines marked `!!` in the
+output say what still needs attention (printer not reachable, no permission to start at boot, ...); the pairing itself
+stays done.
+
+**Several bornes on one computer:** run the same command again with the other borne's own code. The running helper notices
+the new printer by itself (within about 10 seconds) and serves all of them. Each log line carries its printer's name.
+
+**Setting it up again** (new computer, lost config): get a new code and run the command. It replaces that printer's
+secret, so the old installation stops printing. Re-running with the same printer on the same computer just refreshes it.
+
+Other commands: `node src/cli.mjs install-service` / `uninstall-service` (the start at boot only), `--no-service` and
+`--no-test` on `setup`, `--help`.
+
+> **Not tried yet on real restaurant machines:** the Linux start at boot was tried on a development PC (it starts, prints,
+> comes back after being killed, and uninstalls); the Windows task was only checked up to the administrator-rights message.
+> After the first real setup, reboot the computer once to prove that tickets still print.
+> Linux: the service is a *user* service; setup also runs `loginctl enable-linger` so that it starts without anyone logged
+> in, and tells you to run it with `sudo` if that is not allowed. macOS is not supported for the start at boot: run
+> `node src/cli.mjs` by hand.
+
+## 4. Run it by hand (without the start at boot)
+
+```
+node src/cli.mjs
+```
+
+You should see `Print helper started` and `Serving <printer>`, then the test ticket printing. Stop it with Ctrl+C.
+
+## 5. Setting up with a token instead (older way)
+
+In the back office open *Set up by hand with a token instead* > **Generate token** and copy it (shown once). Then either put
+it in `helper.config.json`:
 
 ```json
 {
@@ -50,29 +98,13 @@ In the helper folder, copy `helper.config.example.json` to `helper.config.json` 
 }
 ```
 
-`apiUrl` is the address of the kiosk **API** (ask whoever deployed it). The file holds a secret: do not share it or put
-it in version control (it is already ignored by git).
+or use environment variables (`KIOSK_API_URL`, `PRINT_HELPER_TOKEN`, `POLL_INTERVAL_MS`; they win over the file). This form
+serves one printer and can sit next to the `printers` list that `setup` writes. To start it at boot use
+`node src/cli.mjs install-service`.
 
-You can use environment variables instead (`KIOSK_API_URL`, `PRINT_HELPER_TOKEN`, `POLL_INTERVAL_MS`). If both are set,
-the environment variable wins.
+Hand-made recipes, if you prefer them to `install-service`:
 
-## 4. Run it
-
-```
-node src/cli.mjs
-```
-
-You should see `Print helper started`, then the test ticket printing, and the back office should show the helper as
-**Online**. Stop it with Ctrl+C.
-
-## 5. Make it start by itself
-
-The helper must survive reboots. Choose the one that matches the computer.
-
-> These service recipes have **not been tested on real machines** yet. Try them once while you are on site, and reboot
-> the computer to prove that tickets still print.
-
-### Windows (Task Scheduler, no extra software)
+### Windows (Task Scheduler)
 
 Open PowerShell **as Administrator** and run (change the two paths if needed; find node with `where node`):
 
@@ -91,12 +123,10 @@ Register-ScheduledTask -TaskName "Kiosk Print Helper" -Action $action -Trigger $
 Start-ScheduledTask -TaskName "Kiosk Print Helper"
 ```
 
-It starts at boot without anyone logging in, restarts itself if it ever stops, and writes its log to
-`C:\kiosk-print-helper\helper.log`. To remove it: `Unregister-ScheduledTask -TaskName "Kiosk Print Helper" -Confirm:$false`.
+Its log is `helper.log` in the helper folder; it grows slowly (a few lines per ticket), so archive it once in a while.
+To remove it: `Unregister-ScheduledTask -TaskName "Kiosk Print Helper" -Confirm:$false`.
 
-`helper.log` grows over time. It is small (a few lines per ticket), but delete or archive it once in a while.
-
-### Linux (systemd)
+### Linux (systemd, system-wide)
 
 Save as `/etc/systemd/system/kiosk-print-helper.service` (adjust the paths and the user):
 
@@ -125,12 +155,12 @@ journalctl -u kiosk-print-helper -f      # the log
 
 ## Day to day
 
-- **Status:** Back office > Printer shows *Online* while the helper is running, the last contact, the last printing
+- **Status:** Back office > Bornes > (the borne) shows *Online* while the helper is running, the last contact, the last printing
   error, and the recent tickets. A ticket that keeps failing is retried 5 times (waiting a little longer each time) and
   then shows as **FAILED** with the reason. Open the order and use **Print ticket** to print it again.
 - **Reprint** any time from an order's page.
-- **New token:** *Generate a new token* in the back office, put it in `helper.config.json`, restart the helper. The old
-  token stops working immediately. Do this if the config file might have leaked or the computer is replaced.
+- **New secret:** get a new setup code and run `setup` again (or *Generate a new token* and put it in the config file). The old
+  secret stops working immediately. Do this if the config file might have leaked or the computer is replaced.
 - **Update the helper:** replace the `src` folder with the new one and restart it. Tickets are built by the API, so
   layout changes do not need a helper update.
 
@@ -140,7 +170,7 @@ journalctl -u kiosk-print-helper -f      # the log
 |---|---|
 | `Connection refused by 192.168.1.50:9100` | The printer is off, or the port is wrong (some models use a different one, see the printer's self-test sheet). |
 | `Cannot reach 192.168.1.50:9100` or a timeout | Wrong IP, the printer is on another network, or a firewall blocks it. Ping it from the helper computer. |
-| `The API rejected the helper token` | The token was regenerated or mistyped. Generate a new one and update the config. |
+| `The API rejected the helper token` | The token was regenerated or mistyped. Get a new setup code and run `setup` again. |
 | `Cannot reach the API at ... (ENOTFOUND / ECONNREFUSED)` | Wrong `apiUrl`, or the computer has no internet. |
 | Helper shows *Offline* in the back office | It is not running, or cannot reach the API. Check `helper.log`. |
 | Accents print as strange symbols | Change the *Character set* in the back office and print another test ticket (try PC858, then PC437, then Windows-1252). |
@@ -151,7 +181,7 @@ journalctl -u kiosk-print-helper -f      # the log
 ## Checklist for the first real printer
 
 1. `node src/cli.mjs --printer <ip>` prints the test page and cuts.
-2. Back office: address and port saved, token generated, helper started, status **Online**.
+2. Back office: address and port saved, then **Set up the helper** and the `setup` command run; status **Online**.
 3. **Print a test ticket**: check the width (nothing cut off), the accents (é è à ç ô ù œ €), the large number, and the cut.
 4. Place a real order on the kiosk and confirm the ticket prints **by itself**, within a few seconds.
 5. Switch the printer off, place an order, switch it on: the ticket must print by itself once the printer is back, and the
