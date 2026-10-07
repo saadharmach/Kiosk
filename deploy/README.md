@@ -68,6 +68,24 @@ It builds the committed code in a clean copy (never your working folder), upload
 the database, switches over, and checks the new version answers. If it does not, the previous version is put
 back by itself (database changes are not undone, so keep migrations additive).
 
+## Alerts by email
+
+The server emails `ALERT_EMAIL` (set in `deploy/config.sh`; by default the same as `CERT_EMAIL`) through Brevo when:
+
+| | checked |
+|---|---|
+| the API or the kiosk app does not answer, or the database is unreachable | every 5 minutes |
+| the API or the kiosk app keeps crashing (3+ restarts between two checks) | every 5 minutes |
+| the disk is 85% full or more | every 5 minutes |
+| an https certificate ends in less than 14 days (renewal keeps failing) | every 5 minutes |
+| no database backup in the last 26 hours | every 5 minutes |
+| the nightly backup fails | at once |
+
+A problem is mailed once it has been seen twice in a row (so a restart or a deploy never mails anyone), again every
+6 hours while it lasts, and a "Resolved" mail follows when it is gone. Remember to allow the server's IP in Brevo, or
+the alerts cannot leave either. To see what the watchdog does: `journalctl -t kiosk-alert` and
+`systemctl list-timers kiosk-watch`. To try the mail: `kiosk-alert "Test" "Hello"` on the server.
+
 ## Good to know
 
 - The nginx site files (`/etc/nginx/sites-available/kiosk-*.conf`) are written only the first time, because

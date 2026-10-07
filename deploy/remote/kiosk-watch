@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# The kiosk server's watchdog (kiosk-watch.timer runs it every 5 minutes). Emails through kiosk-alert when
+# something is wrong — once per problem, again every 6 hours while it lasts, and once when it is resolved.
+# A problem only counts once it has been seen on two runs in a row, so a restart or a blip never mails anyone.
+set -uo pipefail
+STATE=${KIOSK_WATCH_STATE:-/var/lib/kiosk/watch}
+REMIND_SEC=${KIOSK_WATCH_REMIND_SEC:-21600}
+ENV_FILE=/etc/kiosk/kiosk.env
+mkdir -p "$STATE"
+set -a; . "$ENV_FILE" 2>/dev/null; set +a
+API_PORT="${PORT:-3105}"; WEB_PORT="$(sed -n 's/^PORT=//p' /etc/kiosk/kiosk-web.env 2>/dev/null)"; WEB_PORT="${WEB_PORT:-3102}"
+now=$(date +%s)
+seen=()
+
+# problem <key> <subject> <details>: report it (subject to the rules above).
+problem() {
+  local key="$1" subject="$2" details="$3" f="$STATE/$1"
+  seen+=("$key")
+  if [ ! -f "$f" ]; then echo "pending $now 0 $subject" > "$f"; return; fi
+  read -r state since last _ < "$f"
+  if [ "$state" = pending ] || [ $((now - last)) -ge "$REMIND_SEC" ]; then
+    [ "$state" = pending ] && since=$now
+    kiosk-alert "$subject" "$details
+
+Since: $(date -d "@$since" '+%Y-%m-%d %H:%M') (server time). This email repeats every $((REMIND_SEC / 3600)) hours while the problem lasts." \
+      && echo "active $since $now $subject" > "$f"
+  fi
+}
+
+# --- the API and the kiosk app answer
+api="$(curl -s -m 8 "http://127.0.0.1:$API_PORT/api/health" || true)"
+if [[ "$api" != *'"status":"ok"'* ]]; then
+  problem api-down "The API does not answer" "http://127.0.0.1:$API_PORT/api/health answered: ${api:-nothing}
+Kiosks cannot load menus or take orders while this lasts.
+
+Last log lines:
+$(journalctl -u kiosk-api -n 20 --no-pager 2>/dev/null)"
+elif [[ "$api" == *'"database":"'* && "$api" != *'"database":"ok"'* ]]; then
+  problem db-down "The database does not answer" "The API runs but cannot reach PostgreSQL: $api
+$(systemctl status postgresql --no-pager 2>/dev/null | head -5)"
+fi
+web="$(curl -s -m 8 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$WEB_PORT/" || true)"
+if ! [[ "$web" =~ ^[234] ]]; then
+  problem web-down "The kiosk app does not answer" "http://127.0.0.1:$WEB_PORT/ answered ${web:-nothing}. Customers see an error on the kiosks.
+
+Last log lines:
+$(journalctl -u kiosk-web -n 20 --no-pager 2>/dev/null)"
+fi
+
+# --- a service that keeps crashing (it restarts by itself, so it may answer between crashes)
+for unit in kiosk-api kiosk-web; do
+  n="$(systemctl show -p NRestarts --value "$unit" 2>/dev/null || echo 0)"; n="${n:-0}"
+  before="$(cat "$STATE/.restarts-$unit" 2>/dev/null || echo "$n")"
+  echo "$n" > "$STATE/.restarts-$unit"
+  if [ $((n - before)) -ge 3 ]; then
+    problem "$unit-crashing" "$unit keeps crashing" "It restarted $((n - before)) times in the last few minutes ($n since it was started).
+
+Last log lines:
+$(journalctl -u "$unit" -n 30 --no-pager 2>/dev/null)"
+  fi
+done
+
+# --- disk
+used="$(df --output=pcent / | tail -1 | tr -dc 0-9)"
+if [ "${used:-0}" -ge "${KIOSK_WATCH_DISK_PCT:-85}" ]; then
+  problem disk-full "The disk is ${used}% full" "Free space on / is running out. The biggest folders:
+$(du -xsh /var/lib/kiosk/media /var/backups/kiosk /var/log /opt/kiosk/releases /var/lib/postgresql 2>/dev/null | sort -rh)"
+fi
+
+# --- https certificates (they renew by themselves; this catches a renewal that keeps failing)
+for cert in /etc/letsencrypt/live/*/cert.pem; do
+  [ -f "$cert" ] || continue
+  end="$(date -d "$(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)" +%s 2>/dev/null || echo 0)"
+  days=$(( (end - now) / 86400 ))
+  if [ "$days" -lt 14 ]; then
+    name="$(basename "$(dirname "$cert")")"
+    problem "cert-$name" "The https certificate for $name ends in $days days" "It should have renewed by itself. Try: certbot renew --dry-run
+$(journalctl -u certbot -n 15 --no-pager 2>/dev/null)"
+  fi
+done
+
+# --- last night's backup
+latest="$(ls -1t /var/backups/kiosk/kiosk-*.dump 2>/dev/null | head -1)"
+if [ -z "$latest" ] || [ $((now - $(stat -c %Y "$latest"))) -gt $((26 * 3600)) ]; then
+  problem backup-old "No recent database backup" "The newest backup is ${latest:-missing}. Backups run every night at 03:30.
+$(journalctl -u kiosk-backup -n 15 --no-pager 2>/dev/null)"
+fi
+
+# --- anything seen before and not now: resolved (a mail only if one was sent about it)
+for f in "$STATE"/*; do
+  [ -f "$f" ] || continue
+  key="$(basename "$f")"
+  [[ " ${seen[*]} " == *" $key "* ]] && continue
+  read -r state since last subject < "$f"
+  [ "$state" = active ] && kiosk-alert "Resolved: ${subject:-$key}" "This is working again. It was reported since $(date -d "@$since" '+%Y-%m-%d %H:%M') (server time)."
+  rm -f "$f"
+done
+exit 0

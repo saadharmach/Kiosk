@@ -47,6 +47,7 @@ mkdir -p "$OUT/kiosk/apps/kiosk/.next" && cp -r apps/kiosk/.next/static "$OUT/ki
 cp -r apps/backoffice/out "$OUT/backoffice"
 cp -r apps/admin/out "$OUT/admin"
 mkdir -p "$OUT/deploy" && cp -r deploy/config.sh deploy/remote deploy/systemd deploy/nginx "$OUT/deploy/"
+bash "$ROOT/deploy/remote/write-resolved-config.sh" "$OUT/deploy/config.resolved.sh"
 echo "$REV $(git log -1 --format=%s | cut -c1-80)" > "$OUT/REVISION"
 du -sh "$OUT" | awk '{print "Release size: " $1}'
 

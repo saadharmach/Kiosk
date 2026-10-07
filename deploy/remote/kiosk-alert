@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Sends one alert email:   kiosk-alert "<subject>" "<text>"
+# Uses the Brevo (SMTP) settings in /etc/kiosk/kiosk.env and plain curl, so it works even when the app is down.
+# ALERT_EMAIL is who gets it. ALERT_TRANSPORT=file:<path> writes the mail to a file instead (for testing).
+set -uo pipefail
+ENV_FILE=/etc/kiosk/kiosk.env
+subject="${1:?subject}"; text="${2:-}"
+set -a; . "$ENV_FILE" 2>/dev/null; set +a
+host="$(hostname)"
+logger -t kiosk-alert -- "$subject"
+
+to="${ALERT_EMAIL:-}"
+if [ -z "$to" ]; then logger -t kiosk-alert "No ALERT_EMAIL set: nobody was emailed."; exit 0; fi
+from_addr="$(printf '%s' "${MAIL_FROM:-}" | sed -E 's/.*<([^>]+)>.*/\1/; s/^"//; s/"$//')"
+[ -n "$from_addr" ] || from_addr="$to"
+
+msg="$(mktemp)"; cfg="$(mktemp)"; trap 'rm -f "$msg" "$cfg"' EXIT
+chmod 600 "$cfg"
+{
+  printf 'From: Kiosk server <%s>\r\nTo: <%s>\r\nSubject: [Kiosk %s] %s\r\n' "$from_addr" "$to" "$host" "$subject"
+  printf 'Date: %s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n' "$(date -R)"
+  printf '%s\n\n-- \nSent by kiosk-alert on %s at %s.\n' "$text" "$host" "$(date '+%Y-%m-%d %H:%M %Z')" | sed 's/$/\r/'
+} > "$msg"
+
+case "${ALERT_TRANSPORT:-smtp}" in
+  file:*) cat "$msg" >> "${ALERT_TRANSPORT#file:}"; echo >> "${ALERT_TRANSPORT#file:}"; exit 0 ;;
+esac
+
+[ -n "${SMTP_HOST:-}" ] || { logger -t kiosk-alert "No SMTP_HOST: cannot email $to."; exit 1; }
+# The password goes through a private file, never the command line (which every user can see).
+printf 'user = "%s:%s"\n' "${SMTP_USER:-}" "${SMTP_PASS:-}" > "$cfg"
+if [ "${SMTP_SECURE:-false}" = true ]; then url="smtps://$SMTP_HOST:${SMTP_PORT:-465}"; tls=(); else url="smtp://$SMTP_HOST:${SMTP_PORT:-587}"; tls=(--ssl-reqd); fi
+if ! curl -sS --max-time 30 "${tls[@]}" --url "$url" -K "$cfg" --mail-from "$from_addr" --mail-rcpt "$to" -T "$msg" 2>/tmp/kiosk-alert.err; then
+  logger -t kiosk-alert "Could not email $to: $(tail -1 /tmp/kiosk-alert.err)"; exit 1
+fi

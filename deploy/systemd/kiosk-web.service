@@ -2,6 +2,8 @@
 Description=Kiosk web app (the screens customers use)
 After=network-online.target kiosk-api.service
 Wants=network-online.target
+# Never give up restarting: the watchdog emails when it keeps crashing.
+StartLimitIntervalSec=0
 
 [Service]
 User=kiosk

@@ -6,6 +6,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/config.sh"
 [[ "$DEPLOY_HOST" != *NEW_SERVER_IP* ]] || { echo "Set DEPLOY_HOST in deploy/config.sh (root@<server ip>) first."; exit 1; }
 # tar rather than rsync: a fresh server may not have rsync yet (the setup installs it).
-tar -C "$HERE" --exclude='*.md' -czf - . | ssh "$DEPLOY_HOST" 'rm -rf /root/kiosk-deploy && mkdir -p /root/kiosk-deploy && tar -xzf - -C /root/kiosk-deploy'
+STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
+cp -r "$HERE/." "$STAGE/" && rm -f "$STAGE"/*.md
+bash "$HERE/remote/write-resolved-config.sh" "$STAGE/config.resolved.sh"
+tar -C "$STAGE" -czf - . | ssh "$DEPLOY_HOST" 'rm -rf /root/kiosk-deploy && mkdir -p /root/kiosk-deploy && tar -xzf - -C /root/kiosk-deploy'
 
 ssh -t "$DEPLOY_HOST" "bash /root/kiosk-deploy/remote/server-setup.sh"

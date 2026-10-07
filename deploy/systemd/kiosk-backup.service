@@ -1,6 +1,7 @@
 [Unit]
 Description=Kiosk database backup
 After=postgresql.service
+OnFailure=kiosk-alert@%n.service
 
 [Service]
 Type=oneshot

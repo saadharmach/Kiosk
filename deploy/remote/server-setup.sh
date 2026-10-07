@@ -84,15 +84,19 @@ set_default ADMIN_APP_URL "https://$ADMIN_DOMAIN"
 set_default CORS_ORIGINS "https://$KIOSK_DOMAIN,https://$BACKOFFICE_DOMAIN,https://$ADMIN_DOMAIN"
 # A fresh signing key for this server: everyone signs in once more after the move, nothing else changes.
 set_default JWT_SECRET "$(openssl rand -hex 48)"
+[ -n "${ALERT_EMAIL:-}" ] && set_default ALERT_EMAIL "$ALERT_EMAIL"
 printf 'PORT=%s\n' "$KIOSK_PORT" > /etc/kiosk/kiosk-web.env && chmod 644 /etc/kiosk/kiosk-web.env
 echo "Still to come from your PC (push-secrets.sh): $(for k in ENCRYPTION_KEY SMTP_HOST SMTP_PASS MAIL_FROM; do grep -q "^$k=" "$ENV_FILE" || printf '%s ' "$k"; done)"
 
 say "Services"
-install -m 644 "$HERE"/systemd/kiosk-*.service "$HERE"/systemd/kiosk-backup.timer /etc/systemd/system/
-install -m 755 "$HERE/remote/kiosk-backup" /usr/local/bin/kiosk-backup
+install -m 644 "$HERE"/systemd/kiosk-*.service "$HERE"/systemd/kiosk-*.timer /etc/systemd/system/
+install -m 755 "$HERE/remote/kiosk-backup" "$HERE/remote/kiosk-alert" "$HERE/remote/kiosk-watch" /usr/local/bin/
+install -d -m 700 /var/lib/kiosk/watch
 systemctl daemon-reload
 systemctl enable kiosk-api kiosk-web >/dev/null
-systemctl enable --now kiosk-backup.timer >/dev/null
+systemctl enable --now kiosk-backup.timer kiosk-watch.timer >/dev/null
+grep -q '^ALERT_EMAIL=.' "$ENV_FILE" && echo "Alerts go to $(sed -n 's/^ALERT_EMAIL=//p' "$ENV_FILE")." \
+  || echo "No ALERT_EMAIL yet: alerts are only logged (set ALERT_EMAIL or CERT_EMAIL in deploy/config.sh and run this again)."
 echo "kiosk-api and kiosk-web start after the first deploy."
 
 say "nginx"
