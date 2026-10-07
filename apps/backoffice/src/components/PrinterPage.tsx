@@ -257,9 +257,14 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
           A small program on a computer at the restaurant (on the same network as the printer). It fetches new tickets and
           sends them to the printer. Setting it up takes one command, with a code from here.
         </p>
-        <button type="button" className={primary} disabled={busy || !configured} onClick={getCode}>
-          {pairing ? "Get a new code" : "Set up the helper"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <a href="/downloads/kiosk-print-helper.zip" download className={`${secondary} inline-flex items-center`}>
+            Download the helper (zip)
+          </a>
+          <button type="button" className={primary} disabled={busy || !configured} onClick={getCode}>
+            {pairing ? "Get a new code" : "Set up the helper"}
+          </button>
+        </div>
         {!configured ? <p className={hint}>Save the printer's address first.</p> : null}
         {configured && helper?.tokenIssuedAt ? (
           <p className={hint}>A helper was set up {ago(helper.tokenIssuedAt)}. Setting it up again replaces its secret.</p>
@@ -270,8 +275,9 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
             <p className="text-sm">Your setup code (works once, until {new Date(pairing.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}):</p>
             <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{pairing.code}</p>
             <ol className="list-decimal space-y-1 pl-5 text-sm">
-              <li>On the restaurant computer, put the <code>tools/print-helper</code> folder and install <b>Node.js 20 or newer</b> (nodejs.org).</li>
-              <li>Open a terminal in that folder (on Windows: PowerShell with <i>Run as administrator</i>) and run:</li>
+              <li>On the restaurant computer, install <b>Node.js 20 or newer</b> (nodejs.org, the LTS version), if it is not there yet.</li>
+              <li><a href="/downloads/kiosk-print-helper.zip" download className="underline">Download the helper</a> and unzip it somewhere it will stay (for example <code>C:\kiosk-print-helper</code>).</li>
+              <li>Open a terminal in the unzipped <code>kiosk-print-helper</code> folder (on Windows: PowerShell with <i>Run as administrator</i>) and run:</li>
             </ol>
             <pre className="mt-2 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs select-all">
 {`node src/cli.mjs setup ${typeof window !== "undefined" ? window.location.origin : ""} ${pairing.code}`}

@@ -22,7 +22,9 @@ kiosk ── order ──> API ──(ticket queued)──> print helper ──(
 
 ## 1. Check the printer first
 
-Copy the `tools/print-helper` folder to the computer (for example to `C:\kiosk-print-helper`). In a terminal inside it:
+Get the helper on that computer: in the back office, open the printer (Bornes > the borne, or Default printer) and click
+**Download the helper (zip)**. Unzip it somewhere it will stay (for example `C:\kiosk-print-helper`); it unzips into a
+`kiosk-print-helper` folder. In a terminal inside that folder:
 
 ```
 node src/cli.mjs --printer 192.168.1.50
