@@ -55,6 +55,7 @@ type Dict = {
   chosenCount: string; edit: string; saveChanges: string;
   suggestTitle: string; noThanks: string; added: string; done: string;
   unavailableTitle: string; unavailableText: string;
+  startOrder: string; startHint: string; discover: string; fromPrice: string; needHelp: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -89,6 +90,7 @@ export const STRINGS: Record<Locale, Dict> = {
     suggestTitle: "Souhaitez-vous ajouter… ?", noThanks: "Non merci", added: "Ajouté", done: "Terminé",
     unavailableTitle: "Momentanément indisponible",
     unavailableText: "Nous ne pouvons pas prendre de commande sur cette borne pour le moment. Merci de vous adresser à un membre de notre équipe.",
+    startOrder: "Commencer ma commande", startHint: "Touchez le bouton et laissez-vous tenter.", discover: "À découvrir", fromPrice: "Dès", needHelp: "Besoin d’aide ?",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -120,6 +122,7 @@ export const STRINGS: Record<Locale, Dict> = {
     suggestTitle: "Would you like to add…?", noThanks: "No thanks", added: "Added", done: "Done",
     unavailableTitle: "Temporarily unavailable",
     unavailableText: "We can't take orders on this kiosk right now. Please ask a member of our staff.",
+    startOrder: "Start my order", startHint: "Tap the button and treat yourself.", discover: "Discover", fromPrice: "From", needHelp: "Need help?",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -151,6 +154,7 @@ export const STRINGS: Record<Locale, Dict> = {
     suggestTitle: "هل تودّ إضافة…؟", noThanks: "لا، شكرًا", added: "تمت الإضافة", done: "تم",
     unavailableTitle: "غير متاح مؤقتًا",
     unavailableText: "لا يمكننا استلام الطلبات على هذه الشاشة حاليًا. يُرجى التوجّه إلى أحد موظفينا.",
+    startOrder: "ابدأ طلبي", startHint: "المس الزر واستمتع.", discover: "اكتشف", fromPrice: "ابتداءً من", needHelp: "تحتاج مساعدة؟",
   },
 };
 

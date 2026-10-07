@@ -35,7 +35,7 @@ export default function StatusScreen({
 
         {secondary ? (
           <button onClick={secondary.onClick}
-            className="px-8 py-5 font-display text-3xl font-semibold text-slate-700 underline decoration-2 underline-offset-8">
+            className="px-8 py-5 font-display text-3xl font-semibold text-(--color-ink-muted) underline decoration-2 underline-offset-8">
             {secondary.label}
           </button>
         ) : null}

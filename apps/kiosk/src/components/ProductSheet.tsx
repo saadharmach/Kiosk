@@ -76,7 +76,7 @@ export default function ProductSheet({
   /** A radio circle for single picks, a square tick for "choose N". */
   const marker = (on: boolean, square: boolean) => (
     <span className={`flex size-10 shrink-0 items-center justify-center border-[3px] bg-white ${square ? "rounded-lg" : "rounded-full"} ${
-      on ? "border-(--color-brand-deep)" : "border-slate-400"
+      on ? "border-(--color-brand-deep)" : "border-(--color-ink-muted)"
     }`}>
       {on ? (
         square
@@ -88,7 +88,7 @@ export default function ProductSheet({
 
   const card = (on: boolean) =>
     `flex min-h-28 items-center gap-4 rounded-3xl border-[3px] px-6 text-start ${
-      on ? "border-(--color-brand) bg-(--color-brand-soft)" : "border-(--color-line) bg-slate-50"
+      on ? "border-(--color-brand) bg-(--color-brand-soft)" : "border-(--color-line) bg-(--color-page)"
     }`;
 
   return (
@@ -96,7 +96,7 @@ export default function ProductSheet({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
       <div className="relative flex max-h-[92dvh] w-full max-w-225 flex-col overflow-hidden rounded-[3rem] bg-(--color-surface) shadow-2xl">
         <button onClick={onClose} aria-label={t.close}
-          className="absolute end-7 top-7 z-10 flex size-22 items-center justify-center rounded-full bg-(--color-navy)/85 text-white">
+          className="absolute end-7 top-7 z-10 flex size-22 items-center justify-center rounded-full bg-black/55 text-white">
           <Icon name="close" className="size-10" strokeWidth={2.4} />
         </button>
 
@@ -225,7 +225,7 @@ export default function ProductSheet({
         <div className="flex shrink-0 items-center justify-between gap-6 border-t-2 border-(--color-line) px-12 py-8">
           <div className="flex items-center gap-5" role="group" aria-label={t.quantity}>
             <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="−"
-              className="flex size-24 items-center justify-center rounded-full border-2 border-slate-300 bg-(--color-page)">
+              className="flex size-24 items-center justify-center rounded-full border-2 border-(--color-line) bg-(--color-page)">
               <Icon name="minus" className="size-10" strokeWidth={2.4} />
             </button>
             <span className="min-w-16 text-center font-display text-6xl font-bold tabular-nums">{qty}</span>

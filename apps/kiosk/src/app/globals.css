@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
 @theme static {
-  /* Accent. Overridden per restaurant from Restaurant.primaryColor (see lib/theme.ts). */
-  --color-brand: #f59e0b;
-  --color-brand-ink: #0f172a;
+  /* Accent (the big buttons). Overridden per restaurant from Restaurant.primaryColor (see lib/theme.ts). */
+  --color-brand: #f5c842;
+  --color-brand-ink: #14110d;
 
-  --color-navy: #0f172a;
-  --color-navy-2: #1e293b;
-  --color-page: #f1f5f9;
+  /* Warm, light and calm: cream page, white bars and cards, near-black text, red for prices. */
+  --color-page: #f7f3ec;
+  --color-chrome: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-2: #eef2f7;
-  --color-ink: #0f172a;
-  --color-ink-muted: #475569;
-  --color-line: #e2e8f0;
+  --color-surface-2: #f1ebe1;
+  --color-ink: #1f1c18;
+  --color-ink-muted: #6b655d;
+  --color-line: #e6ded1;
+  --color-price: #c8372d;
   --color-danger: #b91c1c;
   --color-danger-soft: #fee2e2;
   --color-success: #059669;

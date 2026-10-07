@@ -1,12 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { LOCALES, LOCALE_NAMES, STRINGS, localized, type Locale } from "@/i18n";
-import type { Bootstrap } from "@/lib/api";
-import { Icon, LogoTile } from "../icons";
+import { useEffect, useRef, useState } from "react";
+import { LOCALES, LOCALE_NAMES, STRINGS, localized, money, type Locale } from "@/i18n";
+import type { Bootstrap, WelcomeSlide } from "@/lib/api";
+import { Icon } from "../icons";
 
-/** How long each welcome photo stays before the next one fades in. */
-const SLIDE_MS = 6000;
+/** How long a photo stays before the next slide. A video stays until it has played to its end. */
+const PHOTO_MS = 6000;
+/** A video that never reports its end (a broken file, a stream) still moves on after this long. */
+const VIDEO_MAX_MS = 90_000;
+/** How long the help notice stays up. */
+const HELP_MS = 7000;
+
+/** One advert: the photo or the video filling the whole frame. Only the slide on show plays. */
+function Slide({ slide, active, onEnded, onError }: { slide: WelcomeSlide; active: boolean; onEnded: () => void; onError: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    if (active) {
+      v.currentTime = 0;
+      // A kiosk may refuse to start a video by itself; the slide then simply moves on after its time.
+      v.play().catch(() => undefined);
+    } else {
+      v.pause();
+    }
+  }, [active]);
+  const cls = `absolute inset-0 size-full object-cover transition-opacity duration-1000 ${active ? "opacity-100" : "opacity-0"}`;
+  return slide.kind === "video" ? (
+    <video ref={video} src={slide.url} muted playsInline preload="auto" onEnded={onEnded} onError={onError} className={cls} />
+  ) : (
+    // Decorative: the texts over it carry the meaning.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={slide.url} alt="" onError={onError} className={cls} />
+  );
+}
 
 export default function WelcomeScreen({
   boot, locale, onLocale, onStart,
@@ -17,69 +45,127 @@ export default function WelcomeScreen({
   onStart: () => void;
 }) {
   const t = STRINGS[locale];
-  const tagline = localized(boot.restaurant.tagline, locale);
-  // The restaurant's photos (offers, adverts) in turn. One that will not load is dropped, not shown broken.
+  const r = boot.restaurant;
+  const headline = localized(r.tagline, locale);
+  const subtitle = localized(r.subtitle, locale);
+
+  // The adverts in turn; one that will not load is dropped, not shown broken.
   const [failed, setFailed] = useState<string[]>([]);
-  const photos = boot.restaurant.welcomeImageUrls.filter((u) => !failed.includes(u));
+  const slides = r.welcomeSlides.filter((s) => !failed.includes(s.url));
   const [shown, setShown] = useState(0);
+  const current = slides.length ? shown % slides.length : -1;
+  const slide = current >= 0 ? slides[current]! : null;
+  const next = () => setShown((n) => n + 1);
   useEffect(() => {
-    if (photos.length < 2) return;
-    const id = setInterval(() => setShown((n) => n + 1), SLIDE_MS);
-    return () => clearInterval(id);
-  }, [photos.length]);
-  const current = photos.length ? shown % photos.length : -1;
-  // The prompt in the two other languages, so a foreign visitor still sees it.
-  const otherPrompts = LOCALES.filter((l) => l !== locale).map((l) => STRINGS[l].tapToStart).join(" • ");
+    if (!slide) return;
+    // A single photo stays; a single video plays again from the start.
+    if (slides.length === 1 && slide.kind === "image") return;
+    const id = setTimeout(next, slide.kind === "video" ? VIDEO_MAX_MS : PHOTO_MS);
+    return () => clearTimeout(id);
+  }, [slide, slides.length, shown]);
+
+  const [languages, setLanguages] = useState(false);
+  const [help, setHelp] = useState(false);
+  useEffect(() => {
+    if (!help) return;
+    const id = setTimeout(() => setHelp(false), HELP_MS);
+    return () => clearTimeout(id);
+  }, [help]);
+
+  const nextLocale = LOCALES[(LOCALES.indexOf(locale) + 1) % LOCALES.length]!;
+  const product = slide?.product ?? null;
 
   return (
-    <main className="flex min-h-dvh flex-col bg-(--color-navy) text-white">
-      <div role="group" aria-label="Language" className="flex justify-center gap-3 px-8 pt-14">
-        {LOCALES.map((l) => (
-          <button key={l} onClick={() => onLocale(l)} aria-pressed={l === locale}
-            className={`h-16 rounded-full border-2 px-7 font-display text-2xl font-semibold ${
-              l === locale
-                ? "border-(--color-brand) bg-(--color-brand) text-(--color-brand-ink)"
-                : "border-slate-600 bg-(--color-navy-2)"
-            }`}>
-            {LOCALE_NAMES[l]}
-          </button>
-        ))}
+    <main className="flex h-dvh flex-col bg-(--color-chrome) text-(--color-ink)">
+      {/* ---- top bar */}
+      <div className="flex h-28 shrink-0 items-center justify-between bg-(--color-page) px-14">
+        <button onClick={() => onLocale(nextLocale)} aria-label={LOCALE_NAMES[nextLocale]}
+          className="flex items-center gap-3 font-display text-3xl font-semibold">
+          <Icon name="globe" className="size-9" />
+          <span>{locale.toUpperCase()}</span>
+        </button>
+        {r.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={r.logoUrl} alt={r.name} className="h-18 max-w-60 object-contain" />
+        ) : null}
       </div>
 
-      {/* The whole area is the start button: a kiosk should never hide the way in. */}
-      <button onClick={onStart} className="flex flex-1 flex-col items-center justify-center gap-10 p-10 text-center">
-        <LogoTile className="size-52 rounded-[3.25rem]" iconClass="size-28" />
-        <h1 className="font-display text-8xl leading-none font-bold">{boot.restaurant.name}</h1>
-        {tagline ? <p className="-mt-4 max-w-4xl text-4xl leading-snug text-slate-400">{tagline}</p> : null}
-
-        {photos.length ? (
-          <span className="relative block aspect-[2/1] w-full max-w-[62.5rem] overflow-hidden rounded-[2.75rem] shadow-2xl">
-            {photos.map((src, i) => (
-              // Decorative: the name and prompt carry the meaning. All are kept loaded, so the change is a fade, not a blank.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={src} src={src} alt="" onError={() => setFailed((f) => [...f, src])}
-                className={`absolute inset-0 size-full object-cover transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`} />
-            ))}
-            {photos.length > 1 ? (
-              <span className="absolute inset-x-0 bottom-5 flex justify-center gap-3" aria-hidden="true">
-                {photos.map((src, i) => (
-                  <span key={src} className={`size-4 rounded-full ${i === current ? "bg-white" : "bg-white/40"}`} />
-                ))}
-              </span>
-            ) : null}
-          </span>
+      {/* ---- the advert. Tapping it starts too (a kiosk never hides the way in); the button below is the named way. */}
+      <div onClick={onStart} className="relative min-h-0 flex-1 cursor-pointer overflow-hidden bg-(--color-page) text-start">
+        {slides.map((s, i) => (
+          <Slide key={s.url} slide={s} active={i === current}
+            onEnded={slides.length > 1 ? next : () => setShown((n) => n + slides.length)}
+            onError={() => setFailed((f) => [...f, s.url])} />
+        ))}
+        {/* Keeps the texts readable on any photo. */}
+        {slides.length ? (
+          <span className="absolute inset-x-0 top-0 h-[55%] bg-gradient-to-b from-(--color-page)/90 via-(--color-page)/45 to-transparent" />
         ) : null}
 
-        <span className={`flex flex-col items-center gap-6 ${photos.length ? "mt-6" : "mt-12"}`}>
-          <span className="flex size-40 items-center justify-center rounded-full bg-(--color-navy-2)">
-            <span className="flex size-28 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
-              <Icon name="hand" className="size-14" strokeWidth={1.8} />
+        <span className="absolute inset-x-0 top-0 flex flex-col gap-5 px-14 pt-14">
+          <span className="font-display text-3xl font-semibold tracking-[0.12em] uppercase">{r.name}</span>
+          {headline ? <span className="max-w-[52rem] font-display text-8xl leading-[1.05] font-bold">{headline}</span> : null}
+          {subtitle ? <span className="max-w-[52rem] text-4xl leading-snug text-(--color-ink-muted)">{subtitle}</span> : null}
+        </span>
+
+        {product ? (
+          <span className="absolute start-14 bottom-14 flex max-w-[40rem] flex-col items-start gap-3 rounded-[2rem] bg-(--color-surface) p-9 shadow-2xl">
+            <span className="rounded-xl bg-(--color-brand-soft) px-4 py-2 text-2xl font-semibold">{t.discover}</span>
+            <span className="font-display text-4xl leading-tight font-bold">{localized(product.names, locale) ?? product.name}</span>
+            <span className="font-display text-6xl font-bold tabular-nums text-(--color-price)">
+              {product.fromPrice ? `${t.fromPrice} ` : ""}{money(product.price, boot.restaurant.currency, locale)}
             </span>
           </span>
-          <span className="font-display text-7xl font-bold">{t.tapToStart}</span>
-          <span className="text-3xl text-(--color-brand)">{otherPrompts}</span>
-        </span>
-      </button>
+        ) : null}
+      </div>
+
+      {/* ---- which slide */}
+      <div className="flex h-16 shrink-0 items-center justify-center gap-3 bg-(--color-page)" aria-hidden="true">
+        {slides.length > 1 ? slides.map((s, i) => (
+          <span key={s.url} className={`h-3 rounded-full transition-all ${i === current ? "w-14 bg-(--color-price)" : "w-3 bg-(--color-line)"}`} />
+        )) : null}
+      </div>
+
+      {/* ---- the way in */}
+      <div className="flex shrink-0 flex-col gap-6 px-14 pt-10 pb-8">
+        <button onClick={onStart}
+          className="flex h-28 items-center justify-center gap-5 rounded-[1.75rem] bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) shadow-lg">
+          <span>{t.startOrder}</span>
+          <Icon name="hand" className="size-11" strokeWidth={1.9} />
+        </button>
+        <p className="text-center text-3xl text-(--color-ink-muted)">{t.startHint}</p>
+
+        <div className="relative mt-4 flex items-center justify-between">
+          <button onClick={() => setLanguages((v) => !v)} aria-expanded={languages}
+            className="flex items-center gap-3 py-3 text-3xl">
+            <Icon name="globe" className="size-8" />
+            <span>{LOCALE_NAMES[locale]}</span>
+          </button>
+          {languages ? (
+            <span role="menu" className="absolute start-0 bottom-full mb-3 flex flex-col overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-surface) shadow-xl">
+              {LOCALES.map((l) => (
+                <button key={l} role="menuitemradio" aria-checked={l === locale} onClick={() => { onLocale(l); setLanguages(false); }}
+                  className={`px-10 py-6 text-start text-3xl ${l === locale ? "bg-(--color-brand-soft) font-semibold" : ""}`}>
+                  {LOCALE_NAMES[l]}
+                </button>
+              ))}
+            </span>
+          ) : null}
+          <button onClick={() => setHelp(true)} className="py-3 text-3xl text-(--color-ink-muted)">{t.needHelp}</button>
+        </div>
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/nexborn.png" alt="NEXBORN, by POS & SOFT Distribution" className="mx-auto mt-2 h-14 w-auto" />
+      </div>
+
+      {help ? (
+        <button onClick={() => setHelp(false)} className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-14">
+          <span role="status" className="flex items-center gap-5 rounded-[2rem] bg-(--color-surface) px-10 py-8 text-3xl font-medium shadow-2xl">
+            <Icon name="info" className="size-10 shrink-0" />
+            {t.helpNotice}
+          </span>
+        </button>
+      ) : null}
     </main>
   );
 }

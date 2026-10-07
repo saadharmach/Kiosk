@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { after, before, describe, it } from "node:test";
-import { MAX_IMAGE_BYTES, StorageService, isMediaPath, sniffImageType } from "../src/common/storage.service.js";
+import { MAX_IMAGE_BYTES, StorageService, isMediaPath, sniffMediaType } from "../src/common/storage.service.js";
 
 const R = "11111111-1111-4111-8111-111111111111";
 let dir: string;
@@ -55,8 +55,8 @@ describe("photos on the server's disk", () => {
   it("the type must be the one signed for, and the bytes must really be that image", async () => {
     const s = await signed("image/png");
     await assert.rejects(svc().receive(tokenOf(s.uploadUrl), "image/jpeg", Readable.from(JPG)), /expects image\/png/);
-    await assert.rejects(svc().receive(tokenOf(s.uploadUrl), "image/png", Readable.from(Buffer.from("<html><script>alert(1)</script></html>".padEnd(2000)))), /not the image it claims/);
-    await assert.rejects(svc().receive(tokenOf(s.uploadUrl), "image/png", Readable.from(JPG)), /not the image it claims/);
+    await assert.rejects(svc().receive(tokenOf(s.uploadUrl), "image/png", Readable.from(Buffer.from("<html><script>alert(1)</script></html>".padEnd(2000)))), /not the image or video it claims/);
+    await assert.rejects(svc().receive(tokenOf(s.uploadUrl), "image/png", Readable.from(JPG)), /not the image or video it claims/);
     assert.equal(await svc().objectSize(s.path), null);
     assert.ok(!filesIn(dir).some((f) => f.includes(".part-")), "no half-written file is left behind");
   });
@@ -102,11 +102,29 @@ describe("photos on the server's disk", () => {
     }
   });
 
-  it("recognises the four image types by their first bytes", () => {
-    assert.equal(sniffImageType(PNG), "image/png");
-    assert.equal(sniffImageType(JPG), "image/jpeg");
-    assert.equal(sniffImageType(Buffer.from("RIFF\0\0\0\0WEBPVP8 ", "latin1")), "image/webp");
-    assert.equal(sniffImageType(Buffer.from("\0\0\0\x1cftypavif\0\0", "latin1")), "image/avif");
-    assert.equal(sniffImageType(Buffer.from("<svg xmlns=")), null);
+  it("videos: only for the welcome slides, up to 50 MB, and they must really be videos", async () => {
+    await assert.rejects(svc().signUpload({ restaurantId: R, kind: "products", ownerId: "42", contentType: "video/mp4" }), /Unsupported file type/);
+    await assert.rejects(svc().signUpload({ restaurantId: R, kind: "branding", ownerId: "logo", contentType: "video/mp4" }), /Unsupported file type/);
+    const MP4 = Buffer.concat([Buffer.from("\0\0\0\x20ftypisom\0\0\x02\0", "latin1"), Buffer.alloc(9 * 1024 * 1024, 3)]);
+    const s = await svc().signUpload({ restaurantId: R, kind: "branding", ownerId: "welcome", contentType: "video/mp4" });
+    assert.match(s.path, /\.mp4$/);
+    const r = await svc().receive(tokenOf(s.uploadUrl), "video/mp4", Readable.from(MP4), MP4.length);
+    assert.equal(r.size, MP4.length, "a 9 MB video is fine (photos stop at 8 MB)");
+    const s2 = await svc().signUpload({ restaurantId: R, kind: "branding", ownerId: "welcome", contentType: "video/mp4" });
+    await assert.rejects(svc().receive(tokenOf(s2.uploadUrl), "video/mp4", Readable.from(PNG), 51 * 1024 * 1024), /video is too big \(50 MB/);
+    await assert.rejects(svc().receive(tokenOf(s2.uploadUrl), "video/mp4", Readable.from(PNG)), /not the image or video it claims/);
+    const s3 = await svc().signUpload({ restaurantId: R, kind: "branding", ownerId: "welcome", contentType: "image/png" });
+    await assert.rejects(svc().receive(tokenOf(s3.uploadUrl), "image/png", Readable.from(PNG), 9 * 1024 * 1024), /photo is too big \(8 MB/);
+  });
+
+  it("recognises the image and video types by their first bytes", () => {
+    assert.equal(sniffMediaType(Buffer.from("\0\0\0\x20ftypisom\0\0", "latin1")), "video/mp4");
+    assert.equal(sniffMediaType(Buffer.from("\0\0\0\x18ftypmp42\0\0", "latin1")), "video/mp4");
+    assert.equal(sniffMediaType(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81])), "video/webm");
+    assert.equal(sniffMediaType(PNG), "image/png");
+    assert.equal(sniffMediaType(JPG), "image/jpeg");
+    assert.equal(sniffMediaType(Buffer.from("RIFF\0\0\0\0WEBPVP8 ", "latin1")), "image/webp");
+    assert.equal(sniffMediaType(Buffer.from("\0\0\0\x1cftypavif\0\0", "latin1")), "image/avif");
+    assert.equal(sniffMediaType(Buffer.from("<svg xmlns=")), null);
   });
 });

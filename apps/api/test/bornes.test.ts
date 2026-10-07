@@ -116,7 +116,7 @@ describe("which borne is asking", () => {
 
 describe("the kiosk's start-up tells which borne it is", () => {
   function make(rows: any[]) {
-    const rest = { id: "r1", slug: "chez", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", logoPath: null, welcomeImagePaths: [], tagline: null, primaryColor: null, settings: {}, tpapi: null };
+    const rest = { id: "r1", slug: "chez", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null, settings: {}, tpapi: null };
     const prisma: any = {
       restaurant: { findUnique: async () => rest },
       tpapiSalesArea: { findMany: async () => [] },

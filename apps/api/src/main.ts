@@ -15,7 +15,8 @@ async function bootstrap(): Promise<void> {
   // Photos and logos. In production nginx serves this folder itself and requests never get here.
   // The paths are unique per upload, so a file never changes: cache it for good.
   app.use(MEDIA_URL_PREFIX, express.static(new StorageService().dir, {
-    index: false, dotfiles: "deny", fallthrough: false, immutable: true, maxAge: "365d",
+    // A missing file falls through to the router's plain 404 (fallthrough: false turned it into a logged 500).
+    index: false, dotfiles: "deny", fallthrough: true, immutable: true, maxAge: "365d",
     setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
   }));
   app.use(cookieParser());

@@ -78,10 +78,13 @@ model Restaurant {
   logoPath     String?
   primaryColor String?          @db.VarChar(9)
 
-  /// Welcome-screen photos (offers, adverts), shown in turn: paths in the media folder, like logoPath. At most 5.
-  welcomeImagePaths String[]    @default([])
-  /// { fr, en, ar } line under the restaurant name on the welcome screen.
+  /// Welcome-screen adverts shown in turn, at most 5: [{ "path": "<media path>", "productId": "<unTill article id>" | null }].
+  /// A path ending in .mp4/.webm is a video. A product, if set, is shown on the slide with its menu price.
+  welcomeSlides Json          @default("[]")
+  /// { fr, en, ar } big line on the welcome screen.
   tagline       Json?
+  /// { fr, en, ar } smaller line under it.
+  subtitle      Json?
 
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

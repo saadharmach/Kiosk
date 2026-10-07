@@ -153,7 +153,7 @@ export default function CartScreen({
                         </p>
                       ) : null;
                     })}
-                    <p className="mt-3 font-display text-4xl font-bold tabular-nums text-(--color-brand-deep)">
+                    <p className="mt-3 font-display text-4xl font-bold tabular-nums text-(--color-price)">
                       {money(l.unitPrice * l.quantity, currency, locale)}
                     </p>
                   </div>
@@ -165,7 +165,7 @@ export default function CartScreen({
                       </button>
                     ) : null}
                     <button onClick={() => cart.setQty(l.key, l.quantity - 1)} aria-label="−"
-                      className="flex size-20 items-center justify-center rounded-full border-2 border-slate-300 bg-(--color-page)">
+                      className="flex size-20 items-center justify-center rounded-full border-2 border-(--color-line) bg-(--color-page)">
                       <Icon name="minus" className="size-8" strokeWidth={2.4} />
                     </button>
                     <span className="min-w-12 text-center font-display text-5xl font-bold tabular-nums">{l.quantity}</span>
@@ -184,7 +184,7 @@ export default function CartScreen({
 
             <div className="mt-10 flex items-baseline justify-between border-t-2 border-(--color-line) px-3 pt-8">
               <span className="font-display text-5xl font-bold">{t.total}</span>
-              <span className="font-display text-6xl font-bold tabular-nums text-(--color-brand-deep)">
+              <span className="font-display text-6xl font-bold tabular-nums text-(--color-price)">
                 {serverTotal === null ? "…" : money(serverTotal, currency, locale)}
               </span>
             </div>

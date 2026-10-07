@@ -65,7 +65,7 @@ function setup(over: Record<string, unknown[]> = {}, settings: Record<string, un
   const w = world(over);
   const rest = {
     id: "r1", slug: "resto-a", name: "Resto A", currency: "MAD", status: "ACTIVE", locale: "fr",
-    logoPath: null, welcomeImagePaths: [], tagline: null, primaryColor: null,
+    logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null,
     settings, tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: new Date() }, ...restaurantOver,
   };
   const prisma: Record<string, unknown> = {
@@ -281,12 +281,15 @@ describe("CatalogService.bootstrap: order types", () => {
 describe("CatalogService.bootstrap: the restaurant's look", () => {
   it("sends the logo and the welcome photos as public URLs and only the languages that have a tagline", async () => {
     const { svc } = setup({}, { showAllergens: true }, {
-      logoPath: "restaurants/r1/branding/logo/a.png", welcomeImagePaths: ["restaurants/r1/branding/welcome/b.jpg", "restaurants/r1/branding/welcome/c.jpg"],
+      logoPath: "restaurants/r1/branding/logo/a.png", welcomeSlides: [{ path: "restaurants/r1/branding/welcome/b.jpg" }, { path: "restaurants/r1/branding/welcome/c.mp4", productId: null }],
       tagline: { fr: "Cuisine fraîche", en: "", ar: 7 }, primaryColor: "#0E6B54",
     });
     const b = await svc.bootstrap("resto-a");
     assert.equal(b.restaurant.logoUrl, "https://cdn.test/restaurants/r1/branding/logo/a.png");
-    assert.deepEqual(b.restaurant.welcomeImageUrls, ["https://cdn.test/restaurants/r1/branding/welcome/b.jpg", "https://cdn.test/restaurants/r1/branding/welcome/c.jpg"]);
+    assert.deepEqual(b.restaurant.welcomeSlides, [
+      { url: "https://cdn.test/restaurants/r1/branding/welcome/b.jpg", kind: "image", product: null },
+      { url: "https://cdn.test/restaurants/r1/branding/welcome/c.mp4", kind: "video", product: null },
+    ]);
     assert.deepEqual(b.restaurant.tagline, { fr: "Cuisine fraîche" });
     assert.equal(b.restaurant.primaryColor, "#0E6B54");
   });
@@ -294,7 +297,7 @@ describe("CatalogService.bootstrap: the restaurant's look", () => {
   it("sends nulls and an empty tagline when nothing is set", async () => {
     const b = await setup().svc.bootstrap("resto-a");
     assert.equal(b.restaurant.logoUrl, null);
-    assert.deepEqual(b.restaurant.welcomeImageUrls, []);
+    assert.deepEqual(b.restaurant.welcomeSlides, []);
     assert.deepEqual(b.restaurant.tagline, {});
   });
 

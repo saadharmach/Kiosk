@@ -107,7 +107,7 @@ export default function MenuScreen({
     <main className="flex min-h-dvh flex-col">
       <KioskHeader name={name} locale={locale} onLocale={onLocale} onBack={onBack} backLabel={t.back}
         extra={tableNumber !== null ? (
-          <span className="rounded-xl bg-(--color-navy-2) px-5 py-3 font-display text-3xl font-semibold">
+          <span className="rounded-xl bg-(--color-surface-2) px-5 py-3 font-display text-3xl font-semibold">
             {t.table} {tableNumber}
           </span>
         ) : null} />
@@ -154,7 +154,7 @@ export default function MenuScreen({
                 <span className={`flex min-h-0 flex-[45] flex-col justify-between gap-1 overflow-hidden ${showImageSlot ? "p-2.5" : "p-3"}`}>
                   <span className={`line-clamp-2 font-display leading-tight font-bold break-words ${showImageSlot ? "text-base" : "text-lg"}`}>{p.name}</span>
                   <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                    <span className="font-display text-xl font-bold tabular-nums text-(--color-brand-deep)">
+                    <span className="font-display text-xl font-bold tabular-nums text-(--color-price)">
                       {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, catalog.currency, locale)}
                     </span>
                     <span className="flex flex-wrap gap-1">
@@ -169,11 +169,11 @@ export default function MenuScreen({
       </div>
 
       {cart.count > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 flex h-40 items-center justify-between bg-(--color-navy) px-12 text-white">
+        <div className="fixed inset-x-0 bottom-0 flex h-40 items-center justify-between border-t border-(--color-line) bg-(--color-chrome) px-12 text-(--color-ink) shadow-[0_-10px_30px_rgba(31,28,24,0.08)]">
           <div className="flex items-center gap-6">
             <span className="relative flex size-24 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
               <Icon name="bag" className="size-11" strokeWidth={1.8} />
-              <span className="absolute -top-1.5 -end-1.5 flex h-10 min-w-10 items-center justify-center rounded-full bg-red-500 px-2 font-display text-2xl font-bold text-white">
+              <span className="absolute -top-1.5 -end-1.5 flex h-10 min-w-10 items-center justify-center rounded-full bg-(--color-price) px-2 font-display text-2xl font-bold text-white">
                 {cart.count}
               </span>
             </span>

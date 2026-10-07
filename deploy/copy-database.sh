@@ -46,7 +46,7 @@ sudo -u postgres psql -q -v ON_ERROR_STOP=1 -d kiosk -c 'drop schema public'
 
 echo "== Clearing old photo references and sessions"
 psql -q -v ON_ERROR_STOP=1 "$DATABASE_URL" <<'SQL'
-update restaurants set "logoPath" = null, "welcomeImagePaths" = '{}';
+update restaurants set "logoPath" = null, "welcomeSlides" = '[]';
 update product_presentations set "imagePath" = null where "imagePath" is not null;
 update category_presentations set "imagePath" = null where "imagePath" is not null;
 delete from restaurant_sessions;

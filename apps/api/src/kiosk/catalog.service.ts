@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireOrderable, resolveBorne } from "./availability.js";
-import { StorageService } from "../common/storage.service.js";
+import { StorageService, isVideoPath } from "../common/storage.service.js";
+import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
 import { allowedGroups } from "./option-kinds.js";
 import { isOrderTypeConfigured } from "../common/order-type-config.js";
@@ -76,8 +77,9 @@ export class CatalogService {
         locale: restaurant.locale,
         logoPath: restaurant.logoPath,
         logoUrl: this.storage.publicUrl(restaurant.logoPath),
-        welcomeImageUrls: restaurant.welcomeImagePaths.map((p) => this.storage.publicUrl(p)).filter((u): u is string => Boolean(u)),
+        welcomeSlides: await this.welcomeSlides(restaurant.id, restaurant.welcomeSlides, orderTypes, salesAreas),
         tagline: readLocalizedMap(restaurant.tagline),
+        subtitle: readLocalizedMap(restaurant.subtitle),
         primaryColor: restaurant.primaryColor,
       },
       ordering: {
@@ -99,6 +101,50 @@ export class CatalogService {
       },
       catalogReady: Boolean(restaurant.tpapi?.lastSyncAt),
     };
+  }
+
+  /**
+   * The welcome screen's adverts. A slide linked to a product shows that product's name and its menu price — at
+   * the sales area of the first order type the kiosk offers, the one most customers will order in. A product that
+   * is not on sale there (switched off, hidden, a set menu, no price) shows no card: the advert stays.
+   */
+  private async welcomeSlides(
+    restaurantId: string,
+    raw: unknown,
+    orderTypes: { configured: boolean; salesAreaId: string | null }[],
+    salesAreas: { untillId: bigint; priceLevelId: bigint | null }[],
+  ) {
+    const slides = readSlides(raw);
+    const areaId = orderTypes.find((o) => o.configured && o.salesAreaId)?.salesAreaId ?? null;
+    const area = areaId ? salesAreas.find((a) => a.untillId.toString() === areaId) : undefined;
+    const ids = [...new Set(slides.map((x) => x.productId).filter((x): x is string => Boolean(x)))].map((i) => BigInt(i));
+    const cards = new Map<string, { id: string; name: string; names: Record<string, string>; price: number; fromPrice: boolean }>();
+    if (area && ids.length) {
+      const priceLevelId = area.priceLevelId ?? 0n;
+      const [articles, prices, sizePrices, pres] = await Promise.all([
+        this.prisma.tpapiArticle.findMany({
+          where: { restaurantId, untillId: { in: ids }, isActive: true, isPresent: true, isMenu: false, availableSalesAreaIds: { has: area.untillId } },
+          select: { untillId: true, name: true, sizeModifierId: true },
+        }),
+        this.prisma.tpapiArticlePrice.findMany({ where: { restaurantId, priceLevelId, articleId: { in: ids } } }),
+        this.prisma.tpapiArticleSizePrice.findMany({ where: { restaurantId, priceLevelId, articleId: { in: ids } } }),
+        this.prisma.productPresentation.findMany({ where: { restaurantId, articleId: { in: ids } } }),
+      ]);
+      for (const a of articles) {
+        const key = a.untillId.toString();
+        const p = pres.find((x) => x.articleId === a.untillId);
+        if (p && !p.isVisible) continue;
+        const sizes = sizePrices.filter((x) => x.articleId === a.untillId).map((x) => Number(x.amount)).filter((n) => n > 0);
+        const base = Number(prices.find((x) => x.articleId === a.untillId)?.amount ?? 0);
+        // The same rule as the menu: a product with sizes is priced by its sizes ("from" the cheapest).
+        const card = a.sizeModifierId && sizes.length ? { price: Math.min(...sizes), fromPrice: true } : base > 0 ? { price: base, fromPrice: false } : null;
+        if (card) cards.set(key, { id: key, name: a.name, names: readLocalizedMap(p?.displayName), ...card });
+      }
+    }
+    return slides.flatMap((x) => {
+      const url = this.storage.publicUrl(x.path);
+      return url ? [{ url, kind: isVideoPath(x.path) ? ("video" as const) : ("image" as const), product: (x.productId && cards.get(x.productId)) || null }] : [];
+    });
   }
 
   /**

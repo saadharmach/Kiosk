@@ -285,7 +285,7 @@ function KioskFlow({ slug }: { slug: string }) {
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <main role="status" className="flex min-h-dvh flex-col items-center justify-center gap-14 bg-(--color-navy) text-white">
+    <main role="status" className="flex min-h-dvh flex-col items-center justify-center gap-14 bg-(--color-page) text-(--color-ink)">
       <span className="relative flex size-64 items-center justify-center">
         <svg viewBox="0 0 260 260" className="absolute inset-0 animate-spin [animation-duration:2.4s]" aria-hidden="true">
           <circle cx="130" cy="130" r="120" fill="none" stroke="var(--color-brand)" strokeWidth="8"

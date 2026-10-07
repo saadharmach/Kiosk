@@ -43,7 +43,7 @@ export default function TableScreen({
 
         <div dir="ltr"
           className={`mt-12 flex min-h-36 w-160 max-w-full items-center justify-center rounded-4xl border-4 bg-(--color-surface) font-display text-8xl font-bold tabular-nums ${
-            showError ? "border-red-500 text-(--color-danger)" : "border-(--color-navy)"
+            showError ? "border-red-500 text-(--color-danger)" : "border-(--color-ink)"
           }`}>
           {value || "—"}
         </div>

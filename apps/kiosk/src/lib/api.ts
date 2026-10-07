@@ -57,6 +57,12 @@ export interface OrderTypeOption {
   fixedTableNumber: number | null;
 }
 
+export interface WelcomeSlide {
+  url: string;
+  kind: "image" | "video";
+  product: { id: string; name: string; names: Partial<Record<"fr" | "en" | "ar", string>>; price: number; fromPrice: boolean } | null;
+}
+
 export interface Bootstrap {
   /** Which borne this machine is, as the restaurant named it (null when it is not one of its bornes). */
   borne?: { code: string; name: string } | null;
@@ -68,10 +74,11 @@ export interface Bootstrap {
     logoPath: string | null;
     /** Public URLs; null until the restaurant uploads them. */
     logoUrl: string | null;
-    /** Welcome-screen photos (offers, adverts), shown in turn. */
-    welcomeImageUrls: string[];
+    /** Welcome-screen adverts (photos or videos), shown in turn; a slide may show a product with its menu price. */
+    welcomeSlides: WelcomeSlide[];
     /** Only the languages that have text. */
     tagline: Partial<Record<"fr" | "en" | "ar", string>>;
+    subtitle?: Partial<Record<"fr" | "en" | "ar", string>>;
     primaryColor: string | null;
   };
   ordering: {

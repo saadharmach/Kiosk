@@ -1,5 +1,14 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Matches, MaxLength, ValidateNested } from "class-validator";
+
+export class WelcomeSlideDto {
+  @IsString() @MaxLength(300)
+  path!: string;
+
+  /** An unTill article id: the product shown on the slide, with its menu price. */
+  @IsOptional() @IsString() @Matches(/^\d{1,19}$/)
+  productId?: string | null;
+}
 
 export class TaglineDto {
   @IsOptional() @IsString() @MaxLength(120) fr?: string;
@@ -18,12 +27,16 @@ export class UpdateBrandingDto {
   @IsOptional() @IsString() @MaxLength(300)
   logoPath?: string | null;
 
-  /** The whole list, in the order they are shown. [] removes them all. */
-  @IsOptional() @IsArray() @ArrayMaxSize(5) @IsString({ each: true }) @MaxLength(300, { each: true })
-  welcomeImagePaths?: string[];
+  /** The whole list of welcome slides, in the order they are shown. [] removes them all. */
+  @IsOptional() @IsArray() @ArrayMaxSize(5) @ValidateNested({ each: true }) @Type(() => WelcomeSlideDto)
+  welcomeSlides?: WelcomeSlideDto[];
+
+  @IsOptional() @ValidateNested() @Type(() => TaglineDto)
+  subtitle?: TaglineDto | null;
 }
 
 export class SignBrandingUploadDto {
-  @IsIn(["image/jpeg", "image/png", "image/webp", "image/avif"])
+  // Videos are refused by the storage for anything but the welcome slides.
+  @IsIn(["image/jpeg", "image/png", "image/webp", "image/avif", "video/mp4", "video/webm"])
   contentType!: string;
 }

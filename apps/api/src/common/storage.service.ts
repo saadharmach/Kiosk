@@ -7,37 +7,52 @@ import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 
-const ALLOWED: Record<string, string> = {
+const IMAGES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/avif": "avif",
 };
+/** Videos are only for the welcome screen's adverts. */
+const VIDEOS: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
 
 /** A photo bigger than this is refused; a kiosk never needs more. */
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+/** A welcome-screen video: a short advert, not a film. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const maxBytesFor = (type: string) => (type in VIDEOS ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES);
+const tooBig = (type: string) => `The ${type in VIDEOS ? "video" : "photo"} is too big (${maxBytesFor(type) / 1024 / 1024} MB at most)`;
 /** How long a signed upload address works. */
 export const UPLOAD_TTL_SEC = 300;
 /** Where the files are served: nginx reads them straight from disk in production, the API in development. */
 export const MEDIA_URL_PREFIX = "/api/media/files";
 
 /** The only shape a stored file's path may have. Anything else (a "..", an absolute path) is not ours. */
-const PATH_RE = /^restaurants\/[0-9a-f-]{36}\/(products|categories|branding)\/[A-Za-z0-9_-]{1,64}\/[0-9a-f-]{36}\.(jpg|png|webp|avif)$/;
+const PATH_RE = /^restaurants\/[0-9a-f-]{36}\/(products|categories|branding)\/[A-Za-z0-9_-]{1,64}\/[0-9a-f-]{36}\.(jpg|png|webp|avif|mp4|webm)$/;
 export const isMediaPath = (p: string) => PATH_RE.test(p);
+/** Whether a stored file is a video (by its extension, which the upload fixed). */
+export const isVideoPath = (p: string) => /\.(mp4|webm)$/.test(p);
 
 /** What the first bytes of a file say it is, whatever its name or the browser claims. */
-export function sniffImageType(head: Buffer): string | null {
+export function sniffMediaType(head: Buffer): string | null {
   if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
   if (head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
   if (head.length >= 12 && head.toString("latin1", 0, 4) === "RIFF" && head.toString("latin1", 8, 12) === "WEBP") return "image/webp";
-  if (head.length >= 12 && head.toString("latin1", 4, 8) === "ftyp" && ["avif", "avis"].includes(head.toString("latin1", 8, 12))) return "image/avif";
+  if (head.length >= 12 && head.toString("latin1", 4, 8) === "ftyp") {
+    // The same box starts AVIF photos and MP4 videos; the brand after it tells them apart.
+    return ["avif", "avis"].includes(head.toString("latin1", 8, 12)) ? "image/avif" : "video/mp4";
+  }
+  if (head.length >= 4 && head.readUInt32BE(0) === 0x1a45dfa3) return "video/webm";
   return null;
 }
 
 const b64 = (b: Buffer | string) => Buffer.from(b).toString("base64url");
 
 /**
- * Photos and logos on the server's own disk. The browser uploads straight to a short-lived signed address on
+ * Photos, logos and welcome videos on the server's own disk. The browser uploads straight to a short-lived signed address on
  * this API (like a cloud bucket would give), and the files are then served as plain static files.
  *
  * Settings: MEDIA_DIR (the folder; default ./.media), JWT_SECRET (the signing key is derived from it).
@@ -86,9 +101,12 @@ export class StorageService {
   }
 
   async signUpload(params: { restaurantId: string; kind: "products" | "categories" | "branding"; ownerId: string; contentType: string }) {
-    const ext = ALLOWED[params.contentType];
+    // Videos only where they are shown: the welcome screen's adverts.
+    const videoAllowed = params.kind === "branding" && params.ownerId === "welcome";
+    const allowed = videoAllowed ? { ...IMAGES, ...VIDEOS } : IMAGES;
+    const ext = allowed[params.contentType];
     if (!ext) {
-      throw new BadRequestException(`Unsupported image type "${params.contentType}". Allowed: ${Object.keys(ALLOWED).join(", ")}`);
+      throw new BadRequestException(`Unsupported file type "${params.contentType}". Allowed: ${Object.keys(allowed).join(", ")}`);
     }
     // The UUID makes the path unguessable and makes every upload a new URL,
     // so a replaced image is never served from a stale cache.
@@ -112,7 +130,8 @@ export class StorageService {
   async receive(token: string, contentType: string, body: Readable, declaredLength?: number): Promise<{ path: string; size: number }> {
     const { p, t } = this.verify(token);
     if (contentType.split(";")[0]!.trim().toLowerCase() !== t) throw new BadRequestException(`This address expects ${t}`);
-    if (declaredLength !== undefined && declaredLength > MAX_IMAGE_BYTES) throw new PayloadTooLargeException("The photo is too big (8 MB at most)");
+    const max = maxBytesFor(t);
+    if (declaredLength !== undefined && declaredLength > max) throw new PayloadTooLargeException(tooBig(t));
     const full = this.resolve(p);
     if (!full) throw new BadRequestException("That cannot be stored");
     if (await stat(full).then(() => true, () => false)) throw new ConflictException("This upload address was already used");
@@ -123,7 +142,7 @@ export class StorageService {
     const limit = new Transform({
       transform(chunk: Buffer, _enc, done) {
         size += chunk.length;
-        done(size > MAX_IMAGE_BYTES ? new PayloadTooLargeException("The photo is too big (8 MB at most)") : null, chunk);
+        done(size > max ? new PayloadTooLargeException(tooBig(t)) : null, chunk);
       },
     });
     try {
@@ -131,7 +150,7 @@ export class StorageService {
       const fh = await open(temp, "r");
       const head = Buffer.alloc(16);
       try { await fh.read(head, 0, 16, 0); } finally { await fh.close(); }
-      if (sniffImageType(head) !== t) throw new BadRequestException("That file is not the image it claims to be");
+      if (sniffMediaType(head) !== t) throw new BadRequestException("That file is not the image or video it claims to be");
       await rename(temp, full);
       return { path: p, size };
     } catch (e) {

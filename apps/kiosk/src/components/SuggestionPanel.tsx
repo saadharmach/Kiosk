@@ -66,7 +66,7 @@ export default function SuggestionPanel({
                 <span className="flex min-w-0 flex-1 flex-col justify-between gap-1 p-3">
                   <span className="line-clamp-2 font-display text-xl leading-tight font-bold break-words">{p.name}</span>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="font-display text-xl font-bold tabular-nums text-(--color-brand-deep)">
+                    <span className="font-display text-xl font-bold tabular-nums text-(--color-price)">
                       {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, currency, locale)}
                     </span>
                     {added ? (

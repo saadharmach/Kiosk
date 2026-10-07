@@ -4,8 +4,8 @@ import { DEFAULT_BRAND, brandColors } from "../src/lib/theme";
 
 describe("brandColors", () => {
   it("keeps a valid colour and picks dark text on a light accent", () => {
-    assert.deepEqual(brandColors("#f59e0b"), { brand: "#f59e0b", ink: "#0f172a" });
-    assert.deepEqual(brandColors("#FFFFFF"), { brand: "#FFFFFF", ink: "#0f172a" });
+    assert.deepEqual(brandColors("#f59e0b"), { brand: "#f59e0b", ink: "#14110d" });
+    assert.deepEqual(brandColors("#FFFFFF"), { brand: "#FFFFFF", ink: "#14110d" });
   });
 
   it("picks white text on a dark accent", () => {
@@ -15,7 +15,7 @@ describe("brandColors", () => {
   });
 
   it("expands the short form", () => {
-    assert.deepEqual(brandColors("#fff"), { brand: "#ffffff", ink: "#0f172a" });
+    assert.deepEqual(brandColors("#fff"), { brand: "#ffffff", ink: "#14110d" });
     assert.equal(brandColors("#000").brand, "#000000");
   });
 
@@ -41,7 +41,7 @@ describe("brandColors", () => {
     for (let r = 0; r < 256; r += 51) for (let g = 0; g < 256; g += 51) for (let b = 0; b < 256; b += 51) {
       const hex = `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
       const { brand, ink } = brandColors(hex);
-      const [a, c] = [lum(brand), lum(ink === "#ffffff" ? "#ffffff" : "#0f172a")].sort((x, y) => y - x);
+      const [a, c] = [lum(brand), lum(ink === "#ffffff" ? "#ffffff" : "#14110d")].sort((x, y) => y - x);
       worst = Math.min(worst, (a! + 0.05) / (c! + 0.05));
     }
     assert.ok(worst >= 4.2, `the worst accent/text pair has contrast ${worst.toFixed(2)}`);

@@ -1,6 +1,7 @@
 /** Default accent, used when a restaurant sets none or sets something unusable. */
-export const DEFAULT_BRAND = "#f59e0b";
-const DARK_INK = "#0f172a";
+export const DEFAULT_BRAND = "#f5c842";
+// Text on a light button: a warm near-black, dark enough that every accent keeps at least 4.2:1.
+const DARK_INK = "#14110d";
 const LIGHT_INK = "#ffffff";
 
 /** Relative luminance (WCAG) of a 6-digit hex colour, 0 (black) to 1 (white). */

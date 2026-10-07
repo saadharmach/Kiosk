@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Prisma } from "@prisma/client";
-import { BrandingService } from "../src/restaurant/branding.service.js";
+import { BrandingService, readSlides } from "../src/restaurant/branding.service.js";
 
 const RID = "11111111-1111-4111-8111-111111111111";
 
-function setup(before: Record<string, unknown> = {}, sizes: Record<string, number | null> = {}) {
-  const row: Record<string, unknown> = { id: RID, logoPath: null, welcomeImagePaths: [] as string[], tagline: null, primaryColor: null, ...before };
+function setup(before: Record<string, unknown> = {}, sizes: Record<string, number | null> = {}, menu: { restaurantId: string; untillId: bigint }[] = [{ restaurantId: RID, untillId: 42n }]) {
+  const row: Record<string, unknown> = { id: RID, logoPath: null, welcomeSlides: [] as unknown[], tagline: null, subtitle: null, primaryColor: null, ...before };
   const updates: { where: Record<string, unknown>; data: Record<string, unknown> }[] = [];
   const removed: string[] = [];
   const prisma = {
+    tpapiArticle: {
+      findMany: async (a: { where: { restaurantId: string; untillId: { in: bigint[] } } }) =>
+        menu.filter((m) => m.restaurantId === a.where.restaurantId && a.where.untillId.in.includes(m.untillId)).map((m) => ({ ...m, name: `Product ${m.untillId}` })),
+    },
     restaurant: {
       findUniqueOrThrow: async () => ({ ...row }),
       update: async (a: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -29,6 +33,9 @@ function setup(before: Record<string, unknown> = {}, sizes: Record<string, numbe
 }
 
 const logo = (name = "a.png") => `restaurants/${RID}/branding/logo/${name}`;
+/** Slides from paths, as the back office sends them. */
+const S = (ps: string[]) => ps.map((path) => ({ path }));
+const paths = (slides: unknown) => (slides as { path: string }[]).map((x) => x.path);
 const welcome = (name = "w.jpg") => `restaurants/${RID}/branding/welcome/${name}`;
 const bad = (p: Promise<unknown>, re: RegExp) =>
   assert.rejects(p, (e: { getStatus?: () => number; message: string }) => { assert.equal(e.getStatus?.(), 400); assert.match(e.message, re); return true; });
@@ -41,10 +48,10 @@ describe("BrandingService: images", () => {
   });
 
   it("rejects a path that belongs to another restaurant", () =>
-    bad(setup().svc.update(RID, { welcomeImagePaths: ["restaurants/22222222-2222-4222-8222-222222222222/branding/welcome/x.png"] }), /signed welcome upload/));
+    bad(setup().svc.update(RID, { welcomeSlides: S(["restaurants/22222222-2222-4222-8222-222222222222/branding/welcome/x.png"]) }), /signed welcome upload/));
 
   it("rejects a logo path used as a welcome photo, and the other way round", async () => {
-    await bad(setup().svc.update(RID, { welcomeImagePaths: [logo()] }), /signed welcome upload/);
+    await bad(setup().svc.update(RID, { welcomeSlides: S([logo()]) }), /signed welcome upload/);
     await bad(setup().svc.update(RID, { logoPath: welcome() }), /signed logo upload/);
   });
 
@@ -77,10 +84,10 @@ describe("BrandingService: images", () => {
   });
 
   it("leaves a field alone when it is not sent", async () => {
-    const { svc, row, removed } = setup({ logoPath: logo("keep.png"), welcomeImagePaths: [welcome("keep.jpg")] });
+    const { svc, row, removed } = setup({ logoPath: logo("keep.png"), welcomeSlides: S([welcome("keep.jpg")]) });
     await svc.update(RID, { tagline: { fr: "x" } });
     assert.equal(row.logoPath, logo("keep.png"));
-    assert.deepEqual(row.welcomeImagePaths, [welcome("keep.jpg")]);
+    assert.deepEqual(paths(row.welcomeSlides), [welcome("keep.jpg")]);
     assert.deepEqual(removed, []);
   });
 
@@ -94,46 +101,83 @@ describe("BrandingService: images", () => {
 describe("BrandingService: welcome photos (offers, adverts)", () => {
   it("saves the list in the order given and returns each photo's public URL", async () => {
     const { svc, row } = setup();
-    const r = await svc.update(RID, { welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] });
-    assert.deepEqual(row.welcomeImagePaths, [welcome("a.jpg"), welcome("b.jpg")]);
-    assert.deepEqual(r.welcomeImages.map((w) => w.url), [`https://cdn.test/${welcome("a.jpg")}`, `https://cdn.test/${welcome("b.jpg")}`]);
+    const r = await svc.update(RID, { welcomeSlides: S([welcome("a.jpg"), welcome("b.jpg")]) });
+    assert.deepEqual(paths(row.welcomeSlides), [welcome("a.jpg"), welcome("b.jpg")]);
+    assert.deepEqual(r.welcomeSlides.map((w) => w.url), [`https://cdn.test/${welcome("a.jpg")}`, `https://cdn.test/${welcome("b.jpg")}`]);
   });
   it("adding one keeps the others; a removed one is deleted from storage, a kept one is not", async () => {
-    const { svc, removed, row } = setup({ welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] });
-    await svc.update(RID, { welcomeImagePaths: [welcome("b.jpg"), welcome("c.jpg")] });
-    assert.deepEqual(row.welcomeImagePaths, [welcome("b.jpg"), welcome("c.jpg")]);
+    const { svc, removed, row } = setup({ welcomeSlides: S([welcome("a.jpg"), welcome("b.jpg")]) });
+    await svc.update(RID, { welcomeSlides: S([welcome("b.jpg"), welcome("c.jpg")]) });
+    assert.deepEqual(paths(row.welcomeSlides), [welcome("b.jpg"), welcome("c.jpg")]);
     assert.deepEqual(removed, [welcome("a.jpg")]);
   });
   it("reordering checks nothing new and deletes nothing", async () => {
     // Sizes say "not uploaded" for both: reordering must not ask storage again.
-    const { svc, removed } = setup({ welcomeImagePaths: [welcome("a.jpg"), welcome("b.jpg")] }, { [welcome("a.jpg")]: null, [welcome("b.jpg")]: null });
-    await svc.update(RID, { welcomeImagePaths: [welcome("b.jpg"), welcome("a.jpg")] });
+    const { svc, removed } = setup({ welcomeSlides: S([welcome("a.jpg"), welcome("b.jpg")]) }, { [welcome("a.jpg")]: null, [welcome("b.jpg")]: null });
+    await svc.update(RID, { welcomeSlides: S([welcome("b.jpg"), welcome("a.jpg")]) });
     assert.deepEqual(removed, []);
   });
   it("a photo kept from before still counts, even from the old single-photo folder", async () => {
     const old = `restaurants/${RID}/branding/hero/old.jpg`;
-    const { svc, row } = setup({ welcomeImagePaths: [old] });
-    await svc.update(RID, { welcomeImagePaths: [old, welcome("new.jpg")] });
-    assert.deepEqual(row.welcomeImagePaths, [old, welcome("new.jpg")]);
+    const { svc, row } = setup({ welcomeSlides: S([old]) });
+    await svc.update(RID, { welcomeSlides: S([old, welcome("new.jpg")]) });
+    assert.deepEqual(paths(row.welcomeSlides), [old, welcome("new.jpg")]);
   });
   it("an empty list removes them all", async () => {
-    const { svc, removed, row } = setup({ welcomeImagePaths: [welcome("a.jpg")] });
-    await svc.update(RID, { welcomeImagePaths: [] });
-    assert.deepEqual(row.welcomeImagePaths, []);
+    const { svc, removed, row } = setup({ welcomeSlides: S([welcome("a.jpg")]) });
+    await svc.update(RID, { welcomeSlides: S([]) });
+    assert.deepEqual(paths(row.welcomeSlides), []);
     assert.deepEqual(removed, [welcome("a.jpg")]);
   });
   it("at most 5, no duplicates, and each new one must really be uploaded", async () => {
-    await bad(setup().svc.update(RID, { welcomeImagePaths: ["1", "2", "3", "4", "5", "6"].map((n) => welcome(`${n}.jpg`)) }), /At most 5/);
-    await bad(setup().svc.update(RID, { welcomeImagePaths: [welcome("a.jpg"), welcome("a.jpg")] }), /twice/);
-    await bad(setup({}, { [welcome("none.jpg")]: null }).svc.update(RID, { welcomeImagePaths: [welcome("none.jpg")] }), /not uploaded/);
-    await bad(setup({}, { [welcome("tiny.jpg")]: 8 }).svc.update(RID, { welcomeImagePaths: [welcome("tiny.jpg")] }), /too small/);
+    await bad(setup().svc.update(RID, { welcomeSlides: S(["1", "2", "3", "4", "5", "6"].map((n) => welcome(`${n}.jpg`))) }), /At most 5/);
+    await bad(setup().svc.update(RID, { welcomeSlides: S([welcome("a.jpg"), welcome("a.jpg")]) }), /twice/);
+    await bad(setup({}, { [welcome("none.jpg")]: null }).svc.update(RID, { welcomeSlides: S([welcome("none.jpg")]) }), /not uploaded/);
+    await bad(setup({}, { [welcome("tiny.jpg")]: 8 }).svc.update(RID, { welcomeSlides: S([welcome("tiny.jpg")]) }), /too small/);
   });
   it("a path that climbs out of the folder is refused", () =>
-    bad(setup().svc.update(RID, { welcomeImagePaths: [`restaurants/${RID}/branding/welcome/../../products/1/x.png`] }), /signed welcome upload/));
+    bad(setup().svc.update(RID, { welcomeSlides: S([`restaurants/${RID}/branding/welcome/../../products/1/x.png`]) }), /signed welcome upload/));
   it("nothing is deleted when saving fails", async () => {
-    const { svc, removed } = setup({ welcomeImagePaths: [welcome("a.jpg")] }, { [welcome("none.jpg")]: null });
-    await assert.rejects(svc.update(RID, { welcomeImagePaths: [welcome("none.jpg")] }));
+    const { svc, removed } = setup({ welcomeSlides: S([welcome("a.jpg")]) }, { [welcome("none.jpg")]: null });
+    await assert.rejects(svc.update(RID, { welcomeSlides: S([welcome("none.jpg")]) }));
     assert.deepEqual(removed, []);
+  });
+});
+
+describe("BrandingService: welcome slides with videos and products", () => {
+  it("a slide can be a video; it is reported as one", async () => {
+    const { svc } = setup();
+    const r = await svc.update(RID, { welcomeSlides: S([welcome("a.jpg"), welcome("b.mp4")]) });
+    assert.deepEqual(r.welcomeSlides.map((x) => x.kind), ["image", "video"]);
+  });
+  it("a slide can show a product from this restaurant's menu", async () => {
+    const { svc, row } = setup();
+    const r = await svc.update(RID, { welcomeSlides: [{ path: welcome("a.jpg"), productId: "42" }, { path: welcome("b.jpg") }] });
+    assert.deepEqual(row.welcomeSlides, [{ path: welcome("a.jpg"), productId: "42" }, { path: welcome("b.jpg"), productId: null }]);
+    assert.deepEqual(r.welcomeSlides.map((x) => x.productName), ["Product 42", null], "the back office is told which product");
+  });
+  it("a product that is not on this restaurant's menu is refused, and nothing is saved", async () => {
+    const { svc, updates } = setup({}, {}, [{ restaurantId: "other", untillId: 7n }]);
+    await bad(svc.update(RID, { welcomeSlides: [{ path: welcome("a.jpg"), productId: "7" }] }), /not on this restaurant's menu/);
+    assert.equal(updates.length, 0);
+  });
+  it("changing only the product of a slide checks nothing again and deletes nothing", async () => {
+    const { svc, removed } = setup({ welcomeSlides: [{ path: welcome("a.jpg"), productId: null }] }, { [welcome("a.jpg")]: null });
+    await svc.update(RID, { welcomeSlides: [{ path: welcome("a.jpg"), productId: "42" }] });
+    assert.deepEqual(removed, []);
+  });
+  it("a malformed list in the database reads as what can be used", () => {
+    assert.deepEqual(readSlides([{ path: "p", productId: "12" }, { path: 5 }, null, "x", { path: "q", productId: "x1" }]), [
+      { path: "p", productId: "12" }, { path: "q", productId: null },
+    ]);
+    assert.deepEqual(readSlides({ not: "a list" }), []);
+  });
+  it("the second welcome line works like the first", async () => {
+    const { svc, row } = setup();
+    await svc.update(RID, { subtitle: { fr: "  Des burgers généreux. ", en: "" } });
+    assert.deepEqual(row.subtitle, { fr: "Des burgers généreux." });
+    await svc.update(RID, { subtitle: null });
+    assert.equal(row.subtitle, Prisma.DbNull);
   });
 });
 
