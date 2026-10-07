@@ -3,14 +3,14 @@
 # DEPLOY_HOST=… ./deploy/deploy.sh — the values in effect are sent along to the server (config.resolved.sh).
 
 # The server, as you would type it after `ssh`.
-DEPLOY_HOST="${DEPLOY_HOST:-root@NEW_SERVER_IP}"
+DEPLOY_HOST="${DEPLOY_HOST:-root@84.247.188.58}"
 
 # The three sites. Each needs a DNS A record pointing to the server.
-KIOSK_DOMAIN="${KIOSK_DOMAIN:-kiosk.pos-soft.ma}"
-BACKOFFICE_DOMAIN="${BACKOFFICE_DOMAIN:-backoffice.pos-soft.ma}"
-ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.pos-soft.ma}"
+KIOSK_DOMAIN="${KIOSK_DOMAIN:-nex-borne.pos-soft.ma}"
+BACKOFFICE_DOMAIN="${BACKOFFICE_DOMAIN:-backoffice-borne.pos-soft.ma}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin-borne.pos-soft.ma}"
 # Let's Encrypt writes here when a certificate is about to expire and could not renew.
-CERT_EMAIL="${CERT_EMAIL:-}"
+CERT_EMAIL="${CERT_EMAIL:-saadhmk13@gmail.com}"
 # Who gets the server's alert emails (a service down, disk nearly full, backup missing...). Default: CERT_EMAIL.
 ALERT_EMAIL="${ALERT_EMAIL:-$CERT_EMAIL}"
 
