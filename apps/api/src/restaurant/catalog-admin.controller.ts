@@ -7,8 +7,7 @@ import {
   SetAllergensDto,
   UpdateCategoryPresentationDto,
   UpdateProductPresentationDto,
-  SignImageUploadDto,
-} from "./dto/presentation.dto.js";
+  SignImageUploadDto, SetVisibilityDto } from "./dto/presentation.dto.js";
 
 interface TenantCtx { restaurantId: string; slug: string }
 
@@ -37,8 +36,16 @@ export class CatalogAdminController {
     @Query("missing") missing?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
+    @Query("visibility") visibility?: string,
   ) {
-    return this.catalog.listProducts(tenant.restaurantId, { categoryId, search, missing, page, pageSize });
+    return this.catalog.listProducts(tenant.restaurantId, { categoryId, search, missing, page, pageSize, visibility });
+  }
+
+  /** "Show all" / "Hide all": every product the same filters would list. */
+  @Post("products/visibility")
+  @HttpCode(200)
+  setVisibility(@Tenant() tenant: TenantCtx, @Body() dto: SetVisibilityDto) {
+    return this.catalog.setVisibility(tenant.restaurantId, dto);
   }
 
   @Patch("products/:articleId")

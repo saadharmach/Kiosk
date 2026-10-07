@@ -95,9 +95,13 @@ export interface Bootstrap {
   orderTypes: OrderTypeOption[];
   pos: { connected: boolean; lastSyncAt: string | null };
   catalogReady: boolean;
+  /** When what the kiosk shows last changed; the kiosk reloads when /version says otherwise. */
+  version?: string;
 }
 
 export const api = {
+  /** When the restaurant last changed something the kiosk shows (answers even when it is switched off). */
+  version: (slug: string) => request<{ version: string }>(`/kiosk/${slug}/version`),
   bootstrap: (slug: string, borne?: string | null) =>
     request<Bootstrap>(`/kiosk/${slug}/bootstrap${borne ? `?borne=${encodeURIComponent(borne)}` : ""}`),
 };

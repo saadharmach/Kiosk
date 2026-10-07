@@ -52,3 +52,15 @@ export class SignImageUploadDto {
   @IsIn(["image/jpeg", "image/png", "image/webp", "image/avif"])
   contentType!: string;
 }
+/** Show or hide every product that matches the same filters as the product list. */
+export class SetVisibilityDto {
+  @IsBoolean() isVisible!: boolean;
+
+  @IsOptional() @IsString() @Matches(/^\d{1,19}$/) categoryId?: string;
+
+  @IsOptional() @IsString() @MaxLength(100) search?: string;
+
+  @IsOptional() @IsIn(["shown", "hidden"]) visibility?: "shown" | "hidden";
+
+  @IsOptional() @IsIn(["translation", "image"]) missing?: "translation" | "image";
+}

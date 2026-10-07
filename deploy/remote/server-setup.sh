@@ -118,6 +118,19 @@ done
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl enable nginx >/dev/null && systemctl reload-or-restart nginx
 
+say "Firewall: only SSH, http and https come in"
+# Some hosts (Hetzner Cloud) have a firewall in their console; others (Contabo) have none, so the server keeps its
+# own. SSH is allowed first, on the port sshd really uses, so this can never lock anyone out.
+command -v ufw >/dev/null || apt-get install -y -q ufw >/dev/null
+ssh_port="$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')"
+ufw allow "${ssh_port:-22}/tcp" comment ssh >/dev/null
+ufw allow 80/tcp comment http >/dev/null
+ufw allow 443/tcp comment https >/dev/null
+ufw default deny incoming >/dev/null
+ufw default allow outgoing >/dev/null
+ufw --force enable >/dev/null
+ufw status | sed -n '1p;/ALLOW/p'
+
 say "SSH: keys only"
 if [ -s /root/.ssh/authorized_keys ]; then
   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/10-kiosk.conf

@@ -71,8 +71,13 @@ function world() {
   };
 }
 
-function service() {
+/** As the restaurant has it: a product with no presentation row is shown; `untouched` ones have none (hidden). */
+function service(untouched: bigint[] = []) {
   const w = world();
+  const has = new Set((w.productPresentation as { articleId: bigint }[]).map((r) => r.articleId));
+  for (const a of w.tpapiArticle as { untillId: bigint }[]) {
+    if (!has.has(a.untillId) && !untouched.includes(a.untillId)) (w.productPresentation as unknown[]).push({ articleId: a.untillId, isVisible: true, displayName: null });
+  }
   const prisma = Object.fromEntries(Object.entries(w).map(([k, rows]) => [k, model(rows as never)]));
   return new PricingService(prisma as never);
 }
@@ -119,6 +124,10 @@ describe("PricingService: base prices", () => {
 });
 
 describe("PricingService: what cannot be sold", () => {
+  it("a product nobody has shown yet cannot be ordered, even by a request that names it", async () => {
+    await reject(service([2n]).price("r1", "MAD", { orderType: "EAT_IN", salesAreaId: "100", lines: [{ articleId: "2", quantity: 1, sizeItemId: "71" }] } as never), 400, /not available/);
+  });
+
   it("rejects an empty cart", () => reject(price([]), 400, /empty/i));
   it("rejects a product that does not exist", () => reject(price([{ articleId: "999", quantity: 1 }]), 400, /not available/));
   it("rejects an inactive product", () => reject(price([{ articleId: "6", quantity: 1 }]), 400, /not available/));

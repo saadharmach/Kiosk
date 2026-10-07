@@ -48,6 +48,12 @@ const qs = (o: Record<string, string | undefined>) =>
 export const listProducts = (slug: string, q: Record<string, string | undefined>) =>
   request<ProductPage>(`/restaurant/${slug}/catalog/products?${qs(q)}`);
 
+/** Show all / Hide all: every product the same filters list. */
+export const setProductsVisibility = (
+  slug: string,
+  body: { isVisible: boolean; search?: string; categoryId?: string; missing?: string; visibility?: string },
+) => request<{ changed: number }>(`/restaurant/${slug}/catalog/products/visibility`, { method: "POST", body: JSON.stringify(body) });
+
 export const updateProduct = (slug: string, articleId: string, body: unknown) =>
   request<unknown>(`/restaurant/${slug}/catalog/products/${articleId}`, {
     method: "PATCH",

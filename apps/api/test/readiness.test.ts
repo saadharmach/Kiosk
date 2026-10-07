@@ -186,7 +186,7 @@ describe("is an order type really set up (shared with the kiosk)", () => {
 });
 
 describe("ReadinessService reads only this restaurant's data", () => {
-  function setup(over: { printerSeen?: Date | null; mappings?: Record<string, unknown>[]; bornes?: { id: string; name: string }[]; printers?: Record<string, unknown>[] } = {}) {
+  function setup(over: { printerSeen?: Date | null; mappings?: Record<string, unknown>[]; bornes?: { id: string; name: string }[]; printers?: Record<string, unknown>[]; shown?: { articleId: bigint }[] } = {}) {
     const calls: Call[] = [];
     const prisma = {
       restaurant: { findUnique: async (a: any) => (a.where.id === "r1" ? {
@@ -195,7 +195,11 @@ describe("ReadinessService reads only this restaurant's data", () => {
         tpapi: { isEnabled: true, credentialsCiphertext: "x", lastSuccessAt: ago(H), lastFailureAt: null, lastErrorMessage: null, lastSyncAt: ago(H) },
       } : null) },
       tpapiDepartment: { count: async (a: any) => { calls.push({ model: "tpapiDepartment", op: "count", args: a }); return 4; } },
-      tpapiArticle: { count: async (a: any) => { calls.push({ model: "tpapiArticle", op: "count", args: a }); return 90; } },
+      tpapiArticle: {
+        count: async (a: any) => { calls.push({ model: "tpapiArticle", op: "count", args: a }); return 90; },
+        findMany: async (a: any) => { calls.push({ model: "tpapiArticle", op: "findMany", args: a }); return [{ untillId: 1n }, { untillId: 2n }]; },
+      },
+      productPresentation: { findMany: async (a: any) => { calls.push({ model: "productPresentation", op: "findMany", args: a }); return over.shown ?? [{ articleId: 1n }, { articleId: 99n }]; } },
       tpapiArticlePrice: { count: async (a: any) => { calls.push({ model: "tpapiArticlePrice", op: "count", args: a }); return 88; } },
       tpapiSalesArea: model([{ untillId: 100n, tableRanges: [{ FromTable: 1, ToTable: 12 }] }], calls, "tpapiSalesArea"),
       orderTypeMapping: model(over.mappings ?? [{ orderType: "EAT_IN", salesAreaId: 100n }], calls, "orderTypeMapping"),
@@ -240,6 +244,14 @@ describe("ReadinessService reads only this restaurant's data", () => {
     await svc.get("r1", NOW);
     const q = calls.find((c) => c.model === "order")!.args as any;
     assert.deepEqual(q.where.status.in, ["CONFIRMED", "PAID"]);
+  });
+
+  it("a menu with nothing shown yet (products from unTill start hidden) blocks, and says where to show them", async () => {
+    const { svc, calls } = setup({ shown: [{ articleId: 99n }] });   // only a product no longer on the menu
+    const c = (await svc.get("r1", NOW)).checks.find((x) => x.key === "MENU")!;
+    assert.equal(c.state, "todo");
+    assert.match(c.detail, /none is shown on the kiosk yet.*Products \(Show all/);
+    assert.equal((calls.find((x) => x.model === "productPresentation")!.args as any).where.isVisible, true);
   });
 
   it("an order type whose sales area is no longer in unTill (the till was changed) is not ready, and says so", async () => {

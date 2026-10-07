@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
+import { ContentChangedInterceptor } from "./common/content-changed.interceptor.js";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module.js";
 import { KioskModule } from "./kiosk/kiosk.module.js";
@@ -25,6 +26,8 @@ import { PrismaModule } from "./prisma/prisma.module.js";
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Any successful change in the back office or the admin: that restaurant's kiosks reload what they show.
+    { provide: APP_INTERCEPTOR, useClass: ContentChangedInterceptor },
     
   ],
 })

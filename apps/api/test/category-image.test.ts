@@ -9,7 +9,7 @@ const photo = (name = "a.jpg", rid = R) => `restaurants/${rid}/categories/depart
 function setup(pres: Record<string, unknown> | null = null) {
   const calls: { op: string; args: any }[] = [];
   const removed: string[] = [];
-  let row = pres ? { restaurantId: R, scope: "DEPARTMENT", untillId: 7n, ...pres } : null;
+  let row: Record<string, any> | null = pres ? { restaurantId: R, scope: "DEPARTMENT", untillId: 7n, ...pres } : null;
   const prisma: any = {
     tpapiDepartment: {
       findFirst: async (a: any) => { calls.push({ op: "dept.findFirst", args: a }); return a.where.restaurantId === R && a.where.untillId === 7n ? { id: "d" } : null; },

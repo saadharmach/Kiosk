@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LOCALES, listCategories, listProducts, updateProduct,
+import { LOCALES, listCategories, listProducts, setProductsVisibility, updateProduct,
   type AdminCategory, type AdminProduct, type ProductPage } from "@/lib/catalog";
 import ProductEditor from "./ProductEditor";
 
@@ -11,6 +11,9 @@ export default function ProductsPage({ slug }: { slug: string }) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [missing, setMissing] = useState("");
+  const [visibility, setVisibility] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<AdminProduct | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +22,31 @@ export default function ProductsPage({ slug }: { slug: string }) {
     try {
       setError(null);
       setData(await listProducts(slug, {
-        search, categoryId, missing, page: String(page), pageSize: "50",
+        search, categoryId, missing, visibility, page: String(page), pageSize: "50",
       }));
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [slug, search, categoryId, missing, page]);
+  }, [slug, search, categoryId, missing, visibility, page]);
+
+  /** Show all / Hide all: exactly the products listed with the current filters (every page). */
+  const setAll = async (isVisible: boolean) => {
+    if (!data) return;
+    const what = data.total === 1 ? "this product" : `these ${data.total} products`;
+    if (!window.confirm(isVisible ? `Show ${what} on the kiosk?` : `Hide ${what} from the kiosk?`)) return;
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      const { changed } = await setProductsVisibility(slug, {
+        isVisible, search: search || undefined, categoryId: categoryId || undefined, missing: missing || undefined, visibility: visibility || undefined,
+      });
+      setNotice(`${changed} product${changed === 1 ? "" : "s"} ${isVisible ? "shown on" : "hidden from"} the kiosk.`);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => { listCategories(slug).then((c) => setDepartments(c.departments)).catch(() => undefined); }, [slug]);
 
@@ -60,9 +82,22 @@ export default function ProductsPage({ slug }: { slug: string }) {
           <option value="translation">Missing a translation</option>
           <option value="image">Missing an image</option>
         </select>
+        <select value={visibility} onChange={(e) => { setPage(1); setVisibility(e.target.value); }}
+          aria-label="Shown or hidden"
+          className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3">
+          <option value="">Shown and hidden</option>
+          <option value="shown">Shown on the kiosk</option>
+          <option value="hidden">Hidden</option>
+        </select>
       </div>
 
+      <p className="mb-4 text-sm text-(--color-ink-muted)">
+        New products from unTill start <b>hidden</b>: choose what the kiosk shows. Show all and Hide all act on the products
+        listed with the filters above (all pages).
+      </p>
+
       {error ? <p className="mb-4 text-(--color-danger)">{error}</p> : null}
+      {notice ? <p role="status" className="mb-4 text-green-700">{notice}</p> : null}
 
       {!data ? (
         <p className="text-(--color-ink-muted)">Loading…</p>
@@ -70,9 +105,19 @@ export default function ProductsPage({ slug }: { slug: string }) {
         <p className="text-(--color-ink-muted)">Nothing matches those filters.</p>
       ) : (
         <>
-          <p className="mb-3 text-sm text-(--color-ink-muted)">
-            {data.total} product{data.total === 1 ? "" : "s"}
-          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <p className="me-auto text-sm text-(--color-ink-muted)">
+              {data.total} product{data.total === 1 ? "" : "s"}
+            </p>
+            <button type="button" disabled={busy} onClick={() => void setAll(true)}
+              className="h-9 rounded-lg bg-(--color-brand) px-4 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50">
+              Show all ({data.total})
+            </button>
+            <button type="button" disabled={busy} onClick={() => void setAll(false)}
+              className="h-9 rounded-lg border border-(--color-line) px-4 text-sm font-medium disabled:opacity-50">
+              Hide all ({data.total})
+            </button>
+          </div>
           <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
             {data.products.map((p) => (
               <li key={p.articleId} className="flex items-center gap-4 p-3">

@@ -85,6 +85,9 @@ model Restaurant {
   tagline       Json?
   /// { fr, en, ar } smaller line under it.
   subtitle      Json?
+  /// When anything the kiosk shows last changed (any change in the back office or the admin, a menu sync).
+  /// Kiosks look at it every few seconds and reload what they show when it moves.
+  contentChangedAt DateTime   @default(now())
 
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -513,7 +516,8 @@ model ProductPresentation {
   description  Json?
   /// Path in the media folder, not a public URL.
   imagePath    String?
-  isVisible    Boolean  @default(true)
+  /// A product from unTill starts hidden: the restaurant chooses what the kiosk shows.
+  isVisible    Boolean  @default(false)
   sortOrder    Int      @default(0)
   isFeatured   Boolean  @default(false)
   badgeText    String?

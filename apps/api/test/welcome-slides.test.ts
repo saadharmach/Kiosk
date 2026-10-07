@@ -4,7 +4,14 @@ import { CatalogService } from "../src/kiosk/catalog.service.js";
 
 const R = "r1";
 const D = (n: number) => ({ toString: () => String(n), valueOf: () => n }) as unknown as number;
-function setup(o: { articles?: any[]; prices?: any[]; sizes?: any[]; pres?: any[] } = {}) {
+function setup(o: { articles?: any[]; prices?: any[]; sizes?: any[]; pres?: any[]; untouched?: bigint[] } = {}) {
+  // As the restaurant has it: a product with no row of its own has been shown, except the `untouched` ones (hidden).
+  const pres = [...(o.pres ?? [])];
+  for (const a of o.articles ?? []) {
+    if (!pres.some((p) => p.articleId === a.untillId && p.restaurantId === a.restaurantId) && !(o.untouched ?? []).includes(a.untillId)) {
+      pres.push({ restaurantId: a.restaurantId, articleId: a.untillId, isVisible: true, displayName: null });
+    }
+  }
   const calls: any[] = [];
   const pick = (rows: any[], model: string) => async (a: any) => {
     calls.push({ model, where: a.where });
@@ -20,11 +27,11 @@ function setup(o: { articles?: any[]; prices?: any[]; sizes?: any[]; pres?: any[
     tpapiArticle: { findMany: pick(o.articles ?? [], "article") },
     tpapiArticlePrice: { findMany: pick(o.prices ?? [], "price") },
     tpapiArticleSizePrice: { findMany: pick(o.sizes ?? [], "size") },
-    productPresentation: { findMany: pick(o.pres ?? [], "pres") },
+    productPresentation: { findMany: pick(pres, "pres") },
   };
   const storage = { publicUrl: (p: string | null) => (p ? `/media/${p}` : null) };
   const svc = new CatalogService(prisma, storage as never) as any;
-  return { slides: (raw: unknown, orderTypes = [{ configured: true, salesAreaId: "100" }]) =>
+  return { slides: (raw: unknown, orderTypes: { configured: boolean; salesAreaId: string | null }[] = [{ configured: true, salesAreaId: "100" }]) =>
     svc.welcomeSlides(R, raw, orderTypes, [{ untillId: 100n, priceLevelId: 5n }, { untillId: 200n, priceLevelId: 6n }]), calls };
 }
 const art = (id: number, over: any = {}) => ({ restaurantId: R, untillId: BigInt(id), name: `Art ${id}`, isActive: true, isPresent: true, isMenu: false, sizeModifierId: null, availableSalesAreaIds: [100n], ...over });
@@ -58,6 +65,10 @@ describe("welcome slides on the kiosk", () => {
     const out = await slides(["3", "4", "5", "6", "7", "8"].map((id) => ({ path: `${id}.jpg`, productId: id })));
     assert.equal(out.length, 6, "the adverts stay");
     assert.deepEqual(out.map((x: any) => x.product), [null, null, null, null, null, null]);
+  });
+  it("no card for a product never shown (products from unTill start hidden)", async () => {
+    const { slides } = setup({ articles: [art(9)], prices: [price(9, 5)], untouched: [9n] });
+    assert.equal((await slides([{ path: "a.jpg", productId: "9" }]))[0].product, null);
   });
   it("with no order type ready, slides still show, without cards and without asking the database", async () => {
     const { slides, calls } = setup({ articles: [art(1)], prices: [price(1, 5)] });

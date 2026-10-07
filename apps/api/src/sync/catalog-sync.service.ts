@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { markChanged } from "../common/content-changed.interceptor.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TpapiClientFactory } from "../common/tpapi-client.factory.js";
 import { TpapiClient, TpapiTransportError } from "@kiosk/tpapi";
@@ -298,6 +299,8 @@ export class CatalogSyncService {
         where: { restaurantId },
         data: { lastSyncAt: new Date(), lastSuccessAt: new Date() },
       });
+      // A new menu: the restaurant's kiosks reload what they show.
+      await markChanged(this.prisma, restaurantId);
       const finished = await this.prisma.syncRun.update({
         where: { id: run.id },
         data: {

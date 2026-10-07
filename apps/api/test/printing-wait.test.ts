@@ -55,7 +55,8 @@ function setup(opts: { printers?: Record<string, unknown>[]; delayMs?: number; r
 }
 
 const p1 = printer() as never;
-const took = async <T>(fn: () => Promise<T>) => { const t = Date.now(); const r = await fn(); return { r, ms: Date.now() - t }; };
+// performance.now, not Date.now: the wall clock can jump (it does on WSL), which made timing tests fail at random.
+const took = async <T>(fn: () => Promise<T>) => { const t = performance.now(); const r = await fn(); return { r, ms: Math.round(performance.now() - t) }; };
 
 describe("PrintingService.next: handing out work", () => {
   it("gives a waiting ticket straight away", async () => {
@@ -185,12 +186,13 @@ describe("PrintingService.enqueueForOrder: from the order the kiosk just created
   });
 
   it("asks the database for everything at the same time, not one thing after another", async () => {
-    // Every read and the insert take 100ms. The printer, the restaurant and the catalog names are
-    // fetched together, so the whole thing is about 2 x 100. Fetched one after another it is 3 x 100 or more.
-    const { svc, queue } = setup({ delayMs: 100 });
+    // Every read and the insert take 300ms. The printer, the restaurant and the catalog names are
+    // fetched together, so the whole thing is about 2 x 300. Fetched one after another it is 3 x 300 or more.
+    // (300, not 100: with a busy machine 100ms steps left only 60ms of margin, and the test failed now and then.)
+    const { svc, queue } = setup({ delayMs: 300 });
     const { ms } = await took(() => svc.enqueueForOrder("r1", "o1", true, order()));
     assert.equal(queue.length, 1);
-    assert.ok(ms < 260, `took ${ms}ms: the lookups ran one after another`);
+    assert.ok(ms < 800, `took ${ms}ms: the lookups ran one after another`);
   });
 
   it("a failing lookup after an early exit never becomes an unhandled rejection", async () => {

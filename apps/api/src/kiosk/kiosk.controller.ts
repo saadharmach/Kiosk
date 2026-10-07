@@ -17,7 +17,14 @@ export class KioskController {
     return this.catalogService.bootstrap(slug, borne);
   }
 
-   @Get("catalog")
+ @Get("version")
+  // Every kiosk asks every 20 seconds; small and cheap, so its own limit is generous.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  version(@Param("slug") slug: string) {
+    return this.catalogService.version(slug);
+  }
+
+     @Get("catalog")
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   getCatalog(
     @Param("slug") slug: string,

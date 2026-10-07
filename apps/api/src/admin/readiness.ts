@@ -29,7 +29,8 @@ export interface ReadinessFacts {
     lastErrorMessage: string | null;
     lastSyncAt: Date | null;
   } | null;
-  menu: { departments: number; articles: number; prices: number };
+  /** shown: products the restaurant has chosen to show (products from unTill start hidden). */
+  menu: { departments: number; articles: number; prices: number; shown?: number };
   /** Only the order types the restaurant has switched on. */
   /** reason: why it is not ready — no sales area chosen, the chosen one is no longer in unTill, or no tables. */
   orderTypes: { type: "EAT_IN" | "TAKE_AWAY" | "DELIVERY"; configured: boolean; reason?: "NO_AREA" | "AREA_GONE" | "NO_TABLES" | null }[];
@@ -75,6 +76,8 @@ export function evaluateReadiness(f: ReadinessFacts, now = Date.now()) {
   if (!t?.lastSyncAt) menu = { state: "todo", detail: "The menu has not been read from the till yet. Press Sync now." };
   else if (m.articles === 0 || m.departments === 0) menu = { state: "todo", detail: "The menu was read but came back empty: no products or no departments." };
   else if (m.prices === 0) menu = { state: "todo", detail: "The menu has products but no prices for this restaurant's price level." };
+  // Products from unTill start hidden: until the restaurant shows some, the kiosk menu is empty.
+  else if (m.shown === 0) menu = { state: "todo", detail: `${m.articles} products were read, but none is shown on the kiosk yet (products from unTill start hidden). The restaurant chooses them in its back office, under Products (Show all, or one by one).` };
   else if (now - t.lastSyncAt.getTime() > STALE_MENU_DAYS * DAY) {
     const days = Math.floor((now - t.lastSyncAt.getTime()) / DAY);
     menu = { state: "warning", detail: `${m.articles} products, last read ${days} days ago. Changes made in unTill since then are not on the kiosk. Press Sync now to refresh.` };

@@ -50,7 +50,7 @@ describe("issuing a setup code", () => {
     assert.equal(printers[0].pairingCodeHash, sha(normalizePairingCode(code)!));
     assert.ok(!JSON.stringify(printers[0]).includes(code.replace("-", "")), "the code itself is never stored");
     assert.ok(Math.abs(expiresAt.getTime() - (before + PAIRING_TTL_MIN * 60_000)) < 5000);
-    assert.equal(calls[0].args.where.restaurantId, "r1");
+    assert.equal(calls[0]!.args.where.restaurantId, "r1");
   });
   it("a printer must be saved first", async () => {
     await assert.rejects(setup([]).svc.issuePairingCode("r1"), BadRequestException);
@@ -111,7 +111,7 @@ describe("trading a setup code for the helper's secret", () => {
     const { code } = await svc.issuePairingCode("r1");
     calls.length = 0;
     await svc.redeemPairingCode(code);
-    const w = calls[0].args.where;
+    const w = calls[0]!.args.where;
     assert.equal(w.restaurantId, "r1");
     assert.equal(w.pairingCodeHash, sha(normalizePairingCode(code)!));
     assert.ok(w.pairingExpiresAt.gt instanceof Date);

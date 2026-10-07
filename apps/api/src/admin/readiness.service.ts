@@ -22,7 +22,7 @@ export class ReadinessService {
     });
     if (!restaurant) throw new NotFoundException("Restaurant not found");
 
-    const [departments, articles, prices, salesAreas, mappings, owners, printers, kiosks, placedOrders] = await Promise.all([
+    const [departments, articles, prices, salesAreas, mappings, owners, printers, kiosks, placedOrders, shownRows] = await Promise.all([
       this.prisma.tpapiDepartment.count({ where: { restaurantId } }),
       this.prisma.tpapiArticle.count({ where: { restaurantId, isActive: true, isPresent: true } }),
       this.prisma.tpapiArticlePrice.count({ where: { restaurantId } }),
@@ -36,7 +36,11 @@ export class ReadinessService {
       }),
       this.prisma.kiosk.findMany({ where: { restaurantId, isEnabled: true }, orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
       this.prisma.order.count({ where: { restaurantId, status: { in: ["CONFIRMED", "PAID"] } } }),
+      this.prisma.productPresentation.findMany({ where: { restaurantId, isVisible: true }, select: { articleId: true } }),
     ]);
+    // Shown and still on the menu (a product unTill retired may keep its old row).
+    const onMenu = new Set((await this.prisma.tpapiArticle.findMany({ where: { restaurantId, isActive: true, isPresent: true }, select: { untillId: true } })).map((a) => a.untillId.toString()));
+    const shown = shownRows.filter((r) => onMenu.has(r.articleId.toString())).length;
 
     const s = restaurant.settings;
     const switchedOn = { EAT_IN: s?.eatInEnabled ?? true, TAKE_AWAY: s?.takeAwayEnabled ?? false, DELIVERY: s?.deliveryEnabled ?? false };
@@ -61,7 +65,7 @@ export class ReadinessService {
         isEnabled: t.isEnabled, hasCredentials: Boolean(t.credentialsCiphertext),
         lastSuccessAt: t.lastSuccessAt, lastFailureAt: t.lastFailureAt, lastErrorMessage: t.lastErrorMessage, lastSyncAt: t.lastSyncAt,
       } : null,
-      menu: { departments, articles, prices },
+      menu: { departments, articles, prices, shown },
       orderTypes,
       activeOwners: owners,
       printer: factsOf(printers.find((p) => p.kioskId === null) ?? null),

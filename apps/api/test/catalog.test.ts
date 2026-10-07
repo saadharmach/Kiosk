@@ -60,12 +60,28 @@ function world(over: Record<string, unknown[]> = {}) {
   };
 }
 
+/**
+ * The test menu as a restaurant has it after choosing what to show: every product without its own presentation row
+ * gets one that shows it. `untouched` lists products left as unTill sent them (no row at all: hidden).
+ */
+function shownByDefault(w: Record<string, unknown[]>, untouched: bigint[] = []) {
+  const rows = w.productPresentation as { articleId: bigint }[];
+  const has = new Set(rows.map((r) => r.articleId));
+  for (const a of w.tpapiArticle as { untillId: bigint }[]) {
+    if (!has.has(a.untillId) && !untouched.includes(a.untillId)) {
+      rows.push({ articleId: a.untillId, displayName: null, description: null, imagePath: null, badgeText: null, isFeatured: false, sortOrder: (a as { number?: number }).number ?? 0, isVisible: true } as never);
+    }
+  }
+  return w;
+}
+
 function setup(over: Record<string, unknown[]> = {}, settings: Record<string, unknown> = { showAllergens: true }, restaurantOver: Record<string, unknown> = {}) {
   const calls: Call[] = [];
-  const w = world(over);
+  const { untouched, ...rest0 } = over as Record<string, unknown[]> & { untouched?: bigint[] };
+  const w = shownByDefault(world(rest0), untouched as bigint[] | undefined);
   const rest = {
     id: "r1", slug: "resto-a", name: "Resto A", currency: "MAD", status: "ACTIVE", locale: "fr",
-    logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null,
+    logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null, contentChangedAt: new Date("2026-10-07T10:00:00Z"),
     settings, tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: new Date() }, ...restaurantOver,
   };
   const prisma: Record<string, unknown> = {
@@ -151,6 +167,13 @@ describe("CatalogService.catalog: what the kiosk can sell", () => {
 });
 
 describe("CatalogService.catalog: what the restaurant chose to show", () => {
+  it("a product from unTill that nobody has shown yet is hidden (products start hidden)", async () => {
+    const { svc } = setup({ untouched: [11n] } as never);
+    const c = await svc.catalog("resto-a", "100");
+    assert.ok(!c.products.some((p) => p.name === "Cake"), "never shown: not on the kiosk");
+    assert.ok(c.products.some((p) => p.name === "Burger FR"), "shown: on the kiosk");
+  });
+
   it("hides a product the manager switched off", async () => {
     const { c } = await catalog({ productPresentation: [{ articleId: 10n, displayName: null, isVisible: false }] });
     assert.ok(!names(c).includes("Burger"));
@@ -292,6 +315,7 @@ describe("CatalogService.bootstrap: the restaurant's look", () => {
     ]);
     assert.deepEqual(b.restaurant.tagline, { fr: "Cuisine fraîche" });
     assert.equal(b.restaurant.primaryColor, "#0E6B54");
+    assert.equal(b.version, "2026-10-07T10:00:00.000Z", "what the kiosk compares /version with");
   });
 
   it("sends nulls and an empty tagline when nothing is set", async () => {

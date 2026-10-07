@@ -40,22 +40,44 @@ export class CatalogAdminService {
     private readonly storage: StorageService,
   ) {}
 
-  async listProducts(
+  /** The products the list shows (and Show all / Hide all acts on): this restaurant's, on the menu, filtered. */
+  private productFilter(restaurantId: string, q: { categoryId?: string; search?: string }) {
+    return {
+      restaurantId,
+      isActive: true,
+      isPresent: true,
+      ...(q.categoryId ? { departmentId: BigInt(q.categoryId) } : {}),
+      ...(q.search ? { name: { contains: q.search, mode: "insensitive" as const } } : {}),
+    };
+  }
+
+  /**
+   * Show all / Hide all: every product the same filters list. One transaction, scoped to the restaurant: a row is
+   * created for a product never touched (products start hidden), the others are updated.
+   */
+  async setVisibility(restaurantId: string, q: { isVisible: boolean; categoryId?: string; search?: string; missing?: string; visibility?: "shown" | "hidden" }) {
+    const ids = (await this.productRows(restaurantId, q)).map((r) => BigInt(r.articleId));
+    if (ids.length === 0) return { changed: 0 };
+    await this.prisma.$transaction([
+      this.prisma.productPresentation.createMany({
+        data: ids.map((articleId) => ({ restaurantId, articleId, isVisible: q.isVisible })),
+        skipDuplicates: true,
+      }),
+      this.prisma.productPresentation.updateMany({ where: { restaurantId, articleId: { in: ids } }, data: { isVisible: q.isVisible } }),
+    ]);
+    return { changed: ids.length };
+  }
+
+  /** The products the list shows — and exactly the ones Show all / Hide all act on: same filters, same code. */
+  private async productRows(
     restaurantId: string,
-    q: { categoryId?: string; search?: string; missing?: string; page?: string; pageSize?: string },
+    q: { categoryId?: string; search?: string; missing?: string; visibility?: string },
   ) {
-    const page = Math.max(1, Number(q.page ?? 1) || 1);
-    const pageSize = Math.min(200, Math.max(1, Number(q.pageSize ?? 50) || 50));
+    if (q.categoryId && !/^\d{1,19}$/.test(q.categoryId)) throw new BadRequestException("categoryId must be a number");
 
     const [articles, presentations, allergenLinks] = await Promise.all([
       this.prisma.tpapiArticle.findMany({
-        where: {
-          restaurantId,
-          isActive: true,
-          isPresent: true,
-          ...(q.categoryId ? { departmentId: BigInt(q.categoryId) } : {}),
-          ...(q.search ? { name: { contains: q.search, mode: "insensitive" as const } } : {}),
-        },
+        where: this.productFilter(restaurantId, q),
         orderBy: { number: "asc" },
         select: { untillId: true, name: true, number: true, departmentId: true, isMenu: true },
       }),
@@ -82,7 +104,8 @@ export class CatalogAdminService {
         displayName: (p?.displayName ?? null) as I18n | null,
         description: (p?.description ?? null) as I18n | null,
         imagePath: p?.imagePath ?? null,
-        isVisible: p?.isVisible ?? true,
+        // Never touched: hidden (products from unTill start hidden).
+        isVisible: p?.isVisible ?? false,
         sortOrder: p?.sortOrder ?? a.number,
         isFeatured: p?.isFeatured ?? false,
         badgeText: p?.badgeText ?? null,
@@ -92,6 +115,10 @@ export class CatalogAdminService {
       };
     });
 
+    if (q.visibility === "shown") rows = rows.filter((r) => r.isVisible);
+    else if (q.visibility === "hidden") rows = rows.filter((r) => !r.isVisible);
+    else if (q.visibility) throw new BadRequestException(`Unknown visibility "${q.visibility}". Use shown or hidden.`);
+
     if (q.missing === "translation") {
       rows = rows.filter((r) => r.translatedInto.length < 3);
     } else if (q.missing === "image") {
@@ -100,6 +127,16 @@ export class CatalogAdminService {
       throw new BadRequestException(`Unknown missing filter "${q.missing}". Use translation or image.`);
     }
 
+    return rows;
+  }
+
+  async listProducts(
+    restaurantId: string,
+    q: { categoryId?: string; search?: string; missing?: string; page?: string; pageSize?: string; visibility?: string },
+  ) {
+    const page = Math.max(1, Number(q.page ?? 1) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number(q.pageSize ?? 50) || 50));
+    const rows = await this.productRows(restaurantId, q);
     const total = rows.length;
     return {
       page,

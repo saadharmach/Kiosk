@@ -18,6 +18,16 @@ export class CatalogService {
     private readonly storage: StorageService,
   ) {}
 
+  /**
+   * When anything the kiosk shows last changed. Kiosks ask every few seconds and reload when it moves. It answers
+   * for a switched-off restaurant too, so a kiosk notices when it is switched back on.
+   */
+  async version(slug: string) {
+    const r = await this.prisma.restaurant.findUnique({ where: { slug }, select: { contentChangedAt: true } });
+    if (!r) throw new NotFoundException("Restaurant not found");
+    return { version: r.contentChangedAt.toISOString() };
+  }
+
   /** Branding, settings and the zones a customer can choose from. */
   async bootstrap(slug: string, borneCode?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
@@ -100,6 +110,8 @@ export class CatalogService {
         lastSyncAt: restaurant.tpapi?.lastSyncAt ?? null,
       },
       catalogReady: Boolean(restaurant.tpapi?.lastSyncAt),
+      // Compared with what /version says later: when it moves, the kiosk reloads this.
+      version: restaurant.contentChangedAt.toISOString(),
     };
   }
 
@@ -133,7 +145,8 @@ export class CatalogService {
       for (const a of articles) {
         const key = a.untillId.toString();
         const p = pres.find((x) => x.articleId === a.untillId);
-        if (p && !p.isVisible) continue;
+        // Hidden (or never shown: products start hidden): no card.
+        if (!p?.isVisible) continue;
         const sizes = sizePrices.filter((x) => x.articleId === a.untillId).map((x) => Number(x.amount)).filter((n) => n > 0);
         const base = Number(prices.find((x) => x.articleId === a.untillId)?.amount ?? 0);
         // The same rule as the menu: a product with sizes is priced by its sizes ("from" the cheapest).
@@ -333,7 +346,8 @@ export class CatalogService {
           badgeText: pres?.badgeText ?? null,
           isFeatured: pres?.isFeatured ?? false,
           sortOrder: pres?.sortOrder ?? a.number,
-          visible: pres?.isVisible ?? true,
+          // A product from unTill is hidden until the restaurant shows it.
+          visible: pres?.isVisible ?? false,
           pricing,
           price: pricing === "BASE" ? dec(price!.amount) : null,
           vat: price ? dec(price.vat) : null,

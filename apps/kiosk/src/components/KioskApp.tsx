@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
+import { VERSION_POLL_MS, decideRefresh } from "@/lib/refresh";
 import { readBorne } from "@/lib/borne";
 import { api, getCatalog, isConnectionError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
 import { brandColors } from "@/lib/theme";
@@ -96,6 +97,27 @@ function KioskFlow({ slug }: { slug: string }) {
     }, 60_000);
     return () => clearInterval(timer);
   }, [unavailable, slug, borne]);
+
+  // The restaurant changed something (back office, admin, a menu sync): reload what the kiosk shows. Asked every
+  // 20 seconds; done at once on the welcome screen or a problem screen, otherwise once the customer's order is over.
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  useEffect(() => {
+    const ask = () => api.version(slug).then((v) => setLatestVersion(v.version), () => undefined);
+    const timer = setInterval(ask, VERSION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [slug]);
+  const problem = Boolean(error) || Boolean(boot && (!boot.catalogReady || !boot.orderTypes.some((o) => o.configured)));
+  useEffect(() => {
+    if (decideRefresh({ known: boot?.version ?? null, latest: latestVersion, screen, problem }) !== "now") return;
+    // A quiet reload: the screen stays as it is until the new data is there (no flicker, no lost fullscreen).
+    api.bootstrap(slug, borne).then(
+      (d) => {
+        setBoot(d);
+        setError(null);
+      },
+      (e) => setError(toKioskError(e)),
+    );
+  }, [latestVersion, screen, problem, boot?.version, slug, borne]);
 
   // Load the menu as soon as the order type resolves the sales area, so the
   // customer never waits on a spinner after choosing their table.

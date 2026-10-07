@@ -146,7 +146,8 @@ export class PricingService {
     }
 
     const pres = ctx.presById.get(line.articleId);
-    if (pres && pres.isVisible === false) {
+    // Products start hidden: only one the restaurant has shown can be ordered, whatever the request says.
+    if (!pres?.isVisible) {
       throw new BadRequestException(`"${article.name}" is not available`);
     }
 
