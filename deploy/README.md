@@ -92,6 +92,10 @@ the alerts cannot leave either. To see what the watchdog does: `journalctl -t ki
   certbot adds https to them; running the setup again does not overwrite them. The shared parts
   (`/etc/nginx/snippets/kiosk-*.conf`) are refreshed every time.
 - Any other name, or the server's bare IP address, gets no site at all.
+- If the server already had another PostgreSQL (a Contabo server came with version 16 on port 5432), the kiosk uses
+  its own PostgreSQL 17 on the next port (5433): `pg_lsclusters` lists them. The other one is left alone; if nothing
+  uses it, it can be removed with `pg_dropcluster --stop 16 main && apt-get remove postgresql-16`.
+- The server keeps its own firewall (ufw): only SSH, http and https come in. `ufw status` shows it.
 - Memory measured in a rehearsal: API ~110 MB, kiosk app ~50 MB, PostgreSQL ~105 MB, nginx ~17 MB.
 
 ## When something is wrong

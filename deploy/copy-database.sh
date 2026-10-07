@@ -25,22 +25,26 @@ read -r SRC
 set -a; . "$ENV_FILE"; set +a
 bin=/usr/lib/postgresql/$PG_VERSION/bin
 dump=$(mktemp /tmp/supabase-XXXXXX.dump); trap 'rm -f "$dump"' EXIT
+# The kiosk's own database server: its port is in the settings (another PostgreSQL may hold the usual one).
+PORT="$(printf '%s' "$DATABASE_URL" | sed -n 's|.*@127\.0\.0\.1:\([0-9]*\)/.*|\1|p')"; PORT="${PORT:-5432}"
+version="$(sudo -u postgres psql -p "$PORT" -tAc "show server_version_num" | cut -c1-2)"
+[ "$version" = "$PG_VERSION" ] || { echo "!! The kiosk's database (port $PORT) is PostgreSQL $version, not $PG_VERSION: run install-server.sh again first."; exit 1; }
 
 echo "== Reading Supabase (public schema only: Supabase's own schemas stay behind)"
 "$bin/pg_dump" "$SRC" --schema=public --no-owner --no-privileges --format=custom --file="$dump"
 
-if sudo -u postgres psql -tAc "select count(*) from pg_tables where schemaname='public'" kiosk | grep -qv '^0$'; then
+if sudo -u postgres psql -p "$PORT" -tAc "select count(*) from pg_tables where schemaname='public'" kiosk | grep -qv '^0$'; then
   keep="$BACKUP_DIR/before-copy-$(date +%Y%m%d-%H%M%S).dump"
-  sudo -u postgres "$bin/pg_dump" -Fc kiosk > "$keep"
+  sudo -u postgres "$bin/pg_dump" -p "$PORT" -Fc kiosk > "$keep"
   echo "== The server's database was not empty: saved first to $keep"
 fi
 
 echo "== Replacing the server's database"
 systemctl stop kiosk-api 2>/dev/null || true
-sudo -u postgres dropdb --if-exists kiosk
-sudo -u postgres createdb -O kiosk kiosk
+sudo -u postgres dropdb -p "$PORT" --if-exists kiosk
+sudo -u postgres createdb -p "$PORT" -O kiosk kiosk
 # The copy creates the public schema itself, so the empty one a new database comes with goes first.
-sudo -u postgres psql -q -v ON_ERROR_STOP=1 -d kiosk -c 'drop schema public'
+sudo -u postgres psql -p "$PORT" -q -v ON_ERROR_STOP=1 -d kiosk -c 'drop schema public'
 # As the kiosk user, so everything restored belongs to it. Any error stops the copy.
 "$bin/pg_restore" --no-owner --no-privileges --exit-on-error --dbname="$DATABASE_URL" "$dump"
 

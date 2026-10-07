@@ -54,23 +54,35 @@ install -d -o kiosk -g kiosk -m 755 "$MEDIA_DIR"
 install -d -o postgres -g postgres -m 750 "$BACKUP_DIR"
 install -d -o root -g kiosk -m 750 "$(dirname "$ENV_FILE")"
 
-say "Database"
+say "Database (PostgreSQL $PG_VERSION)"
 systemctl enable --now postgresql >/dev/null
-if ! grep -q '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null; then
-  pw=$(openssl rand -hex 24)
-  if sudo -u postgres psql -tAc "select 1 from pg_roles where rolname='kiosk'" | grep -q 1; then
-    sudo -u postgres psql -q -c "alter role kiosk with login password '$pw'"
-  else
-    sudo -u postgres psql -q -c "create role kiosk with login password '$pw'"
+# A server may already have another PostgreSQL on the usual port (5432): the kiosk always uses its own version's
+# cluster, on whatever port that one has. The other one is left as it is.
+PG_PORT="$(pg_lsclusters -h | awk -v v="$PG_VERSION" '$1 == v && $2 == "main" {print $3; exit}')"
+[ -n "$PG_PORT" ] || { echo "No PostgreSQL $PG_VERSION cluster found (pg_lsclusters)."; exit 1; }
+pgsql() { sudo -u postgres psql -p "$PG_PORT" "$@"; }
+current_port="$(sed -n 's|^DATABASE_URL=.*@127\.0\.0\.1:\([0-9]*\)/.*|\1|p' "$ENV_FILE" 2>/dev/null | head -1)"
+if [ "$current_port" != "$PG_PORT" ]; then
+  if [ -n "$current_port" ]; then
+    echo "The kiosk pointed at the database on port $current_port, which is not PostgreSQL $PG_VERSION: it now uses port $PG_PORT."
+    echo "(The database on port $current_port is left as it was. Run copy-database.sh again to fill the new one.)"
   fi
-  sudo -u postgres psql -tAc "select 1 from pg_database where datname='kiosk'" | grep -q 1 \
-    || sudo -u postgres createdb -O kiosk kiosk
-  url="postgresql://kiosk:${pw}@127.0.0.1:5432/kiosk"
+  pw=$(openssl rand -hex 24)
+  if pgsql -tAc "select 1 from pg_roles where rolname='kiosk'" | grep -q 1; then
+    pgsql -q -c "alter role kiosk with login password '$pw'"
+  else
+    pgsql -q -c "create role kiosk with login password '$pw'"
+  fi
+  pgsql -tAc "select 1 from pg_database where datname='kiosk'" | grep -q 1 \
+    || sudo -u postgres createdb -p "$PG_PORT" -O kiosk kiosk
+  url="postgresql://kiosk:${pw}@127.0.0.1:${PG_PORT}/kiosk"
   touch "$ENV_FILE" && chown root:kiosk "$ENV_FILE" && chmod 640 "$ENV_FILE"
+  sed -i '/^DATABASE_URL=/d;/^DIRECT_URL=/d' "$ENV_FILE"
   printf 'DATABASE_URL=%s\nDIRECT_URL=%s\n' "$url" "$url" >> "$ENV_FILE"
-  echo "Database kiosk created (its password is only in $ENV_FILE)."
+  if systemctl is-active -q kiosk-api; then systemctl restart kiosk-api; fi
+  echo "Database kiosk ready on PostgreSQL $PG_VERSION, port $PG_PORT (its password is only in $ENV_FILE)."
 else
-  echo "Database already set up."
+  echo "Database already set up: PostgreSQL $PG_VERSION, port $PG_PORT."
 fi
 
 say "Settings ($ENV_FILE)"

@@ -3,7 +3,11 @@
 set -euo pipefail
 DIR=/var/backups/kiosk
 stamp=$(date +%Y-%m-%d_%H%M)
-sudo -u postgres pg_dump -Fc kiosk > "$DIR/kiosk-$stamp.dump.part"
+# The kiosk's own database: the port is in its settings (another PostgreSQL may hold the usual one), and the newest
+# pg_dump installed can read it.
+PORT="$(sed -n 's|^DATABASE_URL=.*@127\.0\.0\.1:\([0-9]*\)/.*|\1|p' /etc/kiosk/kiosk.env | head -1)"
+PG_DUMP="$(ls -1 /usr/lib/postgresql/*/bin/pg_dump | sort -V | tail -1)"
+sudo -u postgres "$PG_DUMP" -p "${PORT:-5432}" -Fc kiosk > "$DIR/kiosk-$stamp.dump.part"
 mv "$DIR/kiosk-$stamp.dump.part" "$DIR/kiosk-$stamp.dump"
 chown postgres:postgres "$DIR/kiosk-$stamp.dump" && chmod 640 "$DIR/kiosk-$stamp.dump"
 ls -1t "$DIR"/kiosk-*.dump | tail -n +15 | xargs -r rm -f
