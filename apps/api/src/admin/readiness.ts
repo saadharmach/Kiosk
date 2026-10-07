@@ -31,7 +31,8 @@ export interface ReadinessFacts {
   } | null;
   menu: { departments: number; articles: number; prices: number };
   /** Only the order types the restaurant has switched on. */
-  orderTypes: { type: "EAT_IN" | "TAKE_AWAY" | "DELIVERY"; configured: boolean }[];
+  /** reason: why it is not ready — no sales area chosen, the chosen one is no longer in unTill, or no tables. */
+  orderTypes: { type: "EAT_IN" | "TAKE_AWAY" | "DELIVERY"; configured: boolean; reason?: "NO_AREA" | "AREA_GONE" | "NO_TABLES" | null }[];
   activeOwners: number;
   /** The restaurant's default printer (the one with no borne). null: none. */
   printer: PrinterFacts | null;
@@ -83,10 +84,17 @@ export function evaluateReadiness(f: ReadinessFacts, now = Date.now()) {
   // ---- at least one way of ordering that the kiosk will really offer
   const ready = f.orderTypes.filter((o) => o.configured);
   const notReady = f.orderTypes.filter((o) => !o.configured);
+  const WHY = {
+    NO_AREA: "has no sales area chosen",
+    AREA_GONE: "points to a sales area that is no longer in unTill (unTill's setup or the connection changed)",
+    NO_TABLES: "has no table numbers to use",
+  } as const;
+  const why = notReady.map((o) => `${TYPE_LABEL[o.type]} ${WHY[o.reason ?? "NO_AREA"]}`).join("; ");
+  const fix = "The restaurant chooses it again in its back office, under Settings > Order types.";
   let types: Pick<Check, "state" | "detail">;
   if (f.orderTypes.length === 0) types = { state: "todo", detail: "No way of ordering is switched on. The restaurant turns one on in its back office, under Settings." };
-  else if (ready.length === 0) types = { state: "todo", detail: `${notReady.map((o) => TYPE_LABEL[o.type]).join(", ")} ${notReady.length === 1 ? "is" : "are"} switched on but not set up (a sales area and a table source are missing). The restaurant sets this in its back office, under Settings.` };
-  else if (notReady.length > 0) types = { state: "warning", detail: `${ready.map((o) => TYPE_LABEL[o.type]).join(", ")} ready. ${notReady.map((o) => TYPE_LABEL[o.type]).join(", ")} ${notReady.length === 1 ? "is" : "are"} switched on but not set up, so customers will not see ${notReady.length === 1 ? "it" : "them"}.` };
+  else if (ready.length === 0) types = { state: "todo", detail: `The kiosk cannot take orders: ${why}. ${fix}` };
+  else if (notReady.length > 0) types = { state: "warning", detail: `${ready.map((o) => TYPE_LABEL[o.type]).join(", ")} ready. Customers will not see the rest: ${why}. ${fix}` };
   else types = { state: "done", detail: `${ready.map((o) => TYPE_LABEL[o.type]).join(", ")} ready.` };
   add({ key: "ORDER_TYPES", label: "Ways of ordering are set up", required: true, ...types });
 

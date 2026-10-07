@@ -56,6 +56,7 @@ type Dict = {
   suggestTitle: string; noThanks: string; added: string; done: string;
   unavailableTitle: string; unavailableText: string;
   startOrder: string; startHint: string; discover: string; fromPrice: string; needHelp: string;
+  staffMenuNotRead: string; staffNoOrderType: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -91,6 +92,7 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableTitle: "Momentanément indisponible",
     unavailableText: "Nous ne pouvons pas prendre de commande sur cette borne pour le moment. Merci de vous adresser à un membre de notre équipe.",
     startOrder: "Commencer ma commande", startHint: "Touchez le bouton et laissez-vous tenter.", discover: "À découvrir", fromPrice: "Dès", needHelp: "Besoin d’aide ?",
+    staffMenuNotRead: "Pour l’équipe : le menu n’a pas encore été lu depuis unTill. Vérifiez la connexion à unTill.", staffNoOrderType: "Pour l’équipe : aucune façon de commander n’est prête. Back-office › Settings › Order types (un secteur de vente a peut-être changé dans unTill).",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -123,6 +125,7 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableTitle: "Temporarily unavailable",
     unavailableText: "We can't take orders on this kiosk right now. Please ask a member of our staff.",
     startOrder: "Start my order", startHint: "Tap the button and treat yourself.", discover: "Discover", fromPrice: "From", needHelp: "Need help?",
+    staffMenuNotRead: "For staff: the menu has not been read from unTill yet. Check the connection to unTill.", staffNoOrderType: "For staff: no way of ordering is ready. Back office › Settings › Order types (a sales area may have changed in unTill).",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -155,6 +158,7 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableTitle: "غير متاح مؤقتًا",
     unavailableText: "لا يمكننا استلام الطلبات على هذه الشاشة حاليًا. يُرجى التوجّه إلى أحد موظفينا.",
     startOrder: "ابدأ طلبي", startHint: "المس الزر واستمتع.", discover: "اكتشف", fromPrice: "ابتداءً من", needHelp: "تحتاج مساعدة؟",
+    staffMenuNotRead: "للموظفين: لم تتم قراءة القائمة من unTill بعد. تحقق من الاتصال بـ unTill.", staffNoOrderType: "للموظفين: لا توجد طريقة طلب جاهزة. لوحة الإدارة › Settings › Order types (ربما تغيّرت منطقة البيع في unTill).",
   },
 };
 

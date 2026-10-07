@@ -92,13 +92,20 @@ describe("the go-live checklist", () => {
       assert.equal(get(ready({ orderTypes: [] }), "ORDER_TYPES").state, "todo");
       const c = get(ready({ orderTypes: [{ type: "TAKE_AWAY", configured: false }] }), "ORDER_TYPES");
       assert.equal(c.state, "todo");
-      assert.match(c.detail, /Take away is switched on but not set up/);
+      assert.match(c.detail, /The kiosk cannot take orders: Take away has no sales area chosen/);
+      assert.match(c.detail, /Settings > Order types/);
       assert.equal(c.tab, undefined);   // only the restaurant can fix it
     });
     it("one ready and one not: allowed, with a warning naming the one customers will not see", () => {
       const c = get(ready({ orderTypes: [{ type: "EAT_IN", configured: true }, { type: "DELIVERY", configured: false }] }), "ORDER_TYPES");
       assert.equal(c.state, "warning");
-      assert.match(c.detail, /Eat in ready\. Delivery is switched on but not set up/);
+      assert.match(c.detail, /Eat in ready\. Customers will not see the rest: Delivery has no sales area chosen/);
+    });
+    it("says why: a sales area that is no longer in unTill, or no table numbers", () => {
+      const gone = get(ready({ orderTypes: [{ type: "EAT_IN", configured: false, reason: "AREA_GONE" }] }), "ORDER_TYPES");
+      assert.match(gone.detail, /Eat in points to a sales area that is no longer in unTill/);
+      const tables = get(ready({ orderTypes: [{ type: "EAT_IN", configured: true }, { type: "TAKE_AWAY", configured: false, reason: "NO_TABLES" }] }), "ORDER_TYPES");
+      assert.match(tables.detail, /Take away has no table numbers to use/);
     });
   });
 
@@ -233,6 +240,13 @@ describe("ReadinessService reads only this restaurant's data", () => {
     await svc.get("r1", NOW);
     const q = calls.find((c) => c.model === "order")!.args as any;
     assert.deepEqual(q.where.status.in, ["CONFIRMED", "PAID"]);
+  });
+
+  it("an order type whose sales area is no longer in unTill (the till was changed) is not ready, and says so", async () => {
+    const { svc } = setup({ mappings: [{ orderType: "EAT_IN", salesAreaId: 1941n }] });
+    const c = (await svc.get("r1", NOW)).checks.find((x) => x.key === "ORDER_TYPES")!;
+    assert.equal(c.state, "todo");
+    assert.match(c.detail, /Eat in points to a sales area that is no longer in unTill/);
   });
 
   it("an order type with no mapping is not ready; an unknown restaurant is not found", async () => {

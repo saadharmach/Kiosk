@@ -118,13 +118,26 @@ export default function SettingsPage({ slug }: { slug: string }) {
       : <p className="text-(--color-ink-muted)">Loading…</p>;
   }
 
+  const errors = saved.warnings.filter((w) => w.severity === "error");
+  const others = saved.warnings.filter((w) => w.severity !== "error");
+  const ranges = (rs: { fromTable: number; toTable: number }[]) =>
+    rs.map((x) => (x.fromTable === x.toTable ? `${x.fromTable}` : `${x.fromTable}–${x.toTable}`)).join(", ");
+
   return (
     <div className="max-w-3xl pb-24">
-      {saved.warnings.length > 0 ? (
+      {errors.length > 0 ? (
+        <div role="alert" className="mb-6 rounded-(--radius-card) border-2 border-(--color-danger) bg-(--color-surface-2) p-5">
+          <p className="mb-2 font-semibold text-(--color-danger)">Must be fixed: customers cannot order this way</p>
+          <ul className="list-disc space-y-1 ps-5 text-sm">
+            {errors.map((w, i) => <li key={`${w.code}-${i}`}>{w.message}</li>)}
+          </ul>
+        </div>
+      ) : null}
+      {others.length > 0 ? (
         <div className={`mb-6 ${card}`}>
-          <p className="mb-2 font-medium text-(--color-danger)">Worth checking</p>
+          <p className="mb-2 font-medium">Worth checking</p>
           <ul className="list-disc space-y-1 ps-5 text-sm text-(--color-ink-muted)">
-            {saved.warnings.map((w, i) => <li key={`${w.code}-${i}`}>{w.message}</li>)}
+            {others.map((w, i) => <li key={`${w.code}-${i}`}>{w.message}</li>)}
           </ul>
         </div>
       ) : null}
@@ -134,8 +147,12 @@ export default function SettingsPage({ slug }: { slug: string }) {
         <div className="space-y-4">
           {orderTypes.map((ot, i) => {
             const asksCustomer = ot.orderType === "EAT_IN" && settings.askTableForEatIn;
+            // What the server says is wrong with this one, as saved.
+            const mine = errors.filter((w) => w.orderType === ot.orderType);
+            const area = saved.salesAreas.find((a) => a.untillId === ot.salesAreaId);
+            const areaGone = Boolean(ot.salesAreaId) && !area;
             return (
-              <div key={ot.orderType} className={card}>
+              <div key={ot.orderType} className={`${card} ${mine.length ? "border-2 border-(--color-danger)" : ""}`}>
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h3 className="font-medium">{ORDER_TYPE_LABEL[ot.orderType]}</h3>
                   <label className="flex items-center gap-2 text-sm">
@@ -144,6 +161,12 @@ export default function SettingsPage({ slug }: { slug: string }) {
                     Offered on the kiosk
                   </label>
                 </div>
+
+                {mine.length ? (
+                  <ul className="mb-4 space-y-1 rounded-lg bg-(--color-danger)/10 p-3 text-sm text-(--color-danger)">
+                    {mine.map((w, k) => <li key={k}>{w.message}</li>)}
+                  </ul>
+                ) : null}
 
                 {ot.orderType === "EAT_IN" ? (
                   <div className="mb-4">
@@ -163,15 +186,22 @@ export default function SettingsPage({ slug }: { slug: string }) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className={lbl} htmlFor={`area-${ot.orderType}`}>Sales area</label>
-                    <select id={`area-${ot.orderType}`} className={field}
+                    <select id={`area-${ot.orderType}`} className={`${field} ${areaGone ? "border-2 border-(--color-danger)" : ""}`}
                       value={ot.salesAreaId ?? ""}
                       onChange={(e) => setOt(i, { salesAreaId: e.target.value || null })}>
                       <option value="">Choose a sales area</option>
+                      {/* The saved one, when unTill no longer has it: shown for what it is, not as "nothing chosen". */}
+                      {areaGone ? <option value={ot.salesAreaId!} disabled>No longer in unTill — choose again</option> : null}
                       {saved.salesAreas.map((a) => (
                         <option key={a.untillId} value={a.untillId}>{a.number} — {a.name}</option>
                       ))}
                     </select>
-                    <p className={hint}>Sets the price level unTill uses for this order type.</p>
+                    <p className={hint}>
+                      {area && area.tableRanges.length
+                        ? <>Tables in unTill for this area: <b>{ranges(area.tableRanges)}</b>. </>
+                        : null}
+                      Sets the price level unTill uses for this order type.
+                    </p>
                   </div>
 
                   <div>

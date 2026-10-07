@@ -48,6 +48,8 @@ export interface SalesAreaPayload {
 
 export interface SettingsWarning {
   code: string;
+  /** error: the kiosk will not offer it, or unTill will refuse its orders. warning: works, not as meant. info. */
+  severity: "error" | "warning" | "info";
   orderType?: OrderTypeName;
   message: string;
 }
@@ -259,15 +261,41 @@ export class SettingsService {
   }
 }
 
+const LABEL: Record<OrderTypeName, string> = { EAT_IN: "Eat in", TAKE_AWAY: "Take away", DELIVERY: "Delivery" };
+
+/** "1–25, 30–48 and 50–60". */
+const listRanges = (ranges: TableRange[]) => {
+  const parts = ranges.map((r) => (r.fromTable === r.toTable ? `${r.fromTable}` : `${r.fromTable}–${r.toTable}`));
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : (parts[0] ?? "none");
+};
+
+/** The numbers from..to that none of the sales area's ranges contains, as ranges. */
+export function uncovered(from: number, to: number, ranges: TableRange[]): TableRange[] {
+  const out: TableRange[] = [];
+  let n = from;
+  while (n <= to) {
+    const r = ranges.find((x) => x.fromTable <= n && n <= x.toTable);
+    if (r) { n = r.toTable + 1; continue; }
+    // Up to the next range that starts inside, or the end.
+    const next = Math.min(to + 1, ...ranges.map((x) => x.fromTable).filter((f) => f > n));
+    out.push({ fromTable: n, toTable: next - 1 });
+    n = next;
+  }
+  return out;
+}
+
 /**
  * Configuration that saves cleanly but fails at order time. Reported as
  * warnings rather than rejections, so a manager is never locked out of their
  * own settings screen by a rule inferred from ordering code.
  *
+ * "error": the kiosk will not offer this way of ordering, or unTill will refuse its orders.
+ * "warning": it works, but not quite as meant. "info": good to know.
+ *
  * A free function, not a method: as a method its parameter types referenced
  * the return type of get(), which in turn depended on it.
  */
-function audit(
+export function audit(
   settings: SettingsPayload,
   orderTypes: OrderTypePayload[],
   areaById: Map<string, SalesAreaPayload>,
@@ -276,19 +304,19 @@ function audit(
 
   if (!settings.eatInEnabled && !settings.takeAwayEnabled && !settings.deliveryEnabled) {
     warnings.push({
-      code: "NO_ORDER_TYPE",
-      message: "No order type is enabled. The kiosk cannot take any order.",
+      code: "NO_ORDER_TYPE", severity: "error",
+      message: "No way of ordering is switched on, so the kiosk cannot take any order. Switch on Eat in or Take away below.",
     });
   }
 
   for (const ot of orderTypes) {
     if (!ot.isEnabled && !settings[FLAG_BY_TYPE[ot.orderType]]) continue;
+    const label = LABEL[ot.orderType];
 
     if (!ot.configured || !ot.salesAreaId) {
       warnings.push({
-        code: "NOT_CONFIGURED",
-        orderType: ot.orderType,
-        message: `${ot.orderType} is enabled but has no sales area. Orders of this type will fail.`,
+        code: "NOT_CONFIGURED", severity: "error", orderType: ot.orderType,
+        message: `${label} is switched on but has no sales area, so the kiosk does not offer it. Choose its sales area.`,
       });
       continue;
     }
@@ -296,9 +324,8 @@ function audit(
     const area = areaById.get(ot.salesAreaId);
     if (!area) {
       warnings.push({
-        code: "SALES_AREA_MISSING",
-        orderType: ot.orderType,
-        message: `${ot.orderType} points at sales area ${ot.salesAreaId}, which was not in the last unTill sync.`,
+        code: "SALES_AREA_MISSING", severity: "error", orderType: ot.orderType,
+        message: `${label}: the sales area chosen for it is no longer in unTill (unTill's setup or the connection to it changed), so the kiosk does not offer ${label}. Choose one of the current sales areas, and check the table numbers too.`,
       });
       continue;
     }
@@ -309,53 +336,52 @@ function audit(
 
     if (asksCustomer && !hasRange && area.tableRanges.length === 0) {
       warnings.push({
-        code: "NO_TABLE_RANGES",
-        orderType: ot.orderType,
-        message: `Customers are asked for a table number, but neither this order type nor sales area "${area.name}" defines a table range to validate it against. Every eat-in order will be rejected.`,
+        code: "NO_TABLE_RANGES", severity: "error", orderType: ot.orderType,
+        message: `Customers are asked for their table number, but neither ${label} nor sales area "${area.name}" says which tables exist, so every number would be refused. Set the lowest and highest table number.`,
       });
     }
 
     if (!asksCustomer && !hasFixed && !hasRange) {
       warnings.push({
-        code: "NO_TABLE_SOURCE",
-        orderType: ot.orderType,
-        message: `${ot.orderType} has neither a fixed table nor a table range, so there is no table to send the order to.`,
+        code: "NO_TABLE_SOURCE", severity: "error", orderType: ot.orderType,
+        message: `${label} has no table to send its orders to: set a range of numbers for the kiosk to hand out (or one fixed table).`,
       });
     }
 
     if (hasFixed && hasRange) {
       warnings.push({
-        code: "TWO_TABLE_SOURCES",
-        orderType: ot.orderType,
-        message: `${ot.orderType} has both a fixed table and a range. Only one is used — clear the other so the behaviour is explicit.`,
+        code: "TWO_TABLE_SOURCES", severity: "warning", orderType: ot.orderType,
+        message: `${label} has both a fixed table and a range. Only one is used — clear the other so it is clear which.`,
       });
     }
 
-    // unTill rejects a table that no sales-area range covers (ReturnCode 7).
+    // unTill refuses a table that no range of the sales area contains (ReturnCode 7).
     if (area.tableRanges.length > 0) {
-      const covered = (from: number, to: number) =>
-        area.tableRanges.some((r) => r.fromTable <= from && to <= r.toTable);
-      const outside: string[] = [];
-      if (hasFixed && !covered(ot.fixedTableNumber!, ot.fixedTableNumber!)) {
-        outside.push(`table ${ot.fixedTableNumber}`);
-      }
-      if (hasRange && !covered(ot.tableRangeFrom!, ot.tableRangeTo!)) {
-        outside.push(`tables ${ot.tableRangeFrom}-${ot.tableRangeTo}`);
-      }
-      if (outside.length > 0) {
+      const has = `Sales area "${area.name}" has tables ${listRanges(area.tableRanges)}.`;
+      if (hasFixed && uncovered(ot.fixedTableNumber!, ot.fixedTableNumber!, area.tableRanges).length) {
         warnings.push({
-          code: "TABLE_OUTSIDE_SALES_AREA",
-          orderType: ot.orderType,
-          message: `${ot.orderType} sends orders to ${outside.join(" and ")}, which sales area "${area.name}" does not define. unTill will reject every order of this type.`,
+          code: "TABLE_OUTSIDE_SALES_AREA", severity: "error", orderType: ot.orderType,
+          message: `${label} sends its orders to table ${ot.fixedTableNumber}, which unTill does not have, so it will refuse them. ${has}`,
         });
+      }
+      if (hasRange) {
+        const missing = uncovered(ot.tableRangeFrom!, ot.tableRangeTo!, area.tableRanges);
+        const all = missing.length === 1 && missing[0]!.fromTable === ot.tableRangeFrom && missing[0]!.toTable === ot.tableRangeTo;
+        if (missing.length) {
+          warnings.push({
+            code: "TABLE_OUTSIDE_SALES_AREA", severity: "error", orderType: ot.orderType,
+            message: all
+              ? `${label} uses tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, none of which unTill has, so it will refuse every order. ${has}`
+              : `${label} uses tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, but unTill has no ${listRanges(missing)}: an order given one of those numbers will be refused. ${has}`,
+          });
+        }
       }
     }
 
     if (!ot.tablePart) {
       warnings.push({
-        code: "DEFAULT_TABLE_PART",
-        orderType: ot.orderType,
-        message: `${ot.orderType} has no table part set; "a" is used.`,
+        code: "DEFAULT_TABLE_PART", severity: "info", orderType: ot.orderType,
+        message: `${label} has no table part set; "a" (the main bill) is used.`,
       });
     }
   }

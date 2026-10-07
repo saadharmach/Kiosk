@@ -187,9 +187,11 @@ function KioskFlow({ slug }: { slug: string }) {
   // Nothing the customer could order: better a clear message than an empty choice screen.
   const nothingOrderable = Boolean(boot) && !boot!.orderTypes.some((o) => o.configured);
   if (error || (boot && !boot.catalogReady) || nothingOrderable) {
+    // Customers get the calm message; the line under it tells the staff why and where to fix it.
+    const note = error ? null : boot && !boot.catalogReady ? t.staffMenuNotRead : nothingOrderable ? t.staffNoOrderType : null;
     return withBrand(
       <StatusScreen header={header} icon="warning" title={t.errorTitle} text={error?.message ?? t.menuUnavailable}
-        action={{ label: t.retry, icon: "refresh", onClick: retry }} />,
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} note={note} />,
     );
   }
 

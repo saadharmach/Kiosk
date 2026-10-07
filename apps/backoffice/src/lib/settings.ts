@@ -43,6 +43,8 @@ export interface SalesAreaPayload {
 
 export interface SettingsWarning {
   code: string;
+  /** error: the kiosk will not offer it, or unTill will refuse its orders. warning: works, not as meant. info. */
+  severity: "error" | "warning" | "info";
   orderType?: OrderTypeName;
   message: string;
 }

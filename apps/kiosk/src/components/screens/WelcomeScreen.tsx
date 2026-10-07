@@ -65,6 +65,8 @@ export default function WelcomeScreen({
   }, [slide, slides.length, shown]);
 
   const [languages, setLanguages] = useState(false);
+  // A logo that will not load is left out, not shown as a broken image with its name.
+  const [logoFailed, setLogoFailed] = useState(false);
   const [help, setHelp] = useState(false);
   useEffect(() => {
     if (!help) return;
@@ -84,9 +86,9 @@ export default function WelcomeScreen({
           <Icon name="globe" className="size-9" />
           <span>{locale.toUpperCase()}</span>
         </button>
-        {r.logoUrl ? (
+        {r.logoUrl && !logoFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={r.logoUrl} alt={r.name} className="h-18 max-w-60 object-contain" />
+          <img src={r.logoUrl} alt={r.name} onError={() => setLogoFailed(true)} className="h-18 max-w-60 object-contain" />
         ) : null}
       </div>
 

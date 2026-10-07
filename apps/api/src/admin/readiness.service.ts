@@ -43,7 +43,10 @@ export class ReadinessService {
     const orderTypes = TYPES.filter((t) => switchedOn[t]).map((type) => {
       const mapping = mappings.find((m) => m.orderType === type);
       const area = mapping ? salesAreas.find((a) => a.untillId === mapping.salesAreaId) : undefined;
-      return { type, configured: isOrderTypeConfigured({ askTable: type === "EAT_IN" ? (s?.askTableForEatIn ?? true) : false, mapping, area }) };
+      const configured = isOrderTypeConfigured({ askTable: type === "EAT_IN" ? (s?.askTableForEatIn ?? true) : false, mapping, area });
+      // Why it is not ready, so the checklist can say what to do.
+      const reason = configured ? null : !mapping ? ("NO_AREA" as const) : !area ? ("AREA_GONE" as const) : ("NO_TABLES" as const);
+      return { type, configured, reason };
     });
 
     const factsOf = (p: (typeof printers)[number] | null) => p ? {

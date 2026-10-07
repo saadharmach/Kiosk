@@ -6,7 +6,7 @@ import { Icon, type IconName } from "../icons";
 
 /** A full-screen message with one main action: errors, lost connection. */
 export default function StatusScreen({
-  header, icon, title, text, action, secondary,
+  header, icon, title, text, action, secondary, note,
 }: {
   /** Shown as the navy bar when the restaurant is known. */
   header?: { name: string; locale: Locale; onLocale: (l: Locale) => void };
@@ -15,6 +15,8 @@ export default function StatusScreen({
   text: string;
   action: { label: string; icon: IconName; onClick: () => void };
   secondary?: { label: string; onClick: () => void };
+  /** A small line for the staff at the bottom: why, and where to fix it. */
+  note?: string | null;
 }) {
   return (
     <main role="alert" className="flex min-h-dvh flex-col">
@@ -40,6 +42,8 @@ export default function StatusScreen({
           </button>
         ) : null}
       </div>
+
+      {note ? <p className="px-16 pb-12 text-center text-2xl leading-snug text-(--color-ink-muted)">{note}</p> : null}
     </main>
   );
 }
