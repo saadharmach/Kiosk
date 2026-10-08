@@ -61,7 +61,9 @@ systemctl enable --now postgresql >/dev/null
 PG_PORT="$(pg_lsclusters -h | awk -v v="$PG_VERSION" '$1 == v && $2 == "main" {print $3; exit}')"
 [ -n "$PG_PORT" ] || { echo "No PostgreSQL $PG_VERSION cluster found (pg_lsclusters)."; exit 1; }
 pgsql() { sudo -u postgres psql -p "$PG_PORT" "$@"; }
-current_port="$(sed -n 's|^DATABASE_URL=.*@127\.0\.0\.1:\([0-9]*\)/.*|\1|p' "$ENV_FILE" 2>/dev/null | head -1)"
+# (No settings file yet on a fresh server: no port, and that must not stop the script.)
+current_port=""
+[ -f "$ENV_FILE" ] && current_port="$(sed -n 's|^DATABASE_URL=.*@127\.0\.0\.1:\([0-9]*\)/.*|\1|p' "$ENV_FILE" | head -1)"
 if [ "$current_port" != "$PG_PORT" ]; then
   if [ -n "$current_port" ]; then
     echo "The kiosk pointed at the database on port $current_port, which is not PostgreSQL $PG_VERSION: it now uses port $PG_PORT."
@@ -87,13 +89,21 @@ fi
 
 say "Settings ($ENV_FILE)"
 set_default() { grep -q "^$1=" "$ENV_FILE" || printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"; }
+# Settings that follow deploy/config.sh every time (the domains may change): replaced, not just added.
+urls_changed=0
+set_value() {
+  if [ "$(sed -n "s/^$1=//p" "$ENV_FILE" | head -1)" != "$2" ]; then
+    sed -i "/^$1=/d" "$ENV_FILE"; printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"; urls_changed=1
+  fi
+}
 set_default NODE_ENV production
 set_default PORT "$API_PORT"
 set_default MEDIA_DIR "$MEDIA_DIR"
-set_default KIOSK_APP_URL "https://$KIOSK_DOMAIN"
-set_default BACKOFFICE_APP_URL "https://$BACKOFFICE_DOMAIN"
-set_default ADMIN_APP_URL "https://$ADMIN_DOMAIN"
-set_default CORS_ORIGINS "https://$KIOSK_DOMAIN,https://$BACKOFFICE_DOMAIN,https://$ADMIN_DOMAIN"
+set_value KIOSK_APP_URL "https://$KIOSK_DOMAIN"
+set_value BACKOFFICE_APP_URL "https://$BACKOFFICE_DOMAIN"
+set_value ADMIN_APP_URL "https://$ADMIN_DOMAIN"
+set_value CORS_ORIGINS "https://$KIOSK_DOMAIN,https://$BACKOFFICE_DOMAIN,https://$ADMIN_DOMAIN"
+if [ "$urls_changed" = 1 ] && systemctl is-active -q kiosk-api; then systemctl restart kiosk-api; echo "Site addresses updated; kiosk-api restarted."; fi
 # A fresh signing key for this server: everyone signs in once more after the move, nothing else changes.
 set_default JWT_SECRET "$(openssl rand -hex 48)"
 [ -n "${ALERT_EMAIL:-}" ] && set_default ALERT_EMAIL "$ALERT_EMAIL"
@@ -121,9 +131,13 @@ render "$HERE/nginx/kiosk-headers.conf" > /etc/nginx/snippets/kiosk-headers.conf
 render "$HERE/nginx/default.conf" > /etc/nginx/sites-available/kiosk-default.conf
 ln -sf /etc/nginx/sites-available/kiosk-default.conf /etc/nginx/sites-enabled/kiosk-default.conf
 for site in kiosk backoffice admin; do
-  # certbot adds https to these files once; running setup again must not undo that.
-  if [ ! -f "/etc/nginx/sites-available/kiosk-$site.conf" ]; then
-    render "$HERE/nginx/$site.conf" > "/etc/nginx/sites-available/kiosk-$site.conf"
+  f="/etc/nginx/sites-available/kiosk-$site.conf"
+  case $site in kiosk) domain=$KIOSK_DOMAIN ;; backoffice) domain=$BACKOFFICE_DOMAIN ;; admin) domain=$ADMIN_DOMAIN ;; esac
+  # certbot adds https to these files once; running setup again must not undo that — unless the domain changed,
+  # then the file is written fresh for the new name (enable-https.sh then adds https for it).
+  if [ ! -f "$f" ] || ! grep -q "server_name $domain;" "$f"; then
+    [ -f "$f" ] && echo "The $site site is now $domain: its nginx file is written again (run enable-https.sh next)."
+    render "$HERE/nginx/$site.conf" > "$f"
   fi
   ln -sf "/etc/nginx/sites-available/kiosk-$site.conf" "/etc/nginx/sites-enabled/kiosk-$site.conf"
 done

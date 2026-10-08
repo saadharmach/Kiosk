@@ -6,9 +6,9 @@
 DEPLOY_HOST="${DEPLOY_HOST:-root@84.247.188.58}"
 
 # The three sites. Each needs a DNS A record pointing to the server.
-KIOSK_DOMAIN="${KIOSK_DOMAIN:-nex-borne.pos-soft.ma}"
-BACKOFFICE_DOMAIN="${BACKOFFICE_DOMAIN:-backoffice-borne.pos-soft.ma}"
-ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin-borne.pos-soft.ma}"
+KIOSK_DOMAIN="${KIOSK_DOMAIN:-nexborn.amsatech.ma}"
+BACKOFFICE_DOMAIN="${BACKOFFICE_DOMAIN:-backoffice.amsatech.ma}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.amsatech.ma}"
 # Let's Encrypt writes here when a certificate is about to expire and could not renew.
 CERT_EMAIL="${CERT_EMAIL:-saadhmk13@gmail.com}"
 # Who gets the server's alert emails (a service down, disk nearly full, backup missing...). Default: CERT_EMAIL.
