@@ -32,6 +32,7 @@ describe("managing bornes", () => {
     const writes: { op: string; args: any }[] = [];
     let failed = false;
     const prisma: any = {
+      subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
       kiosk: {
         ...model(kiosks, calls, "kiosk"),
         create: async (a: any) => {
@@ -118,6 +119,7 @@ describe("the kiosk's start-up tells which borne it is", () => {
   function make(rows: any[]) {
     const rest = { id: "r1", slug: "chez", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null, contentChangedAt: new Date(0), settings: {}, tpapi: null };
     const prisma: any = {
+      subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
       restaurant: { findUnique: async () => rest },
       tpapiSalesArea: { findMany: async () => [] },
       orderTypeMapping: { findMany: async () => [] },
@@ -147,6 +149,7 @@ describe("placing an order from a borne", () => {
       orderStatusHistory: { create: async () => ({}) },
     };
     const prisma: any = {
+      subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
       ...tx,
       restaurant: { findUnique: async () => ({ id: "r1", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", settings: { takeAwayEnabled: true } }) },
       order: { findFirst: async () => existing, findMany: async () => [], create: tx.order.create },
@@ -195,6 +198,7 @@ describe("tickets go to the right printer", () => {
   function setup(printers: any[], kiosks: any[] = [{ id: "k2", restaurantId: "r1", name: "Borne terrasse" }]) {
     const calls: Call[] = []; const jobs: any[] = [];
     const prisma: any = {
+      subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
       printer: model(printers, calls, "printer"),
       kiosk: model(kiosks, calls, "kiosk"),
       restaurant: model([{ id: "r1", name: "Chez", timezone: "Africa/Casablanca", settings: { ticketFooterText: null, askTableForEatIn: false } }], calls, "restaurant"),

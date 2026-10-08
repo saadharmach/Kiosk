@@ -5,13 +5,14 @@ import { getReadiness, getRestaurant, type Readiness, type RestaurantDetail, typ
 import ActivityTab from "./ActivityTab";
 import ConnectionTab from "./ConnectionTab";
 import DetailsTab from "./DetailsTab";
+import SubscriptionTab from "./SubscriptionTab";
 import GoLiveTab from "./GoLiveTab";
 import OrdersTab from "./OrdersTab";
 import TillLogTab from "./TillLogTab";
 import UsersTab from "./UsersTab";
 import { PosBadge, StatusBadge, secondary } from "./ui";
 
-const TABS: RestaurantTab[] = ["Go-live", "Details", "unTill", "Users", "Orders", "Till log", "Activity"];
+const TABS: RestaurantTab[] = ["Go-live", "Subscription", "Details", "unTill", "Users", "Orders", "Till log", "Activity"];
 type Tab = RestaurantTab;
 
 export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", initialFilter, onBack }: { id: string; canWrite: boolean; initialTab?: RestaurantTab; initialFilter?: string; onBack: () => void }) {
@@ -58,6 +59,7 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", i
       {!canWrite ? <p className="mb-4 rounded-lg bg-(--color-surface-2) p-3 text-sm text-(--color-ink-muted)">Read-only: your support account can look at everything and run a sync, but not change anything.</p> : null}
 
       {tab === "Go-live" ? <GoLiveTab r={r} readiness={readiness} onOpenTab={setTab} /> : null}
+      {tab === "Subscription" ? <SubscriptionTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "Details" ? <DetailsTab r={r} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "unTill" ? <ConnectionTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}
       {tab === "Users" ? <UsersTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}

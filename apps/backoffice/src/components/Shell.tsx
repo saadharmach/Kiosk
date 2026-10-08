@@ -11,6 +11,7 @@ import OrdersPage from "./OrdersPage";
 import BornesPage from "./BornesPage";
 import SuggestionsPage from "./SuggestionsPage";
 import BrandingPage from "./BrandingPage";
+import SubscriptionBanner from "./SubscriptionBanner";
 const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Branding", "Settings"] as const;
 
 export default function Shell() {
@@ -101,6 +102,7 @@ export default function Shell() {
       </aside>
 
         <main className="flex-1 overflow-x-auto p-8">
+          {slug ? <SubscriptionBanner slug={slug} /> : null}
           <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
           {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />

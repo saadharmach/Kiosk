@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { consecutiveFailures } from "../sync/sync-schedule.js";
+import { standing, todayIn, ymd } from "../common/subscription.js";
 import { STUCK_AFTER_MIN, buildAttention, type RestaurantFacts } from "./attention.js";
 
 const MIN = 60_000;
@@ -22,8 +23,9 @@ export class OverviewService {
     const [restaurants, owners, stuck, failed, last24h, last7d, syncRuns, activity] = await Promise.all([
       this.prisma.restaurant.findMany({
         select: {
-          id: true, slug: true, name: true, status: true,
+          id: true, slug: true, name: true, status: true, timezone: true,
           tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastFailureAt: true, lastSyncAt: true, lastErrorMessage: true } },
+          subscriptionPeriods: { select: { id: true, startsOn: true, endsOn: true, cancelledAt: true } },
         },
       }),
       this.prisma.restaurantUser.groupBy({ by: ["restaurantId"], where: { isActive: true, role: "OWNER" }, _count: { _all: true } }),
@@ -58,8 +60,11 @@ export class OverviewService {
     const facts: RestaurantFacts[] = restaurants.map((r) => {
       const runs = runsOf.get(r.id) ?? [];
       const failures = consecutiveFailures(runs, now);
+      const { subscriptionPeriods, timezone, ...rest } = r;
+      const sub = standing(subscriptionPeriods, todayIn(timezone, new Date(now)));
       return {
-        ...r,
+        ...rest,
+        subscription: { state: sub.state, coveredUntil: sub.coveredUntil ? ymd(sub.coveredUntil) : null, daysLeft: sub.daysLeft },
         activeOwners: ownersOf.get(r.id) ?? 0,
         stuckOrders: stuckOf.get(r.id) ?? 0,
         failedOrders: failedOf.get(r.id) ?? 0,

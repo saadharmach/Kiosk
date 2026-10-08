@@ -56,9 +56,13 @@ describe("marking it changed", () => {
 });
 
 describe("what the kiosk asks every 20 seconds", () => {
-  const svc = (row: unknown) => new CatalogService({ restaurant: { findUnique: async () => row } } as never, {} as never);
+  const svc = (row: unknown, subscribed = true) => new CatalogService({ restaurant: { findUnique: async () => row }, subscriptionPeriod: { findFirst: async () => (subscribed ? { id: "s" } : null) } } as never, {} as never);
   it("answers with when the restaurant last changed — also when it is switched off", async () => {
-    assert.deepEqual(await svc({ contentChangedAt: new Date("2026-10-07T10:00:00Z") }).version("resto-a"), { version: "2026-10-07T10:00:00.000Z" });
+    assert.deepEqual(await svc({ id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z") }).version("resto-a"), { version: "2026-10-07T10:00:00.000Z" });
+  });
+  it("it also changes when a subscription period starts or ends (at midnight nobody saves anything)", async () => {
+    const row = { id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z") };
+    assert.notEqual((await svc(row, false).version("resto-a")).version, (await svc(row, true).version("resto-a")).version);
   });
   it("an unknown restaurant is a 404", async () => {
     await assert.rejects(svc(null).version("nope"), /not found/i);

@@ -1,10 +1,10 @@
 /** The go-live checklist for one restaurant, worked out from facts about it. Pure, so it can be tested. */
 
-export type CheckKey = "ACTIVE" | "TILL" | "MENU" | "ORDER_TYPES" | "OWNER" | "PRINTER" | "LOGO" | "TEST_ORDER";
+export type CheckKey = "ACTIVE" | "SUBSCRIPTION" | "TILL" | "MENU" | "ORDER_TYPES" | "OWNER" | "PRINTER" | "LOGO" | "TEST_ORDER";
 /** done: fine. todo: not done yet. warning: works, but look at it. */
 export type CheckState = "done" | "todo" | "warning";
 /** Which screen can fix it: the platform admin's tabs, or only the restaurant in its own back office. */
-export type FixTab = "Details" | "unTill" | "Users";
+export type FixTab = "Details" | "unTill" | "Users" | "Subscription";
 
 export interface Check {
   key: CheckKey;
@@ -21,6 +21,8 @@ export interface PrinterFacts { enabled: boolean; hasAddress: boolean; helperIss
 
 export interface ReadinessFacts {
   status: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  /** Where its subscription stands; optional so older callers still work (treated as none). */
+  subscription?: { state: "active" | "ending" | "ended" | "none"; coveredUntil: string | null; daysLeft: number };
   till: {
     isEnabled: boolean;
     hasCredentials: boolean;
@@ -56,6 +58,14 @@ export function evaluateReadiness(f: ReadinessFacts, now = Date.now()) {
   add(f.status === "ACTIVE"
     ? { key: "ACTIVE", label: "Restaurant is active", required: true, state: "done", detail: "Its kiosk and its staff sign-in are on.", tab: "Details" }
     : { key: "ACTIVE", label: "Restaurant is active", required: true, state: "todo", detail: `It is ${f.status.toLowerCase()}: its kiosk is off and its staff cannot sign in. Activate it when it is ready.`, tab: "Details" });
+
+  // ---- a subscription period is running (the kiosks refuse orders without one)
+  const sub = f.subscription ?? { state: "none" as const, coveredUntil: null, daysLeft: 0 };
+  add(sub.state === "active"
+    ? { key: "SUBSCRIPTION", label: "Subscription running", required: true, state: "done", detail: `Until ${sub.coveredUntil}.`, tab: "Subscription" }
+    : sub.state === "ending"
+      ? { key: "SUBSCRIPTION", label: "Subscription running", required: true, state: "warning", detail: `Ends on ${sub.coveredUntil} (${sub.daysLeft === 1 ? "today is the last day" : `in ${sub.daysLeft} days`}): add the next period.`, tab: "Subscription" }
+      : { key: "SUBSCRIPTION", label: "Subscription running", required: true, state: "todo", detail: "No running subscription: the kiosks do not take orders. Add a period in the Subscription tab.", tab: "Subscription" });
 
   // ---- the link to the till
   const t = f.till;

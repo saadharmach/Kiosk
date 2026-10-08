@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable, resolveBorne } from "./availability.js";
+import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
+import { isSubscribed } from "../common/subscription.js";
 import { StorageService, isVideoPath } from "../common/storage.service.js";
 import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
@@ -10,6 +11,9 @@ import { isOrderTypeConfigured } from "../common/order-type-config.js";
 const dec = (v: { toNumber(): number } | null | undefined): number | null =>
   v === null || v === undefined ? null : v.toNumber();
 const pick = pickLocalized;
+
+/** What /version and the start-up data say, so the kiosk can compare them. */
+export const versionOf = (changedAt: Date, subscribed: boolean) => `${changedAt.toISOString()}${subscribed ? "" : "|off"}`;
 
 @Injectable()
 export class CatalogService {
@@ -23,9 +27,11 @@ export class CatalogService {
    * for a switched-off restaurant too, so a kiosk notices when it is switched back on.
    */
   async version(slug: string) {
-    const r = await this.prisma.restaurant.findUnique({ where: { slug }, select: { contentChangedAt: true } });
+    const r = await this.prisma.restaurant.findUnique({ where: { slug }, select: { id: true, contentChangedAt: true, timezone: true } });
     if (!r) throw new NotFoundException("Restaurant not found");
-    return { version: r.contentChangedAt.toISOString() };
+    // Whether a subscription period runs is part of it: at the midnight one starts or ends nobody saves anything,
+    // yet the kiosk must notice.
+    return { version: versionOf(r.contentChangedAt, await isSubscribed(this.prisma, r.id, r.timezone)) };
   }
 
   /** Branding, settings and the zones a customer can choose from. */
@@ -35,6 +41,7 @@ export class CatalogService {
       include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true } } },
     });
     requireOrderable(restaurant);
+    await requireSubscribed(this.prisma, restaurant);
     // Which borne is asking, if it says so. Unknown: none. Switched off: the calm unavailable answer.
     const borne = borneCode && /^[A-Za-z0-9]{1,4}$/.test(borneCode) ? await resolveBorne(this.prisma, restaurant.id, restaurant.name, borneCode) : null;
 
@@ -111,7 +118,7 @@ export class CatalogService {
       },
       catalogReady: Boolean(restaurant.tpapi?.lastSyncAt),
       // Compared with what /version says later: when it moves, the kiosk reloads this.
-      version: restaurant.contentChangedAt.toISOString(),
+      version: versionOf(restaurant.contentChangedAt, true),
     };
   }
 
@@ -176,10 +183,13 @@ export class CatalogService {
         currency: true,
         status: true,
         locale: true,
+        name: true,
+        timezone: true,
         settings: { select: { showAllergens: true } },
       },
     });
     requireOrderable(restaurant);
+    await requireSubscribed(this.prisma, restaurant);
     const restaurantId = restaurant.id;
     const showAllergens = restaurant.settings?.showAllergens ?? false;
         // The server resolves the language. The browser never receives three of everything.

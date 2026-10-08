@@ -1,4 +1,5 @@
 import { NotFoundException, ServiceUnavailableException } from "@nestjs/common";
+import { isSubscribed } from "../common/subscription.js";
 
 /** The kiosk recognises this code and shows its calm "temporarily unavailable" screen. */
 export const RESTAURANT_UNAVAILABLE = "RESTAURANT_UNAVAILABLE";
@@ -39,4 +40,15 @@ export async function resolveBorne(
 export function requireOrderable<T extends { status: string; name?: string }>(restaurant: T | null | undefined): asserts restaurant is T {
   if (!restaurant) throw new NotFoundException("Restaurant not available");
   if (restaurant.status !== "ACTIVE") throw unavailable(restaurant.name);
+}
+
+/**
+ * The subscription check, next to requireOrderable: without a running period the kiosk gets the same calm
+ * "unavailable" answer as a switched-off restaurant (a customer is never told why).
+ */
+export async function requireSubscribed(
+  prisma: Parameters<typeof isSubscribed>[0],
+  restaurant: { id: string; name: string; timezone: string },
+): Promise<void> {
+  if (!(await isSubscribed(prisma, restaurant.id, restaurant.timezone))) throw unavailable(restaurant.name);
 }

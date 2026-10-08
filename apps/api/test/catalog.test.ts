@@ -85,6 +85,7 @@ function setup(over: Record<string, unknown[]> = {}, settings: Record<string, un
     settings, tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: new Date() }, ...restaurantOver,
   };
   const prisma: Record<string, unknown> = {
+    subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
     restaurant: { findUnique: async () => rest },
     tpapiSalesArea: {
       findFirst: async () => ({ untillId: AREA, name: "Restaurant", priceLevelId: 10n }),
@@ -417,5 +418,14 @@ describe("CatalogService.catalog: suggestions per department", () => {
       departmentSuggestion: [sug(3n, 13n, 0), sug(3n, 15n, 1), sug(3n, 11n, 2), sug(3n, 999n, 3), sug(3n, 10n, 4)],
     });
     assert.deepEqual(c.suggestions, { "3": ["10"] });
+  });
+});
+
+describe("without a running subscription", () => {
+  it("the kiosk start-up and the menu answer 'unavailable' (the same calm answer as a switched-off restaurant)", async () => {
+    const { svc } = setup({ subscriptionPeriod: [] } as never);   // no period at all
+    const unavailable = (e: any) => e.getStatus?.() === 503 && e.getResponse?.().code === "RESTAURANT_UNAVAILABLE" && e.getResponse?.().restaurantName === "Resto A";
+    await assert.rejects(svc.bootstrap("resto-a"), unavailable);
+    await assert.rejects(svc.catalog("resto-a", "100"), unavailable);
   });
 });

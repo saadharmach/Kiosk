@@ -13,6 +13,7 @@ const H = 3_600_000, D = 86_400_000;
 /** A restaurant that is completely ready. Each test spoils one thing. */
 const ready = (over: Partial<ReadinessFacts> = {}): ReadinessFacts => ({
   status: "ACTIVE",
+  subscription: { state: "active", coveredUntil: "2026-12-31", daysLeft: 80 },
   till: { isEnabled: true, hasCredentials: true, lastSuccessAt: ago(H), lastFailureAt: null, lastErrorMessage: null, lastSyncAt: ago(H) },
   menu: { departments: 5, articles: 120, prices: 118 },
   orderTypes: [{ type: "EAT_IN", configured: true }],
@@ -28,14 +29,14 @@ describe("the go-live checklist", () => {
   it("a restaurant with everything in place is ready, with every check done", () => {
     const r = evaluateReadiness(ready(), NOW);
     assert.equal(r.ready, true);
-    assert.deepEqual(r.checks.map((c) => c.state), Array(8).fill("done"));
-    assert.deepEqual([r.requiredDone, r.requiredTotal, r.recommendedDone, r.recommendedTotal], [5, 5, 3, 3]);
+    assert.deepEqual(r.checks.map((c) => c.state), Array(9).fill("done"));
+    assert.deepEqual([r.requiredDone, r.requiredTotal, r.recommendedDone, r.recommendedTotal], [6, 6, 3, 3]);
   });
 
   it("a brand-new restaurant is not ready, and says what is missing, in order", () => {
-    const r = evaluateReadiness(ready({ till: null, menu: { departments: 0, articles: 0, prices: 0 }, orderTypes: [{ type: "EAT_IN", configured: false }], activeOwners: 0, printer: null, hasLogo: false, placedOrders: 0 }), NOW);
+    const r = evaluateReadiness(ready({ subscription: { state: "none", coveredUntil: null, daysLeft: 0 }, till: null, menu: { departments: 0, articles: 0, prices: 0 }, orderTypes: [{ type: "EAT_IN", configured: false }], activeOwners: 0, printer: null, hasLogo: false, placedOrders: 0 }), NOW);
     assert.equal(r.ready, false);
-    assert.deepEqual(r.checks.filter((c) => c.state === "todo").map((c) => c.key), ["TILL", "MENU", "ORDER_TYPES", "OWNER", "PRINTER", "LOGO", "TEST_ORDER"]);
+    assert.deepEqual(r.checks.filter((c) => c.state === "todo").map((c) => c.key), ["SUBSCRIPTION", "TILL", "MENU", "ORDER_TYPES", "OWNER", "PRINTER", "LOGO", "TEST_ORDER"]);
     assert.equal(r.requiredDone, 1);   // only "active"
   });
 
@@ -84,6 +85,22 @@ describe("the go-live checklist", () => {
       assert.equal(c.state, "warning");
       assert.match(c.detail, /5 days ago/);
       assert.equal(evaluateReadiness(f, NOW).ready, true);
+    });
+  });
+
+  describe("the subscription", () => {
+    it("running: done; ending within 7 days: a warning to add the next period; none or ended: blocks, and points to its tab", () => {
+      assert.equal(get(ready(), "SUBSCRIPTION").state, "done");
+      const ending = get(ready({ subscription: { state: "ending", coveredUntil: "2026-10-31", daysLeft: 3 } }), "SUBSCRIPTION");
+      assert.equal(ending.state, "warning");
+      assert.match(ending.detail, /Ends on 2026-10-31 \(in 3 days\)/);
+      for (const state of ["ended", "none"] as const) {
+        const r = evaluateReadiness(ready({ subscription: { state, coveredUntil: null, daysLeft: 0 } }), NOW);
+        assert.equal(r.ready, false, state);
+        const c = r.checks.find((x) => x.key === "SUBSCRIPTION")!;
+        assert.equal(c.state, "todo");
+        assert.equal(c.tab, "Subscription");
+      }
     });
   });
 
@@ -190,7 +207,8 @@ describe("ReadinessService reads only this restaurant's data", () => {
     const calls: Call[] = [];
     const prisma = {
       restaurant: { findUnique: async (a: any) => (a.where.id === "r1" ? {
-        status: "ACTIVE", logoPath: "logo.png",
+        status: "ACTIVE", logoPath: "logo.png", timezone: "UTC",
+        subscriptionPeriods: [{ id: "s", startsOn: new Date("2020-01-01T00:00:00Z"), endsOn: new Date("2099-12-31T00:00:00Z"), cancelledAt: null }],
         settings: { eatInEnabled: true, takeAwayEnabled: false, deliveryEnabled: false, askTableForEatIn: true },
         tpapi: { isEnabled: true, credentialsCiphertext: "x", lastSuccessAt: ago(H), lastFailureAt: null, lastErrorMessage: null, lastSyncAt: ago(H) },
       } : null) },

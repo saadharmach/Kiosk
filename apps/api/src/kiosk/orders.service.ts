@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable, resolveBorne } from "./availability.js";
+import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
@@ -21,9 +21,10 @@ export class OrdersService {
   async create(slug: string, dto: CreateOrderDto) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, name: true, currency: true, status: true, settings: true, locale: true },
+      select: { id: true, name: true, currency: true, status: true, settings: true, locale: true, timezone: true },
     });
     requireOrderable(restaurant);
+    await requireSubscribed(this.prisma, restaurant);
     const restaurantId = restaurant.id;
 
     // ---- idempotency: the same clientOrderId always returns the same order. (Which borne this is, is looked up at the
@@ -121,9 +122,10 @@ export class OrdersService {
 
   preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
     return this.prisma.restaurant
-      .findUnique({ where: { slug }, select: { id: true, name: true, currency: true, status: true, settings: true, locale: true } })
-      .then((r) => {
+      .findUnique({ where: { slug }, select: { id: true, name: true, currency: true, status: true, settings: true, locale: true, timezone: true } })
+      .then(async (r) => {
         requireOrderable(r);
+        await requireSubscribed(this.prisma, r);
         // Same rule as create(): no point quoting a price for an order that would be refused.
         this.assertOrderTypeEnabled(r.settings, dto.orderType);
         return this.pricing.price(r.id, r.currency, {

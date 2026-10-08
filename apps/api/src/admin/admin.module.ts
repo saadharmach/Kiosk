@@ -9,6 +9,8 @@ import { TillLogService } from "./till-log.service.js";
 import { OrderStatusModule } from "../orders/order-status.module.js";
 import { OrderSubmitModule } from "../orders/order-submit.module.js";
 import { RestaurantOrdersService } from "../restaurant/restaurant-orders.service.js";
+import { SubscriptionsController } from "./subscriptions.controller.js";
+import { SubscriptionsService } from "./subscriptions.service.js";
 import { TeamController } from "./team.controller.js";
 import { TeamService } from "./team.service.js";
 import { ActivityController } from "./activity.controller.js";
@@ -26,8 +28,8 @@ import { TpapiConnectionService } from "./tpapi-connection.service.js";
 
 @Module({
   imports: [AuthModule, OrderStatusModule, OrderSubmitModule],
-  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController, AdminOrdersController, TeamController],
-  providers: [RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, EmailCheckService, CryptoService],
+  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController, AdminOrdersController, TeamController, SubscriptionsController],
+  providers: [SubscriptionsService, RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, EmailCheckService, CryptoService],
   exports: [AuditService, CryptoService],
 })
 export class AdminModule {}

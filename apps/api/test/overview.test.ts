@@ -91,15 +91,34 @@ describe("failing menu syncs", () => {
   it("nothing when the latest sync worked", () => assert.deepEqual(kinds([syncing(0)]), []));
 });
 
+describe("subscriptions on the overview", () => {
+  it("none running: a problem that says the kiosks are off and where to fix it", () => {
+    const [i] = buildAttention([healthy({ subscription: { state: "ended", coveredUntil: null, daysLeft: 0 } })], NOW);
+    assert.equal(i!.kind, "SUBSCRIPTION_ENDED");
+    assert.equal(i!.severity, "problem");
+    assert.match(i!.message, /kiosks are not taking orders.*Subscription tab/);
+  });
+  it("ending within 7 days: a warning with the date; running: nothing", () => {
+    const [i] = buildAttention([healthy({ subscription: { state: "ending", coveredUntil: "2026-10-31", daysLeft: 1 } })], NOW);
+    assert.equal(i!.kind, "SUBSCRIPTION_ENDING");
+    assert.equal(i!.severity, "warning");
+    assert.match(i!.message, /ends on 2026-10-31 \(today is the last day\)/);
+    assert.deepEqual(kinds([healthy({ subscription: { state: "active", coveredUntil: "2026-12-31", daysLeft: 60 } })]), []);
+  });
+  it("a suspended restaurant is not flagged for its subscription (it is off on purpose)", () => {
+    assert.deepEqual(kinds([healthy({ status: "SUSPENDED", subscription: { state: "ended", coveredUntil: null, daysLeft: 0 } })]), []);
+  });
+});
+
 describe("the overview endpoint's numbers", () => {
   function build() {
     const queries: { model: string; op: string; args: any }[] = [];
     const q = (model: string, op: string, result: unknown) => async (args: any) => { queries.push({ model, op, args }); return result; };
     const prisma = {
       restaurant: { findMany: q("restaurant", "findMany", [
-        { id: "r1", slug: "a", name: "A", status: "ACTIVE", tpapi: { isEnabled: true, lastSuccessAt: ago(H), lastFailureAt: null, lastSyncAt: ago(H), lastErrorMessage: null } },
-        { id: "r2", slug: "b", name: "B", status: "SUSPENDED", tpapi: null },
-        { id: "r3", slug: "c", name: "C", status: "ACTIVE", tpapi: null },
+        { id: "r1", slug: "a", name: "A", status: "ACTIVE", timezone: "UTC", subscriptionPeriods: [{ id: "s", startsOn: new Date("2020-01-01T00:00:00Z"), endsOn: new Date("2099-12-31T00:00:00Z"), cancelledAt: null }], tpapi: { isEnabled: true, lastSuccessAt: ago(H), lastFailureAt: null, lastSyncAt: ago(H), lastErrorMessage: null } },
+        { id: "r2", slug: "b", name: "B", status: "SUSPENDED", timezone: "UTC", subscriptionPeriods: [], tpapi: null },
+        { id: "r3", slug: "c", name: "C", status: "ACTIVE", timezone: "UTC", subscriptionPeriods: [{ id: "old", startsOn: new Date("2026-01-01T00:00:00Z"), endsOn: new Date("2026-02-01T00:00:00Z"), cancelledAt: null }], tpapi: null },
       ]) },
       restaurantUser: {
         groupBy: q("restaurantUser", "groupBy", [{ restaurantId: "r1", _count: { _all: 1 } }]),
@@ -128,7 +147,7 @@ describe("the overview endpoint's numbers", () => {
     assert.deepEqual(o.orders, { last24h: 12, last7d: 80 });
     const byKind = o.attention.map((i) => `${i.slug}:${i.kind}`).sort();
     // r2 is suspended on purpose, so nothing is said about it
-    assert.deepEqual(byKind, ["a:ORDERS_FAILED", "a:ORDERS_STUCK", "c:NO_OWNER", "c:NO_TILL"]);
+    assert.deepEqual(byKind, ["a:ORDERS_FAILED", "a:ORDERS_STUCK", "c:NO_OWNER", "c:NO_TILL", "c:SUBSCRIPTION_ENDED"]);
     assert.equal(o.recentActivity[0]!.restaurant, "A");
     assert.equal(o.recentActivity[0]!.actor, "boss@x.test");
   });

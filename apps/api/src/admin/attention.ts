@@ -2,7 +2,8 @@
 
 export type AttentionKind =
   | "TILL_FAILING" | "ORDERS_STUCK" | "ORDERS_FAILED" | "NO_OWNER"
-  | "SYNC_FAILING" | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED";
+  | "SYNC_FAILING" | "STALE_SYNC" | "NEVER_SYNCED" | "NO_TILL" | "TILL_DISABLED"
+  | "SUBSCRIPTION_ENDED" | "SUBSCRIPTION_ENDING";
 
 /** problem: customers or staff are affected now. warning: it will become one. setup: not finished being set up. */
 export type Severity = "problem" | "warning" | "setup";
@@ -27,6 +28,8 @@ export interface RestaurantFacts {
   /** How many of the newest menu syncs failed in a row (0 when the latest worked or none ran), and why. */
   syncFailures?: number;
   lastSyncError?: string | null;
+  /** Where its subscription stands (see common/subscription.ts standing()). */
+  subscription?: { state: "active" | "ending" | "ended" | "none"; coveredUntil: string | null; daysLeft: number };
 }
 
 export interface AttentionItem {
@@ -66,6 +69,12 @@ export function buildAttention(restaurants: RestaurantFacts[], now = Date.now())
     }
     if (r.activeOwners === 0) {
       add("NO_OWNER", "problem", "Nobody can sign in to its back office: there is no active owner.");
+    }
+    const sub = r.subscription;
+    if (sub && (sub.state === "ended" || sub.state === "none")) {
+      add("SUBSCRIPTION_ENDED", "problem", "No running subscription: its kiosks are not taking orders. Add a period in its Subscription tab.");
+    } else if (sub?.state === "ending") {
+      add("SUBSCRIPTION_ENDING", "warning", `Its subscription ends on ${sub.coveredUntil} (${sub.daysLeft === 1 ? "today is the last day" : `in ${sub.daysLeft} days`}). Add the next period to keep its kiosks on.`);
     }
 
     if (!t) {

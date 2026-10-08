@@ -94,6 +94,7 @@ model Restaurant {
   archivedAt   DateTime?
 
   users        RestaurantUser[]
+  subscriptionPeriods SubscriptionPeriod[]
   settings     RestaurantSettings?
   tpapi        TpapiConnection?
   orders       Order[]
@@ -101,7 +102,6 @@ model Restaurant {
   printers     Printer[]
   printJobs    PrintJob[]
   terminals    PaymentTerminal[]
-  subscription Subscription?
 
   @@index([status])
   @@map("restaurants")
@@ -1095,42 +1095,6 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// =========================================================== subscriptions
-
-enum SubscriptionStatus {
-  TRIALING
-  ACTIVE
-  PAST_DUE
-  SUSPENDED
-  CANCELLED
-}
-
-model Subscription {
-  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  restaurantId       String             @unique @db.Uuid
-
-  plan               String             @default("standard")
-  status             SubscriptionStatus @default(TRIALING)
-  startedAt          DateTime           @default(now())
-  trialEndsAt        DateTime?
-  currentPeriodEnd   DateTime?
-  cancelledAt        DateTime?
-
-  /// Limits enforced by the API. Null = unlimited.
-  maxKiosks          Int?
-  maxOrdersPerMonth  Int?
-  /// Feature flags, e.g. { "delivery": true, "paymentTerminal": false }
-  features           Json               @default("{}")
-  notes              String?
-
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-
-  restaurant         Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@map("subscriptions")
-}
 /// One refresh-token session for a platform user. The token itself is never stored.
 model PlatformSession {
   id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -1204,4 +1168,30 @@ model AccountToken {
 
   @@index([realm, userId])
   @@map("account_tokens")
+}
+
+/// One paid (or free) period during which the restaurant's kiosks take orders. The platform team sets the dates;
+/// renewing is adding the next period. Cancelling ends it at once. Without a running period the kiosks show
+/// "unavailable" (the back office stays open, with a banner).
+model SubscriptionPeriod {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String     @db.Uuid
+  /// First and last day covered, in the restaurant's own time zone (both included).
+  startsOn     DateTime   @db.Date
+  endsOn       DateTime   @db.Date
+  /// What was paid for it, in the restaurant's currency, if anything was recorded.
+  amount       Decimal?   @db.Decimal(12, 2)
+  note         String?    @db.VarChar(500)
+  createdById  String?    @db.Uuid
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  /// Set when someone cancels: from that moment the period no longer counts.
+  cancelledAt  DateTime?
+  cancelledById String?   @db.Uuid
+  cancelReason String?    @db.VarChar(500)
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, endsOn])
+  @@map("subscription_periods")
 }

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { standing, todayIn, ymd } from "../common/subscription.js";
 import { isOrderTypeConfigured } from "../common/order-type-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { evaluateReadiness, type ReadinessFacts } from "./readiness.js";
@@ -15,7 +16,8 @@ export class ReadinessService {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { id: restaurantId },
       select: {
-        status: true, logoPath: true,
+        status: true, logoPath: true, timezone: true,
+        subscriptionPeriods: { select: { id: true, startsOn: true, endsOn: true, cancelledAt: true } },
         settings: { select: { eatInEnabled: true, takeAwayEnabled: true, deliveryEnabled: true, askTableForEatIn: true } },
         tpapi: { select: { isEnabled: true, credentialsCiphertext: true, lastSuccessAt: true, lastFailureAt: true, lastErrorMessage: true, lastSyncAt: true } },
       },
@@ -61,6 +63,10 @@ export class ReadinessService {
     const t = restaurant.tpapi;
     const facts: ReadinessFacts = {
       status: restaurant.status,
+      subscription: (() => {
+        const sub = standing(restaurant.subscriptionPeriods ?? [], todayIn(restaurant.timezone ?? "UTC", new Date(now)));
+        return { state: sub.state, coveredUntil: sub.coveredUntil ? ymd(sub.coveredUntil) : null, daysLeft: sub.daysLeft };
+      })(),
       till: t ? {
         isEnabled: t.isEnabled, hasCredentials: Boolean(t.credentialsCiphertext),
         lastSuccessAt: t.lastSuccessAt, lastFailureAt: t.lastFailureAt, lastErrorMessage: t.lastErrorMessage, lastSyncAt: t.lastSyncAt,

@@ -164,7 +164,7 @@ export interface Overview {
 }
 export const getOverview = () => request<Overview>("/admin/overview");
 
-export type RestaurantTab = "Go-live" | "Details" | "unTill" | "Users" | "Orders" | "Till log" | "Activity";
+export type RestaurantTab = "Go-live" | "Subscription" | "Details" | "unTill" | "Users" | "Orders" | "Till log" | "Activity";
 
 export const KIOSK_URL = process.env.NEXT_PUBLIC_KIOSK_URL ?? "http://localhost:3002";
 export const BACKOFFICE_URL = process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "http://localhost:3003";
@@ -217,7 +217,7 @@ export type CheckState = "done" | "todo" | "warning";
 export interface Check {
   key: string; label: string; required: boolean; state: CheckState; detail: string;
   /** Present when the platform team can fix it here; absent when only the restaurant can, in its own back office. */
-  tab?: "Details" | "unTill" | "Users";
+  tab?: "Details" | "unTill" | "Users" | "Subscription";
 }
 export interface Readiness {
   ready: boolean; requiredDone: number; requiredTotal: number; recommendedDone: number; recommendedTotal: number; checks: Check[];
@@ -257,3 +257,43 @@ export function ago(iso: string | null, now = Date.now()): string {
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   return `${Math.round(s / 86400)} days ago`;
 }
+
+// ---------------------------------------------------------------- subscriptions
+
+export type PeriodState = "current" | "upcoming" | "past" | "cancelled";
+
+export interface SubscriptionPeriod {
+  id: string;
+  startsOn: string;
+  endsOn: string;
+  amount: number | null;
+  note: string | null;
+  state: PeriodState;
+  createdAt: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+}
+
+export interface SubscriptionView {
+  /** Today in the restaurant's time zone, "YYYY-MM-DD". */
+  today: string;
+  currency: string;
+  standing: {
+    state: "active" | "ending" | "ended" | "none";
+    coveredUntil: string | null;
+    daysLeft: number;
+    next: { startsOn: string; endsOn: string } | null;
+  };
+  periods: SubscriptionPeriod[];
+}
+
+export const getSubscription = (id: string) => request<SubscriptionView>(`/admin/restaurants/${id}/subscription`);
+
+export const addPeriod = (id: string, body: { startsOn: string; endsOn: string; amount?: number | null; note?: string | null }) =>
+  request<SubscriptionView>(`/admin/restaurants/${id}/subscription/periods`, { method: "POST", body: JSON.stringify(body) });
+
+export const changePeriod = (id: string, periodId: string, body: { startsOn?: string; endsOn?: string; amount?: number | null; note?: string | null }) =>
+  request<SubscriptionView>(`/admin/restaurants/${id}/subscription/periods/${periodId}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const cancelPeriod = (id: string, periodId: string, reason: string) =>
+  request<SubscriptionView>(`/admin/restaurants/${id}/subscription/periods/${periodId}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });

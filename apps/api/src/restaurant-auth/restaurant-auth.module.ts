@@ -19,6 +19,7 @@ import { RestaurantAuthController } from "./restaurant-auth.controller.js";
 import { RestaurantAuthService } from "./restaurant-auth.service.js";
 import { RestaurantAuthGuard } from "./guards/restaurant-auth.guard.js";
 import { TenantGuard } from "./guards/tenant.guard.js";
+import { RestaurantSubscriptionController } from "../restaurant/subscription.controller.js";
 import { StorageService } from "../common/storage.service.js";
 import { OrderPrintController, PrinterController } from "../printing/printer.controller.js";
 import { PrintingModule } from "../printing/printing.module.js";
@@ -35,8 +36,7 @@ import { PrintingModule } from "../printing/printing.module.js";
     OrderPrintController,
     SettingsController,
     SuggestionsController,
-    KiosksController,
-  ],
+    KiosksController, RestaurantSubscriptionController],
   providers: [
     RestaurantAuthService,
     RestaurantAuthGuard,

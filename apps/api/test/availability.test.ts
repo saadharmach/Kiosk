@@ -37,6 +37,7 @@ describe("is this restaurant taking orders", () => {
 describe("every public kiosk route refuses a restaurant that is not active", () => {
   const rest = (status: string) => ({ id: "r1", name: "Chez Sam", slug: "sam", currency: "MAD", status, locale: "fr", settings: {}, tpapi: null });
   const prisma = (status: string) => ({
+    subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
     restaurant: { findUnique: async (a: { where: { slug: string } }) => (a.where.slug === "ghost" ? null : rest(status)) },
     order: { findFirst: async () => null },
   });
