@@ -278,6 +278,8 @@ export interface SubscriptionView {
   /** Today in the restaurant's time zone, "YYYY-MM-DD". */
   today: string;
   currency: string;
+  /** When no period is running, the back office is closed too (otherwise only the kiosks stop). */
+  closeBackofficeWhenEnded: boolean;
   standing: {
     state: "active" | "ending" | "ended" | "none";
     coveredUntil: string | null;
@@ -297,3 +299,6 @@ export const changePeriod = (id: string, periodId: string, body: { startsOn?: st
 
 export const cancelPeriod = (id: string, periodId: string, reason: string) =>
   request<SubscriptionView>(`/admin/restaurants/${id}/subscription/periods/${periodId}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });
+
+export const setBackofficeRule = (id: string, closeWhenEnded: boolean) =>
+  request<SubscriptionView>(`/admin/restaurants/${id}/subscription/backoffice`, { method: "PUT", body: JSON.stringify({ closeWhenEnded }) });

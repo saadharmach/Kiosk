@@ -1,11 +1,11 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import type { AccessTokenPayload } from "../auth/token.service.js";
-import { AddPeriodDto, CancelPeriodDto, ChangePeriodDto } from "./dto/subscription.dto.js";
+import { AddPeriodDto, BackofficeRuleDto, CancelPeriodDto, ChangePeriodDto } from "./dto/subscription.dto.js";
 import { SubscriptionsService } from "./subscriptions.service.js";
 
 /** Every platform role can look; only SUPER_ADMIN changes a subscription. */
@@ -17,6 +17,12 @@ export class SubscriptionsController {
   @Get()
   get(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.subs.get(id);
+  }
+
+  @Put("backoffice")
+  @Roles("SUPER_ADMIN")
+  setBackoffice(@Param("id", new ParseUUIDPipe()) id: string, @Body() dto: BackofficeRuleDto, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
+    return this.subs.setCloseBackoffice(id, dto.closeWhenEnded, { id: user.sub }, req);
   }
 
   @Post("periods")

@@ -1,4 +1,5 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BACKOFFICE_CLOSED_MESSAGE, backofficeClosed } from "../common/subscription.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { PasswordService } from "../auth/password.service.js";
 import { TokenService } from "../auth/token.service.js";
@@ -53,6 +54,8 @@ export class RestaurantAuthService {
       where: { id: user.id },
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
     });
+    // Only told after the right password: a stranger learns nothing about the restaurant.
+    if (await backofficeClosed(this.prisma, restaurant)) throw new ForbiddenException(BACKOFFICE_CLOSED_MESSAGE);
 
     return this.issue(user.id, user.role, restaurant.id, restaurant.slug, ctx);
   }
@@ -73,6 +76,11 @@ export class RestaurantAuthService {
       session.user.restaurant.status !== "ACTIVE"
     ) {
       throw new UnauthorizedException("Session expired");
+    }
+    // An open back office is closed within one access token's life (15 minutes) once the subscription ends.
+    if (await backofficeClosed(this.prisma, session.user.restaurant)) {
+      await this.prisma.restaurantSession.updateMany({ where: { id: session.id, restaurantId: session.restaurantId, revokedAt: null }, data: { revokedAt: new Date() } });
+      throw new ForbiddenException(BACKOFFICE_CLOSED_MESSAGE);
     }
 
     const next = await this.issue(

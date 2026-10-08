@@ -91,3 +91,20 @@ export async function isSubscribed(
   });
   return Boolean(row);
 }
+
+/** Said to staff when their back office is closed: at sign-in, and when their open session is ended. */
+export const BACKOFFICE_CLOSED_MESSAGE = "Your subscription has ended, so the back office is closed. Contact us to renew: everything is kept and comes back as it was.";
+
+/**
+ * Is this restaurant's back office closed? Only when the platform team chose so for it, and no period is running.
+ * One small query, and none at all for a restaurant that keeps its back office open.
+ */
+export async function backofficeClosed(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Prisma client, or a test's stand-in
+  prisma: { subscriptionPeriod: { findFirst: (a: any) => Promise<unknown> } },
+  restaurant: { id: string; timezone: string; closeBackofficeWhenEnded: boolean },
+  now = new Date(),
+): Promise<boolean> {
+  if (!restaurant.closeBackofficeWhenEnded) return false;
+  return !(await isSubscribed(prisma, restaurant.id, restaurant.timezone, now));
+}

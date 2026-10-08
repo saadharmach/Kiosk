@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getSubscription, type SubscriptionStanding } from "@/lib/subscription";
+import { useEffect, useRef, useState } from "react";
+import { CLOSED_MESSAGE, getSubscription, type SubscriptionStanding } from "@/lib/subscription";
 
 const day = (s: string) => new Date(`${s}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -9,7 +9,7 @@ const day = (s: string) => new Date(`${s}T12:00:00Z`).toLocaleDateString(undefin
  * Only shown when it matters: the last week of the subscription, and once it has ended (the kiosks are then off, but
  * the back office stays open). Looked at again every few minutes, so it changes at midnight without a reload.
  */
-export default function SubscriptionBanner({ slug }: { slug: string }) {
+export default function SubscriptionBanner({ slug, onClosed }: { slug: string; onClosed: (message: string) => void }) {
   const [s, setS] = useState<SubscriptionStanding | null>(null);
   useEffect(() => {
     const load = () => getSubscription(slug).then(setS).catch(() => undefined);
@@ -17,6 +17,13 @@ export default function SubscriptionBanner({ slug }: { slug: string }) {
     const id = setInterval(load, 5 * 60_000);
     return () => clearInterval(id);
   }, [slug]);
+  // When the platform team chose to close the back office, an open one signs out once nothing runs (the API also
+  // refuses to renew the session, so it closes within 15 minutes at the latest).
+  const closed = Boolean(s?.closesWhenEnded && (s.state === "ended" || s.state === "none"));
+  const told = useRef(false);
+  useEffect(() => {
+    if (closed && !told.current) { told.current = true; onClosed(CLOSED_MESSAGE); }
+  }, [closed, onClosed]);
 
   if (!s || s.state === "active") return null;
   if (s.state === "ending") {
@@ -25,7 +32,9 @@ export default function SubscriptionBanner({ slug }: { slug: string }) {
         <p className="font-medium">
           Your subscription ends on {day(s.coveredUntil!)} ({s.daysLeft === 1 ? "today is the last day" : `in ${s.daysLeft} days`}).
         </p>
-        <p className="text-sm">After that your kiosks stop taking orders. Contact us to renew.</p>
+        <p className="text-sm">
+          After that your kiosks stop taking orders{s.closesWhenEnded ? " and this back office closes" : ""}. Contact us to renew.
+        </p>
       </div>
     );
   }

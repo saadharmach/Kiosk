@@ -102,7 +102,9 @@ export default function Shell() {
       </aside>
 
         <main className="flex-1 overflow-x-auto p-8">
-          {slug ? <SubscriptionBanner slug={slug} /> : null}
+          {slug ? (
+            <SubscriptionBanner slug={slug} onClosed={(message) => { setError(message); void signOut(); }} />
+          ) : null}
           <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
           {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />

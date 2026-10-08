@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  addPeriod, cancelPeriod, changePeriod, getSubscription, type PeriodState, type SubscriptionPeriod, type SubscriptionView,
+  addPeriod, cancelPeriod, changePeriod, getSubscription, setBackofficeRule, type PeriodState, type SubscriptionPeriod, type SubscriptionView,
 } from "@/lib/platform";
 import { ErrorText, Field, input, primary, secondary } from "./ui";
 
@@ -29,7 +29,7 @@ function Standing({ v }: { v: SubscriptionView }) {
   const [tone, text] =
     s.state === "active" ? ["border-green-600 bg-green-50", `Running until ${day(s.coveredUntil!)} — ${s.daysLeft} days left. The kiosks take orders.`]
     : s.state === "ending" ? ["border-amber-500 bg-amber-50", `Ends on ${day(s.coveredUntil!)} — ${s.daysLeft === 1 ? "today is the last day" : `${s.daysLeft} days left`}. Add the next period to keep the kiosks on.`]
-    : ["border-red-600 bg-red-50", `No running subscription: the kiosks are not taking orders${s.state === "none" ? " (it never had one)" : ""}. The back office stays open.`];
+    : ["border-red-600 bg-red-50", `No running subscription: the kiosks are not taking orders${s.state === "none" ? " (it never had one)" : ""}. ${v.closeBackofficeWhenEnded ? "The back office is closed too: its staff cannot sign in." : "The back office stays open."}`];
   return (
     <div role="status" className={`rounded-(--radius-card) border-2 p-4 ${tone}`}>
       <p className="font-medium">{text}</p>
@@ -127,6 +127,22 @@ export default function SubscriptionTab({ id, canWrite, onChanged }: { id: strin
       <Standing v={v} />
       <ErrorText message={error} />
       {notice ? <p role="status" className="text-sm text-green-700">{notice}</p> : null}
+
+      <section className="rounded-(--radius-card) border border-(--color-line) p-5">
+        <h2 className="mb-3 font-medium">When no period is running</h2>
+        <fieldset className="flex flex-col gap-3" disabled={!canWrite || busy}>
+          {([
+            [false, "Only the kiosks stop", "The back office stays open with a red banner, so they can still see their orders and renew."],
+            [true, "Close the back office too", "Its staff cannot sign in; anyone signed in is signed out within 15 minutes. Nothing is deleted: when you add a period, everything comes back as it was."],
+          ] as const).map(([close, label, help]) => (
+            <label key={label} className="flex cursor-pointer items-start gap-3">
+              <input type="radio" name="backoffice-rule" className="mt-1 h-4 w-4" checked={v.closeBackofficeWhenEnded === close}
+                onChange={() => void run(() => setBackofficeRule(id, close), close ? "From now on the back office closes when no period is running." : "The back office now stays open when no period is running.")} />
+              <span><span className="font-medium">{label}</span><span className="block text-sm text-(--color-ink-muted)">{help}</span></span>
+            </label>
+          ))}
+        </fieldset>
+      </section>
 
       {canWrite ? (
         <section className="rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5">

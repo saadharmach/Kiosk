@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -19,4 +19,9 @@ export class ChangePeriodDto {
 
 export class CancelPeriodDto {
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+export class BackofficeRuleDto {
+  @IsBoolean()
+  closeWhenEnded!: boolean;
 }

@@ -88,6 +88,9 @@ model Restaurant {
   /// When anything the kiosk shows last changed (any change in the back office or the admin, a menu sync).
   /// Kiosks look at it every few seconds and reload what they show when it moves.
   contentChangedAt DateTime   @default(now())
+  /// Chosen by the platform team: when no subscription period is running, the back office is closed too (staff
+  /// cannot sign in). Off: it stays open with a banner, only the kiosks stop.
+  closeBackofficeWhenEnded Boolean @default(false)
 
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

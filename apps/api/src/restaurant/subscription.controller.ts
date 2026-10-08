@@ -16,7 +16,7 @@ export class RestaurantSubscriptionController {
   @Get()
   async get(@Tenant() t: TenantCtx) {
     const [r, periods] = await Promise.all([
-      this.prisma.restaurant.findUniqueOrThrow({ where: { id: t.restaurantId }, select: { timezone: true } }),
+      this.prisma.restaurant.findUniqueOrThrow({ where: { id: t.restaurantId }, select: { timezone: true, closeBackofficeWhenEnded: true } }),
       this.prisma.subscriptionPeriod.findMany({
         where: { restaurantId: t.restaurantId },
         select: { id: true, startsOn: true, endsOn: true, cancelledAt: true },
@@ -28,6 +28,8 @@ export class RestaurantSubscriptionController {
       coveredUntil: s.coveredUntil ? ymd(s.coveredUntil) : null,
       daysLeft: s.daysLeft,
       next: s.next ? { startsOn: ymd(s.next.startsOn) } : null,
+      // The back office closes when nothing runs: warned in the last days, signed out once it has ended.
+      closesWhenEnded: r.closeBackofficeWhenEnded,
     };
   }
 }

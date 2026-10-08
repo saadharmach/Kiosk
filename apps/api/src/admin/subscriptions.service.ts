@@ -22,7 +22,7 @@ export class SubscriptionsService {
   ) {}
 
   private async restaurant(id: string) {
-    const r = await this.prisma.restaurant.findUnique({ where: { id }, select: { id: true, timezone: true, currency: true } });
+    const r = await this.prisma.restaurant.findUnique({ where: { id }, select: { id: true, timezone: true, currency: true, closeBackofficeWhenEnded: true } });
     if (!r) throw new NotFoundException("Restaurant not found");
     return r;
   }
@@ -35,6 +35,7 @@ export class SubscriptionsService {
     return {
       today: ymd(today),
       currency: r.currency,
+      closeBackofficeWhenEnded: r.closeBackofficeWhenEnded,
       standing: {
         state: s.state,
         coveredUntil: s.coveredUntil ? ymd(s.coveredUntil) : null,
@@ -116,6 +117,20 @@ export class SubscriptionsService {
       before: { startsOn: ymd(p.startsOn), endsOn: ymd(p.endsOn), amount: p.amount === null ? null : Number(p.amount), note: p.note },
       after: { startsOn: ymd(startsOn), endsOn: ymd(endsOn), ...(dto.amount !== undefined ? { amount: dto.amount } : {}), ...(dto.note !== undefined ? { note: data.note } : {}) },
     }, req);
+    return this.get(restaurantId);
+  }
+
+  /** Whether the back office closes too when no period is running (otherwise only the kiosks stop). */
+  async setCloseBackoffice(restaurantId: string, close: boolean, actor: { id: string }, req?: Request) {
+    const r = await this.restaurant(restaurantId);
+    if (r.closeBackofficeWhenEnded !== close) {
+      await this.prisma.restaurant.updateMany({ where: { id: restaurantId }, data: { closeBackofficeWhenEnded: close } });
+      await this.audit.record({
+        restaurantId, actorType: "PLATFORM_USER", actorId: actor.id, action: "subscription.backoffice_rule_changed",
+        entityType: "Restaurant", entityId: restaurantId,
+        before: { closeBackofficeWhenEnded: r.closeBackofficeWhenEnded }, after: { closeBackofficeWhenEnded: close },
+      }, req);
+    }
     return this.get(restaurantId);
   }
 
