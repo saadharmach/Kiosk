@@ -66,7 +66,7 @@ export default function ProductsPage({ slug }: { slug: string }) {
       <div className="mb-6 flex flex-wrap gap-3">
         <input value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }}
           placeholder="Search products" aria-label="Search products"
-          className="h-10 min-w-64 flex-1 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3" />
+          className="h-10 w-full min-w-0 flex-1 rounded-lg sm:min-w-64 border border-(--color-line) bg-(--color-surface-2) px-3" />
         <select value={categoryId} onChange={(e) => { setPage(1); setCategoryId(e.target.value); }}
           aria-label="Category"
           className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3">
@@ -120,7 +120,7 @@ export default function ProductsPage({ slug }: { slug: string }) {
           </div>
           <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
             {data.products.map((p) => (
-              <li key={p.articleId} className="flex items-center gap-4 p-3">
+              <li key={p.articleId} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.imageUrl} alt="" className="size-12 rounded object-cover" />
@@ -128,12 +128,14 @@ export default function ProductsPage({ slug }: { slug: string }) {
                   <div className="size-12 rounded bg-(--color-surface-2)" />
                 )}
 
-                <div className="min-w-0 flex-1">
+                {/* Phone: the name has the first line; the languages and buttons go to a second one. */}
+                <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
                   <p className="truncate font-medium">{p.displayName?.fr ?? p.posName}</p>
                   <p className="truncate text-sm text-(--color-ink-muted)">{p.posName}</p>
                 </div>
 
-                <div className="flex gap-1">
+                <div className="flex w-full items-center gap-4 sm:w-auto">
+                <div className="flex flex-1 gap-1 sm:flex-none">
                   {LOCALES.map((l) => (
                     <span key={l}
                       className={`rounded px-1.5 py-0.5 text-xs uppercase ${
@@ -157,6 +159,7 @@ export default function ProductsPage({ slug }: { slug: string }) {
                   className="rounded-lg bg-(--color-brand) px-4 py-2 text-sm font-medium text-(--color-brand-ink)">
                   Edit
                 </button>
+                </div>
               </li>
             ))}
           </ul>

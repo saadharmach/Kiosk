@@ -114,7 +114,7 @@ function Editor({ slug, dept, departments, onSaved }: {
         <div className="mb-3 flex flex-wrap gap-3">
           <label className="sr-only" htmlFor="pick-dept">Department</label>
           <select id="pick-dept" value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
-            className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface) px-3">
+            className="h-10 w-full min-w-0 rounded-lg border border-(--color-line) bg-(--color-surface) px-3 sm:w-auto sm:max-w-xs">
             <option value="">All departments</option>
             {departments.map((d) => <option key={d.departmentId} value={d.departmentId}>{d.name}</option>)}
           </select>
@@ -187,8 +187,20 @@ export default function SuggestionsPage({ slug }: { slug: string }) {
   const current = depts.find((d) => d.departmentId === selected);
 
   return (
-    <div className="flex gap-8">
-      <nav aria-label="Departments" className="flex w-64 shrink-0 flex-col gap-1">
+    <div className="flex flex-col gap-4 md:flex-row md:gap-8">
+      {/* Phone: the departments are a drop-down above the editor. */}
+      <label className="flex flex-col gap-1 text-sm text-(--color-ink-muted) md:hidden">
+        Department
+        <select value={selected ?? ""} onChange={(e) => setSelected(e.target.value)}
+          className="h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3 text-base text-(--color-ink)">
+          {depts.map((d) => (
+            <option key={d.departmentId} value={d.departmentId}>
+              {d.name}{d.suggestions.length > 0 ? ` (${d.suggestions.length})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <nav aria-label="Departments" className="hidden w-64 shrink-0 flex-col gap-1 md:flex">
         {depts.map((d) => (
           <button key={d.departmentId} onClick={() => setSelected(d.departmentId)} aria-current={d.departmentId === selected ? "true" : undefined}
             className={`flex h-10 items-center justify-between gap-2 rounded-lg px-3 text-start ${

@@ -47,10 +47,10 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", i
         <span className="text-sm text-(--color-ink-muted)">/r/{r.slug} · {r._count.orders} orders</span>
       </div>
 
-      <div role="tablist" className="mb-6 flex gap-1 border-b border-(--color-line)">
+      <div role="tablist" className="mb-6 flex flex-wrap gap-x-1 border-b border-(--color-line)">
         {TABS.map((t) => (
           <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-4 py-2 ${t === tab ? "border-(--color-brand) font-medium" : "border-transparent text-(--color-ink-muted) hover:text-(--color-ink)"}`}>
+            className={`-mb-px border-b-2 px-3 py-2 md:px-4 ${t === tab ? "border-(--color-brand) font-medium" : "border-transparent text-(--color-ink-muted) hover:text-(--color-ink)"}`}>
             {t}
           </button>
         ))}

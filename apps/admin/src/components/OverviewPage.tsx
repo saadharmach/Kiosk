@@ -87,8 +87,8 @@ export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: Re
               <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) text-sm">
                 {data.recentActivity.map((a) => (
                   <li key={a.id} className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <span className="w-44 shrink-0 text-(--color-ink-muted)">{new Date(a.at).toLocaleString()}</span>
-                    <span className="min-w-0 flex-1">
+                    <span className="w-full shrink-0 text-(--color-ink-muted) sm:w-44">{new Date(a.at).toLocaleString()}</span>
+                    <span className="min-w-0 flex-1 wrap-anywhere">
                       {a.restaurantId ? <button onClick={() => onOpen(a.restaurantId!, "Activity")} className="font-medium underline-offset-2 hover:underline">{a.restaurant ?? "a restaurant"}</button> : null}
                       {" "}· {readable(a.action)} · <span className="text-(--color-ink-muted)">{a.actor ?? "unknown"}</span>
                     </span>

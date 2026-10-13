@@ -40,16 +40,18 @@ function Row({ slug, row, onSaved }: { slug: string; row: AdminCategory; onSaved
 
   return (
     <li className="p-3">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--color-surface-2)">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {row.imageUrl ? <img src={row.imageUrl} alt="" className="size-full object-cover" /> : null}
         </span>
-        <div className="min-w-0 flex-1">
+        {/* Phone: the name has the first line; the languages and the button go to a second one. */}
+        <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
           <p className="truncate font-medium">{row.displayName?.fr ?? row.posName}</p>
           <p className="truncate text-sm text-(--color-ink-muted)">{row.posName}</p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex w-full items-center gap-4 sm:w-auto">
+        <div className="flex flex-1 gap-1 sm:flex-none">
           {LOCALES.map((l) => (
             <span key={l} className={`rounded px-1.5 py-0.5 text-xs uppercase ${
               (row.displayName?.[l] ?? "").trim()
@@ -62,6 +64,7 @@ function Row({ slug, row, onSaved }: { slug: string; row: AdminCategory; onSaved
           className="rounded-lg border border-(--color-line) px-4 py-2 text-sm">
           {open ? "Close" : "Edit"}
         </button>
+        </div>
       </div>
 
       {open ? (

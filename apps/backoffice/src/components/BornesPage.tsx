@@ -46,7 +46,7 @@ function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
           <section>
             <h3 className="mb-2 font-medium">Name</h3>
             <div className="flex gap-2">
-              <input aria-label="Borne name" className={`${field} w-72`} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+              <input aria-label="Borne name" className={`${field} w-full sm:w-72`} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
               <button type="button" className={secondary} disabled={busy || !name.trim() || name.trim() === b.name}
                 onClick={() => void act(() => updateBorne(slug, b.id, { name: name.trim() }))}>Rename</button>
             </div>
@@ -122,7 +122,7 @@ export default function BornesPage({ slug }: { slug: string }) {
       >
         <div>
           <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="borne-name">New borne</label>
-          <input id="borne-name" className={`${field} w-72`} value={name} maxLength={60} placeholder="Borne entrée" onChange={(e) => setName(e.target.value)} />
+          <input id="borne-name" className={`${field} w-full sm:w-72`} value={name} maxLength={60} placeholder="Borne entrée" onChange={(e) => setName(e.target.value)} />
         </div>
         <button type="submit" className={primary} disabled={adding || !name.trim()}>{adding ? "Adding…" : "Add a borne"}</button>
       </form>

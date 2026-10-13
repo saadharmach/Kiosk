@@ -113,16 +113,17 @@ export default function OrdersPage({ slug }: { slug: string }) {
         </div>
       ) : (
         <>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-start text-(--color-ink-muted)">
               <tr className="border-b border-(--color-line)">
                 <th className="py-2 text-start font-normal">Reference</th>
                 <th className="py-2 text-start font-normal">Status</th>
-                <th className="py-2 text-start font-normal">Type</th>
-                <th className="py-2 text-end font-normal">Table</th>
-                <th className="py-2 text-end font-normal">Items</th>
-                <th className="py-2 text-end font-normal">Total</th>
-                <th className="py-2 text-start font-normal">Created</th>
+                <th className="hidden py-2 text-start font-normal md:table-cell">Type</th>
+                <th className="hidden py-2 text-end font-normal md:table-cell">Table</th>
+                <th className="hidden py-2 text-end font-normal md:table-cell">Items</th>
+                <th className="py-2 ps-3 text-end font-normal">Total</th>
+                <th className="hidden py-2 ps-3 text-start font-normal md:table-cell">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -130,7 +131,11 @@ export default function OrdersPage({ slug }: { slug: string }) {
                 <tr key={o.id}
                   onClick={() => setOpenId(o.id)}
                   className="cursor-pointer border-b border-(--color-line) hover:bg-(--color-surface-2)">
-                  <td className="py-2 font-mono">{o.reference}</td>
+                  <td className="py-2 pe-3">
+                    <span className="font-mono whitespace-nowrap">{o.reference}</span>
+                    {/* Phone: the time under the reference (its own column is hidden). */}
+                    <span className="block text-xs text-(--color-ink-muted) md:hidden">{when(o.createdAt)}</span>
+                  </td>
                   <td className={`py-2 ${statusClass(o.status)}`}>
                     {o.status}
                     {o.tpapiLastError ? (
@@ -139,17 +144,18 @@ export default function OrdersPage({ slug }: { slug: string }) {
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2">{o.orderType}</td>
-                  <td className="py-2 text-end">{o.tableNumber ?? "—"}</td>
-                  <td className="py-2 text-end">{o.itemCount}</td>
-                  <td className="py-2 text-end">{money(o.total, o.currency)}</td>
-                  <td className="py-2">{when(o.createdAt)}</td>
+                  <td className="hidden py-2 md:table-cell">{o.orderType}</td>
+                  <td className="hidden py-2 text-end md:table-cell">{o.tableNumber ?? "—"}</td>
+                  <td className="hidden py-2 text-end md:table-cell">{o.itemCount}</td>
+                  <td className="py-2 ps-3 text-end whitespace-nowrap">{money(o.total, o.currency)}</td>
+                  <td className="hidden py-2 ps-3 md:table-cell">{when(o.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
 
-          <div className="mt-4 flex items-center gap-3 text-sm text-(--color-ink-muted)">
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-(--color-ink-muted)">
             <button type="button" disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
               className="h-9 rounded-lg border border-(--color-line) px-3 disabled:opacity-40">

@@ -51,6 +51,9 @@ function NewRestaurantForm({ onCreated, onCancel }: { onCreated: (r: RestaurantR
   );
 }
 
+/** The columns that still fit on a phone. */
+const PHONE_COLUMNS = ["Restaurant", "Status", "Orders"];
+
 export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolean; onOpen: (id: string, tab?: "Go-live") => void }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
@@ -94,7 +97,9 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
           <table className="w-full text-start">
             <thead className="bg-(--color-surface-2) text-sm text-(--color-ink-muted)">
               <tr className="text-start">
-                {["Restaurant", "Status", "City", "Orders", "Users", "Till link", "Last sync"].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}
+                {["Restaurant", "Status", "City", "Orders", "Users", "Till link", "Last sync"].map((h) => (
+                  <th key={h} className={`px-4 py-3 text-start font-medium ${PHONE_COLUMNS.includes(h) ? "" : "hidden md:table-cell"}`}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-(--color-line)">
@@ -105,11 +110,11 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
                     <div className="text-sm text-(--color-ink-muted)">/r/{r.slug}</div>
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
-                  <td className="px-4 py-3">{r.city ?? "—"}</td>
+                  <td className="hidden px-4 py-3 md:table-cell">{r.city ?? "—"}</td>
                   <td className="px-4 py-3">{r._count.orders}</td>
-                  <td className="px-4 py-3">{r._count.users}</td>
-                  <td className="px-4 py-3"><PosBadge health={r.tpapi} /></td>
-                  <td className="px-4 py-3 text-sm text-(--color-ink-muted)">{r.tpapi ? ago(r.tpapi.lastSyncAt) : "—"}</td>
+                  <td className="hidden px-4 py-3 md:table-cell">{r._count.users}</td>
+                  <td className="hidden px-4 py-3 md:table-cell"><PosBadge health={r.tpapi} /></td>
+                  <td className="hidden px-4 py-3 text-sm text-(--color-ink-muted) md:table-cell">{r.tpapi ? ago(r.tpapi.lastSyncAt) : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -118,7 +123,7 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
       )}
 
       {data && data.pages > 1 ? (
-        <div className="mt-4 flex items-center gap-3 text-sm">
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <button className={secondary} disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
           <span>Page {data.page} of {data.pages} · {data.total} restaurants</span>
           <button className={secondary} disabled={page >= data.pages} onClick={() => setPage(page + 1)}>Next</button>

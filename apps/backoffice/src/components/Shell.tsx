@@ -21,6 +21,8 @@ export default function Shell() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [section, setSection] = useState<(typeof SECTIONS)[number]>("Products");
+  // On a phone the sections sit behind a Menu button at the top instead of a sidebar.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (loading) {
     return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
@@ -81,31 +83,59 @@ export default function Shell() {
     );
   }
 
+  const pick = (s: (typeof SECTIONS)[number]) => { setSection(s); setMenuOpen(false); window.scrollTo(0, 0); };
+  const sections = (
+    <nav className="flex flex-col gap-1" aria-label="Sections">
+      {SECTIONS.map((s) => (
+        <button key={s} onClick={() => pick(s)} aria-current={s === section ? "page" : undefined}
+          className={`h-11 rounded-lg px-3 text-start md:h-10 ${
+            s === section ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"
+          }`}>
+          {s}
+        </button>
+      ))}
+    </nav>
+  );
+  const account = (
+    <div className="px-2 pt-6 text-sm text-(--color-ink-muted)">
+      <p className="truncate">{user.email}</p>
+      <button onClick={signOut} className="mt-2 underline">Sign out</button>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-dvh">
-      <aside className="flex w-60 shrink-0 flex-col border-e border-(--color-line) bg-(--color-surface-2) p-4">
-        <p className="mb-6 px-2 text-sm text-(--color-ink-muted)">{slug}</p>
-        <nav className="flex flex-col gap-1">
-          {SECTIONS.map((s) => (
-            <button key={s} onClick={() => setSection(s)} aria-current={s === section ? "page" : undefined}
-              className={`h-10 rounded-lg px-3 text-start ${
-                s === section ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"
-              }`}>
-              {s}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-auto px-2 pt-6 text-sm text-(--color-ink-muted)">
-          <p className="truncate">{user.email}</p>
-          <button onClick={signOut} className="mt-2 underline">Sign out</button>
+    <div className="flex min-h-dvh flex-col md:flex-row">
+      {/* Phone: a bar at the top, the sections open below it. */}
+      <header className="sticky top-0 z-30 border-b border-(--color-line) bg-(--color-surface-2) md:hidden">
+        <div className="flex h-14 items-center gap-3 px-4">
+          <span className="min-w-0 flex-1 truncate text-sm text-(--color-ink-muted)">{slug}</span>
+          <button onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}
+            className="flex h-10 items-center gap-2 rounded-lg border border-(--color-line) bg-(--color-surface) px-3 font-medium">
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+              {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+            {menuOpen ? "Close" : section}
+          </button>
         </div>
+        {menuOpen ? (
+          <div className="max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-(--color-line) p-3 pb-6">
+            {sections}
+            {account}
+          </div>
+        ) : null}
+      </header>
+
+      <aside className="hidden w-60 shrink-0 flex-col border-e border-(--color-line) bg-(--color-surface-2) p-4 md:flex">
+        <p className="mb-6 px-2 text-sm text-(--color-ink-muted)">{slug}</p>
+        {sections}
+        <div className="mt-auto">{account}</div>
       </aside>
 
-        <main className="flex-1 overflow-x-auto p-8">
+        <main className="min-w-0 flex-1 p-4 md:p-8">
           {slug ? (
             <SubscriptionBanner slug={slug} onClosed={(message) => { setError(message); void signOut(); }} />
           ) : null}
-          <h1 className="mb-6 text-2xl font-semibold">{section}</h1>
+          <h1 className="mb-4 text-2xl font-semibold md:mb-6">{section}</h1>
           {section === "Products" && slug ? <ProductsPage slug={slug} />
           : section === "Categories" && slug ? <CategoriesPage slug={slug} />
           : section === "Suggestions" && slug ? <SuggestionsPage slug={slug} />

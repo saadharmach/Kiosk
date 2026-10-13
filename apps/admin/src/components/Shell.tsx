@@ -20,7 +20,9 @@ export default function Shell() {
   const [view, setView] = useState<"overview" | "restaurants" | "team" | "account">("overview");
   // A restaurant that is open, and the tab to open it on.
   const [open, setOpen] = useState<{ id: string; tab?: RestaurantTab; filter?: string } | null>(null);
-  const go = (v: "overview" | "restaurants" | "team" | "account") => { setView(v); setOpen(null); };
+  // On a phone the sections and the account links sit behind a Menu button.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const go = (v: "overview" | "restaurants" | "team" | "account") => { setView(v); setOpen(null); setMenuOpen(false); };
   // The next person to sign in on this screen starts at the beginning, not on the last person's page.
   const leave = async () => { await signOut(); setView("overview"); setOpen(null); };
 
@@ -75,23 +77,41 @@ export default function Shell() {
     );
   }
 
+  const nav = ([["overview", "Overview"], ["restaurants", "Restaurants"], ["team", "Team"]] as const).filter(([v]) => v !== "team" || canWrite).map(([v, label]) => (
+    <button key={v} onClick={() => go(v)} aria-current={view === v && !open ? "page" : undefined}
+      className={`rounded-lg px-3 py-2 text-start text-sm md:py-1.5 ${view === v ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"}`}>{label}</button>
+  ));
+  const account = (
+    <>
+      <span className="break-all">{user.email} · {user.role === "SUPER_ADMIN" ? "super admin" : "support (read-only)"}</span>
+      <button onClick={() => go("account")} className="underline" aria-current={view === "account" ? "page" : undefined}>Change password</button>
+      <button onClick={leave} className="underline">Sign out</button>
+    </>
+  );
+
   return (
     <div className="min-h-dvh">
-      <header className="flex items-center gap-4 border-b border-(--color-line) bg-(--color-surface-2) px-8 py-3">
-        <span className="text-lg font-semibold">Platform admin</span>
-        <nav className="flex gap-1" aria-label="Sections">
-          {([["overview", "Overview"], ["restaurants", "Restaurants"], ["team", "Team"]] as const).filter(([v]) => v !== "team" || canWrite).map(([v, label]) => (
-            <button key={v} onClick={() => go(v)} aria-current={view === v ? "page" : undefined}
-              className={`rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"}`}>{label}</button>
-          ))}
-        </nav>
-        <div className="ms-auto flex items-center gap-4 text-sm text-(--color-ink-muted)">
-          <span>{user.email} · {user.role === "SUPER_ADMIN" ? "super admin" : "support (read-only)"}</span>
-          <button onClick={() => go("account")} className="underline" aria-current={view === "account" ? "page" : undefined}>Change password</button>
-          <button onClick={leave} className="underline">Sign out</button>
+      <header className="sticky top-0 z-30 border-b border-(--color-line) bg-(--color-surface-2) md:static">
+        <div className="flex h-14 items-center gap-4 px-4 md:px-8">
+          <span className="text-lg font-semibold">Platform admin</span>
+          <nav className="hidden gap-1 md:flex" aria-label="Sections">{nav}</nav>
+          <div className="ms-auto hidden items-center gap-4 text-sm text-(--color-ink-muted) md:flex">{account}</div>
+          <button onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}
+            className="ms-auto flex h-10 items-center gap-2 rounded-lg border border-(--color-line) bg-(--color-surface) px-3 font-medium md:hidden">
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+              {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+            {menuOpen ? "Close" : "Menu"}
+          </button>
         </div>
+        {menuOpen ? (
+          <div className="flex flex-col gap-4 border-t border-(--color-line) p-4 md:hidden">
+            <nav className="flex flex-col gap-1" aria-label="Sections">{nav}</nav>
+            <div className="flex flex-col items-start gap-3 text-sm text-(--color-ink-muted)">{account}</div>
+          </div>
+        ) : null}
       </header>
-      <main className="mx-auto max-w-6xl p-8">
+      <main className="mx-auto max-w-6xl p-4 md:p-8">
         {view === "account" && !open ? (
           <div>
             <h1 className="mb-1 text-2xl font-semibold">Change password</h1>

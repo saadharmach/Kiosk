@@ -96,7 +96,7 @@ export default function ProductEditor({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div ref={panel} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={product.posName}
-        className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-s border-(--color-line) bg-(--color-surface) p-6">
+        className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-s border-(--color-line) bg-(--color-surface) p-4 sm:p-6">
         <header className="mb-6">
           <p className="text-sm text-(--color-ink-muted)">unTill name</p>
           <h2 className="text-xl font-semibold">{product.posName}</h2>
