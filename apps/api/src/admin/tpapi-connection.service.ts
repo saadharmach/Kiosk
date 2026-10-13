@@ -5,6 +5,7 @@ import { TpapiClient, type TpapiBaseResponse } from "@kiosk/tpapi";
 import { AuditService } from "../common/audit.service.js";
 import { CryptoService, type Sealed } from "../common/crypto.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { TillBridgeService } from "../bridge/till-bridge.service.js";
 import type { UpsertTpapiDto } from "./dto/upsert-tpapi.dto.js";
 
 type Credentials = { userName: string; password: string; appToken: string };
@@ -15,6 +16,7 @@ const PUBLIC = {
   wsdlPath: true, soapPath: true, appName: true, timeoutMs: true, isEnabled: true,
   lastSuccessAt: true, lastFailureAt: true, lastErrorMessage: true,
   lastLatencyMs: true, lastSyncAt: true, updatedAt: true,
+  route: true, bridgeLastSeenAt: true, bridgeTokenIssuedAt: true, bridgePairingExpiresAt: true,
 } as const;
 
 @Injectable()
@@ -25,6 +27,7 @@ export class TpapiConnectionService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly bridges: TillBridgeService,
   ) {}
 
   async get(restaurantId: string) {
@@ -33,8 +36,17 @@ export class TpapiConnectionService {
       select: { ...PUBLIC, credentialsCiphertext: true },
     });
     if (!conn) throw new NotFoundException("No TPAPI configuration for this restaurant");
-    const { credentialsCiphertext, ...rest } = conn;
-    return { ...rest, hasCredentials: Boolean(credentialsCiphertext) };
+    const { credentialsCiphertext, bridgeTokenIssuedAt, bridgePairingExpiresAt, ...rest } = conn;
+    return {
+      ...rest,
+      hasCredentials: Boolean(credentialsCiphertext),
+      bridge: {
+        paired: Boolean(bridgeTokenIssuedAt),
+        pairedAt: bridgeTokenIssuedAt,
+        online: this.bridges.isOnline(restaurantId, conn.bridgeLastSeenAt),
+        pairingPending: Boolean(bridgePairingExpiresAt && bridgePairingExpiresAt.getTime() > Date.now()),
+      },
+    };
   }
 
   async upsert(restaurantId: string, dto: UpsertTpapiDto, actorId: string, req: Request) {
@@ -68,6 +80,7 @@ export class TpapiConnectionService {
       appName: dto.appName ?? "KioskPlatform",
       timeoutMs: dto.timeoutMs ?? 15000,
       isEnabled: dto.isEnabled ?? true,
+      ...(dto.route ? { route: dto.route } : {}),
       ...(sealed
         ? {
             credentialsCiphertext: sealed.ciphertext,
@@ -94,7 +107,7 @@ export class TpapiConnectionService {
         entityId: conn.id,
         // host/port only — never the credentials, not even encrypted
         before: existing ? { host: existing.host, port: existing.port } : undefined,
-        after: { host: conn.host, port: conn.port, credentialsChanged: Boolean(sealed) },
+        after: { host: conn.host, port: conn.port, route: conn.route, credentialsChanged: Boolean(sealed) },
       },
       req,
     );
@@ -127,6 +140,8 @@ export class TpapiConnectionService {
         appToken: creds.appToken,
         appName: conn.appName,
       },
+      // A till the internet cannot reach: the test goes through the bridge at the restaurant, like every other call.
+      ...(conn.route === "BRIDGE" ? { transport: this.bridges.transport(restaurantId) } : {}),
     });
 
     const ping = await client.ping({ correlationId });
@@ -179,5 +194,15 @@ export class TpapiConnectionService {
       version,
       correlationId,
     };
+  }
+
+  /** A one-time code to set up the bridge at the restaurant (the command to run is shown with it). */
+  async bridgePairingCode(restaurantId: string, actorId: string, req: Request) {
+    const r = await this.bridges.issuePairingCode(restaurantId);
+    await this.audit.record({
+      restaurantId, actorType: "PLATFORM_USER", actorId, action: "tpapi.bridge_code", entityType: "TpapiConnection",
+      after: { expiresAt: r.expiresAt.toISOString() },
+    }, req);
+    return r;
   }
 }

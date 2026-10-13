@@ -4,8 +4,11 @@ import fs from "node:fs";
  * The helper's settings file. One helper can serve several printers (one per borne), so the file holds a list:
  *
  *   { "apiUrl": "https://api.example.com", "pollIntervalMs": 2000,
- *     "printers": [ { "id": "...", "label": "Chez Sam - Borne 1", "token": "pht_..." } ] }
+ *     "printers": [ { "id": "...", "label": "Chez Sam - Borne 1", "token": "pht_..." } ],
+ *     "bridges": [ { "id": "...", "label": "Chez Sam - till", "token": "tbr_..." } ] }
  *
+ * A bridge carries the server's calls to the restaurant's till (see bridge.mjs). "allowTillHosts" lists till
+ * addresses outside the restaurant's network the bridge may still use (normally empty).
  * The older one-printer form ("token": "pht_...") still works.
  */
 
@@ -44,9 +47,17 @@ export function withPrinter(values, entry) {
   return { ...values, printers };
 }
 
+/** Adds the till bridge, or replaces it (pairing again gives it a new secret). */
+export function withBridge(values, entry) {
+  const bridges = (Array.isArray(values.bridges) ? values.bridges : []).filter((b) => b?.id !== entry.id);
+  bridges.push({ id: entry.id, label: entry.label, token: entry.token });
+  return { ...values, bridges };
+}
+
 /**
  * Everything the helper has been told to serve, from the file and the environment, as
- * { apiUrl, intervalMs, printers: [{ id, label, token }] }. An environment variable wins over the file.
+ * { apiUrl, intervalMs, printers: [{ id, label, token }], bridges: [{ id, label, token }], allowTillHosts }.
+ * An environment variable wins over the file.
  */
 export function resolveSettings(values, env = process.env) {
   const apiUrl = env.KIOSK_API_URL || values.apiUrl;
@@ -56,5 +67,9 @@ export function resolveSettings(values, env = process.env) {
     .map((p, i) => ({ id: String(p.id ?? `printer-${i + 1}`), label: String(p.label ?? p.id ?? `printer ${i + 1}`), token: p.token }));
   const single = env.PRINT_HELPER_TOKEN || values.token;
   if (single && !printers.some((p) => p.token === single)) printers.push({ id: "single", label: "printer", token: single });
-  return { apiUrl, intervalMs, printers };
+  const bridges = (Array.isArray(values.bridges) ? values.bridges : [])
+    .filter((b) => b && typeof b.token === "string" && b.token)
+    .map((b, i) => ({ id: String(b.id ?? `bridge-${i + 1}`), label: String(b.label ?? "till"), token: b.token }));
+  const allowTillHosts = (Array.isArray(values.allowTillHosts) ? values.allowTillHosts : []).filter((h) => typeof h === "string" && h);
+  return { apiUrl, intervalMs, printers, bridges, allowTillHosts };
 }

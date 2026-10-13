@@ -1,7 +1,8 @@
 # Kiosk print helper
 
 A small program that runs at the restaurant. It fetches new customer tickets from the kiosk API and prints them on the
-restaurant's network receipt printer (80 mm, ESC/POS, raw TCP port 9100).
+restaurant's network receipt printer (80 mm, ESC/POS, raw TCP port 9100). It can also be the **till bridge** (see the
+end of this page): for a restaurant whose till (unTill) cannot be reached from the internet.
 
 It only makes **outbound** connections (HTTPS to the API, and TCP to the printer on the local network). No router or
 firewall changes are needed.
@@ -190,3 +191,35 @@ journalctl -u kiosk-print-helper -f      # the log
    back office must show the error while it was off.
 6. Reboot the helper computer and confirm the helper comes back and prints without anyone touching it.
 7. Reprint an old order from the back office.
+
+
+## The till bridge (when the till cannot be reached from the internet)
+
+Our server talks to the restaurant's till (unTill TP-API). When the till is only on the restaurant's network (an address
+like `192.168.0.106`) and no port is opened in the router, the helper carries those calls instead:
+
+```
+server ── calls for the till ──> helper (bridge, connects OUT over https) ──(restaurant network)──> unTill :3063
+```
+
+Nothing is opened in the router. The bridge only talks to addresses on the restaurant's own network (192.168.x.x, 10.x.x.x,
+172.16-31.x.x, a computer name like `UNTILL-PC`, or `*.local`); anything else is refused unless it is listed in
+`"allowTillHosts"` in `helper.config.json`.
+
+1. **unTill:** TP-API switched on, and the till PC has a fixed address (a DHCP reservation in the router).
+2. **Admin** > the restaurant > **unTill**: choose **Through the bridge at the restaurant**, put the till's address on the
+   restaurant's network (for example `192.168.0.106`, port `3063`) and the TP-API login, **Save**.
+3. Click **Set up the bridge**. A code and the exact command appear. On a computer at the restaurant that is always on and
+   on the same network as the till (the print helper's computer is fine), in the helper's folder (Windows: PowerShell with
+   **Run as administrator**):
+
+```
+node src/cli.mjs setup-bridge https://your-admin-address K7QF-92XM
+```
+
+It trades the code for the bridge's secret, saves it, checks that this computer reaches the till, and starts the helper
+at boot (or, if it already runs for the printers, the running helper picks the bridge up by itself within 10 seconds).
+4. The admin shows **Bridge: connected** within a few seconds. Press **Test connection**, then **Sync now**.
+
+If the computer is off or the helper stops, the server cannot reach the till: after about a minute the kiosks show
+"no connection" and take no orders, and they come back by themselves when the bridge does.

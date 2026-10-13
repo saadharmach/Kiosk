@@ -27,6 +27,25 @@ export interface TpapiLogEvent {
   responseXml?: string;
 }
 
+/**
+ * How a SOAP request reaches the till. By default straight over HTTP(S) from this server; a restaurant whose till
+ * cannot be reached from the internet uses its bridge instead (it runs the request inside the restaurant).
+ */
+export type TpapiTransport = (req: {
+  url: string; soapAction: string; body: string; timeoutMs: number;
+}) => Promise<{ status: number; statusText: string; text: string }>;
+
+/** The usual way: an HTTP POST from here. */
+export const directTransport: TpapiTransport = async ({ url, soapAction, body, timeoutMs }) => {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `"${soapAction}"` },
+    body,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: res.status, statusText: res.statusText, text: await res.text() };
+};
+
 export interface TpapiClientOptions {
   endpoint?: string;
   credentials: TpapiCredentials;
@@ -36,6 +55,8 @@ export interface TpapiClientOptions {
   /** Include the XML in log events. Debugging only. */
   captureXml?: boolean;
   logger?: (event: TpapiLogEvent) => void;
+  /** How requests travel; directTransport when not given. */
+  transport?: TpapiTransport;
 }
 
 export interface TpapiCallOptions {
@@ -75,8 +96,10 @@ export class TpapiClient {
   private readonly successCodes: number[];
   private readonly captureXml: boolean;
   private readonly logger?: (event: TpapiLogEvent) => void;
+  private readonly transport: TpapiTransport;
 
   constructor(options: TpapiClientOptions) {
+    this.transport = options.transport ?? directTransport;
     this.endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
     this.credentials = options.credentials;
     this.timeoutMs = options.timeoutMs ?? 15_000;
@@ -115,17 +138,14 @@ export class TpapiClient {
 
     let responseText: string;
     try {
-      const res = await fetch(this.endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: `"${op.soapAction}"`,
-        },
+      const res = await this.transport({
+        url: this.endpoint,
+        soapAction: op.soapAction,
         body: requestXml,
-        signal: AbortSignal.timeout(callOptions.timeoutMs ?? this.timeoutMs),
+        timeoutMs: callOptions.timeoutMs ?? this.timeoutMs,
       });
-      responseText = await res.text();
-      if (!res.ok && !responseText.includes("Fault")) {
+      responseText = res.text;
+      if ((res.status < 200 || res.status >= 300) && !responseText.includes("Fault")) {
         const err = new TpapiTransportError(`HTTP ${res.status} ${res.statusText}`, { ...base, body: responseText.slice(0, 500) });
         log({ ok: false, error: err.message });
         throw err;

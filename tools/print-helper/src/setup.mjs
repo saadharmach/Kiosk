@@ -1,5 +1,6 @@
-import { readConfigFile, withPrinter, writeConfigFile } from "./config.mjs";
-import { canReach, pair, requestTest } from "./pairing.mjs";
+import { readConfigFile, withBridge, withPrinter, writeConfigFile } from "./config.mjs";
+import { isLocalAddress } from "./bridge.mjs";
+import { canReach, pair, pairBridge, requestTest } from "./pairing.mjs";
 import { installService } from "./service.mjs";
 
 /**
@@ -85,5 +86,85 @@ export async function runSetup({ apiUrl, code, configPath, cli, dir, service = t
   }
 
   out(problems === 0 ? "Done. The back office should show this printer's helper as Online." : "Paired, but see the lines marked !! above.");
+  return 0;
+}
+
+/**
+ * `setup-bridge <api address> <code>`: makes this computer the bridge to the restaurant's till.
+ *
+ *   1. trade the one-time code from the admin for the bridge's secret
+ *   2. write it into the settings file (a running helper notices by itself)
+ *   3. check this computer can reach the till
+ *   4. start the helper at boot and now
+ *
+ * options: { apiUrl, code, configPath, cli, dir, service?, out?, deps? }
+ */
+export async function runBridgeSetup({ apiUrl, code, configPath, cli, dir, service = true, out = console.log, deps = {} }) {
+  const { pairImpl = pairBridge, canReachImpl = canReach, installImpl = installService } = deps;
+  if (!apiUrl || !code) {
+    out("Usage: node src/cli.mjs setup-bridge <API address> <setup code>");
+    out("Both are shown in the admin, restaurant > unTill > \"Set up the bridge\".");
+    return 2;
+  }
+  if (!/^https?:\/\//i.test(apiUrl)) {
+    out(`The API address must start with http:// or https:// (got "${apiUrl}")`);
+    return 2;
+  }
+  apiUrl = apiUrl.replace(/\/+$/, "");
+
+  let existing;
+  try {
+    existing = readConfigFile(configPath).values;
+  } catch (e) {
+    out(`${e.message}`);
+    out("Fix or delete that file, then run the setup again.");
+    return 2;
+  }
+
+  out(`Pairing the till bridge with ${apiUrl} ...`);
+  let paired;
+  try {
+    paired = await pairImpl({ apiUrl, code });
+  } catch (e) {
+    out(`FAILED: ${e.message}`);
+    return 1;
+  }
+  out(`OK  Paired as "${paired.label}".`);
+
+  try {
+    writeConfigFile(configPath, withBridge({ pollIntervalMs: 2000, ...existing, apiUrl }, { id: paired.bridgeId, label: paired.label, token: paired.token }));
+  } catch (e) {
+    out(`FAILED: the secret could not be saved (${e.message}). The code is now used up: get a new one in the admin.`);
+    return 1;
+  }
+  out(`OK  Saved to ${configPath}`);
+
+  let problems = 0;
+  if (paired.tillHost && paired.tillPort) {
+    const r = await canReachImpl(paired.tillHost, paired.tillPort);
+    if (r.ok) out(`OK  This computer can reach the till at ${paired.tillHost}:${paired.tillPort}.`);
+    else {
+      problems++;
+      out(`!!  This computer cannot reach the till at ${paired.tillHost}:${paired.tillPort} (${r.reason}).`);
+      out("    Check that unTill is running with TP-API switched on, that the address in the admin is right, and that this computer is on the same network.");
+    }
+    if (!isLocalAddress(paired.tillHost)) {
+      problems++;
+      out(`!!  ${paired.tillHost} is not an address on the restaurant's network: the bridge refuses it unless it is listed in "allowTillHosts" in ${configPath}.`);
+    }
+  }
+
+  let running = false;
+  if (service) {
+    const s = await installImpl({ cli, dir });
+    out(`${s.ok ? "OK " : "!! "} ${s.message}`);
+    running = s.ok;
+    if (!s.ok) problems++;
+  }
+  if (!running) out(`To run it now: node ${cli}`);
+
+  out(problems === 0
+    ? "Done. In the admin, the unTill tab shows the bridge as connected within a few seconds; then press Test connection."
+    : "Paired, but see the lines marked !! above.");
   return 0;
 }

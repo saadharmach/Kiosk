@@ -61,15 +61,22 @@ export interface Connection {
   isEnabled: boolean; hasCredentials: boolean;
   lastSuccessAt: string | null; lastFailureAt: string | null; lastErrorMessage: string | null;
   lastLatencyMs: number | null; lastSyncAt: string | null;
+  /** DIRECT: the server reaches the till over the internet. BRIDGE: through the bridge program at the restaurant. */
+  route: "DIRECT" | "BRIDGE";
+  bridge: { paired: boolean; pairedAt: string | null; online: boolean; pairingPending: boolean };
 }
 export const getConnection = (id: string) => request<Connection>(`/admin/restaurants/${id}/tpapi`);
 
 export interface ConnectionForm {
-  host: string; port: number; useTls: boolean; isEnabled: boolean; appName?: string;
+  host: string; port: number; useTls: boolean; isEnabled: boolean; appName?: string; route?: "DIRECT" | "BRIDGE";
   userName?: string; password?: string; appToken?: string;
 }
 export const saveConnection = (id: string, body: ConnectionForm) =>
   request<unknown>(`/admin/restaurants/${id}/tpapi`, { method: "PUT", body: JSON.stringify(body) });
+
+/** A one-time code (15 minutes) for `setup-bridge` on the restaurant's computer. */
+export const bridgePairing = (id: string) =>
+  request<{ code: string; expiresAt: string }>(`/admin/restaurants/${id}/tpapi/bridge/pairing`, { method: "POST" });
 
 export interface TestResult { ok: boolean; endpoint: string; durationMs: number; version?: string; message?: string; error?: string }
 export const testConnection = (id: string) =>

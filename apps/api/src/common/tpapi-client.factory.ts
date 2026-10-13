@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { TpapiClient } from "@kiosk/tpapi";
 import { CryptoService } from "./crypto.service.js";
+import { TillBridgeService } from "../bridge/till-bridge.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 type Credentials = { userName: string; password: string; appToken: string };
@@ -10,6 +11,7 @@ export class TpapiClientFactory {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly bridges: TillBridgeService,
   ) {}
 
   /** `timeoutMs`: a shorter wait than the usual one (at least a minute), for a quick "are you there?". */
@@ -34,6 +36,8 @@ export class TpapiClientFactory {
         endpoint,
         timeoutMs: opts.timeoutMs ?? Math.max(conn.timeoutMs, 60_000),
         credentials: { ...creds, appName: conn.appName },
+        // A till the internet cannot reach: every call goes through the bridge at the restaurant.
+        ...(conn.route === "BRIDGE" ? { transport: this.bridges.transport(restaurantId) } : {}),
       }),
     };
   }

@@ -30,6 +30,14 @@ export class TpapiConnectionController {
     return this.tpapi.upsert(id, dto, user.sub, req);
   }
 
+  @Post("bridge/pairing")
+  @HttpCode(200)
+  @Roles("SUPER_ADMIN")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  bridgePairing(@Param("id", new ParseUUIDPipe()) id: string, @CurrentUser() user: AccessTokenPayload, @Req() req: Request) {
+    return this.tpapi.bridgePairingCode(id, user.sub, req);
+  }
+
   @Post("test")
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

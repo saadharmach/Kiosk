@@ -1,14 +1,15 @@
 import { readConfigFile, resolveSettings } from "./config.mjs";
+import { startBridge } from "./bridge.mjs";
 import { startHelper } from "./helper.mjs";
 
 /**
- * Runs one helper loop per printer in the settings file, and looks at the file every few seconds: a printer added
+ * Runs one helper loop per printer in the settings file (and one per till bridge), and looks at the file every few seconds: a printer added
  * by `setup` starts without restarting anything, a replaced secret restarts only that printer, a removed one stops.
  *
- * options: { configPath, env?, log, reloadMs?, startImpl? }
+ * options: { configPath, env?, log, reloadMs?, startImpl?, startBridgeImpl? }
  */
-export function supervise({ configPath, env = process.env, log, reloadMs = 10000, startImpl = startHelper }) {
-  const running = new Map(); // id -> { token, apiUrl, intervalMs, handle }
+export function supervise({ configPath, env = process.env, log, reloadMs = 10000, startImpl = startHelper, startBridgeImpl = startBridge }) {
+  const running = new Map(); // key -> { label, token, apiUrl, intervalMs, extra, handle }
   let stopped = false;
   let lastProblem = null; // said once, not every few seconds
   let timer = null;
@@ -25,10 +26,15 @@ export function supervise({ configPath, env = process.env, log, reloadMs = 10000
     }
     if (!settings.apiUrl) return problem("No API address yet: run the setup command from the back office.");
     lastProblem = null;
-    const wanted = new Map(settings.printers.map((p) => [p.id, p]));
+    // Printers and bridges side by side; a bridge's key cannot clash with a printer's.
+    const allow = JSON.stringify(settings.allowTillHosts);
+    const wanted = new Map([
+      ...settings.printers.map((p) => [p.id, { ...p, kind: "printer", extra: "" }]),
+      ...settings.bridges.map((b) => [`bridge:${b.id}`, { ...b, kind: "bridge", extra: allow }]),
+    ]);
     for (const [id, r] of [...running]) {
       const w = wanted.get(id);
-      if (!w || w.token !== r.token || settings.apiUrl !== r.apiUrl || settings.intervalMs !== r.intervalMs) {
+      if (!w || w.token !== r.token || settings.apiUrl !== r.apiUrl || settings.intervalMs !== r.intervalMs || w.extra !== r.extra) {
         await r.handle.stop();
         running.delete(id);
         log("INFO", w ? `Settings changed for ${r.label}: restarting it` : `${r.label} was removed: stopped`);
@@ -36,11 +42,9 @@ export function supervise({ configPath, env = process.env, log, reloadMs = 10000
     }
     for (const [id, p] of wanted) {
       if (running.has(id) || stopped) continue;
-      const handle = startImpl({
-        apiUrl: settings.apiUrl, token: p.token, intervalMs: settings.intervalMs,
-        log: (level, msg) => log(level, `[${p.label}] ${msg}`),
-      });
-      running.set(id, { label: p.label, token: p.token, apiUrl: settings.apiUrl, intervalMs: settings.intervalMs, handle });
+      const common = { apiUrl: settings.apiUrl, token: p.token, intervalMs: settings.intervalMs, log: (level, msg) => log(level, `[${p.label}] ${msg}`) };
+      const handle = p.kind === "bridge" ? startBridgeImpl({ ...common, allowHosts: settings.allowTillHosts }) : startImpl(common);
+      running.set(id, { label: p.label, token: p.token, apiUrl: settings.apiUrl, intervalMs: settings.intervalMs, extra: p.extra, handle });
       log("INFO", `Serving ${p.label} (${settings.apiUrl})`);
     }
   }

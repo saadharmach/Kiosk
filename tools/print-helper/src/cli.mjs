@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { readConfigFile, resolveSettings } from "./config.mjs";
 import { sendToPrinter } from "./helper.mjs";
 import { installService, uninstallService } from "./service.mjs";
-import { runSetup } from "./setup.mjs";
+import { runBridgeSetup, runSetup } from "./setup.mjs";
 import { supervise } from "./supervisor.mjs";
 
 const CLI = fileURLToPath(import.meta.url);
@@ -13,13 +13,18 @@ const DEFAULT_CONFIG = path.join(DIR, "helper.config.json");
 
 const HELP = `Kiosk print helper
 
-Runs at the restaurant and prints customer tickets on the network printer.
+Runs at the restaurant: prints customer tickets on the network printer, and can be the bridge that carries the
+server's calls to the restaurant's till (unTill) when the till cannot be reached from the internet.
 
   node src/cli.mjs setup <API address> <setup code>
         First-time setup of one printer (both are shown in the back office, printer > "Set up the helper").
         Saves the settings, checks the printer, starts the helper at boot, queues a test ticket.
         Run it again with another code to add another borne's printer to the same helper.
         --no-service  do not register the start at boot      --no-test  do not queue a test ticket
+
+  node src/cli.mjs setup-bridge <API address> <setup code>
+        Makes this computer the bridge to the restaurant's till (the code comes from the admin, restaurant >
+        unTill > "Set up the bridge"). Saves the settings, checks the till, starts the helper at boot.
 
   node src/cli.mjs                       run the helper
   node src/cli.mjs install-service       start at boot (without pairing again)
@@ -74,6 +79,12 @@ if (command === "setup") {
     service: !args.includes("--no-service"), test: !args.includes("--no-test"),
   }));
 }
+if (command === "setup-bridge") {
+  const [, apiUrl, code] = args.filter((a, n) => !a.startsWith("--") && args[n - 1] !== "--config");
+  process.exit(await runBridgeSetup({
+    apiUrl, code, configPath: path.resolve(configPath), cli: CLI, dir: DIR, service: !args.includes("--no-service"),
+  }));
+}
 if (command === "install-service" || command === "uninstall-service") {
   const r = command === "install-service" ? installService({ cli: CLI, dir: DIR }) : uninstallService({});
   console.log(r.message);
@@ -93,7 +104,7 @@ try {
   console.error(e.message);
   process.exit(2);
 }
-if (!settings.apiUrl || settings.printers.length === 0) {
+if (!settings.apiUrl || settings.printers.length + settings.bridges.length === 0) {
   console.error("Nothing to do yet: run the setup command from the back office (node src/cli.mjs setup <API address> <code>), or set the API address and the token in helper.config.json. Run with --help for details.");
   process.exit(2);
 }
@@ -102,7 +113,7 @@ if (!/^https?:\/\//i.test(settings.apiUrl)) {
   process.exit(2);
 }
 
-log("INFO", `Print helper started, talking to ${settings.apiUrl}`);
+log("INFO", `Helper started, talking to ${settings.apiUrl}`);
 const helper = supervise({ configPath, log });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

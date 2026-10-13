@@ -361,3 +361,53 @@ describe("end to end through the real command", () => {
     if (!fs.existsSync(path.join(DIR, "helper.config.json"))) { assert.equal(r2.code, 2); assert.match(r2.out, /Nothing to do yet/); }
   });
 });
+
+describe("setup-bridge", () => {
+  it("pairs, saves the bridge next to any printers, checks the till, and keeps the printers' settings", async () => {
+    const { runBridgeSetup } = await import("../src/setup.mjs");
+    const dir = tmp();
+    const configPath = path.join(dir, "helper.config.json");
+    writeConfigFile(configPath, { apiUrl: "https://old", printers: [{ id: "p1", label: "P", token: "pht_1" }] });
+    const lines = [];
+    const reached = [];
+    const code = await runBridgeSetup({
+      apiUrl: "https://api.example/", code: "K7QF-92XM", configPath, cli: CLI, dir: DIR, service: false, out: (l) => lines.push(l),
+      deps: {
+        pairImpl: async ({ apiUrl, code: c }) => { assert.equal(apiUrl, "https://api.example"); assert.equal(c, "K7QF-92XM"); return { token: "tbr_x", bridgeId: "b1", label: "List - till", tillHost: "192.168.0.106", tillPort: 3063 }; },
+        canReachImpl: async (h, p) => { reached.push(`${h}:${p}`); return { ok: true }; },
+      },
+    });
+    assert.equal(code, 0);
+    assert.deepEqual(reached, ["192.168.0.106:3063"]);
+    const s = resolveSettings(readConfigFile(configPath).values, {});
+    assert.equal(s.apiUrl, "https://api.example");
+    assert.deepEqual(s.printers.map((p) => p.token), ["pht_1"]);
+    assert.deepEqual(s.bridges, [{ id: "b1", label: "List - till", token: "tbr_x" }]);
+    assert.ok(lines.some((l) => l.startsWith("Done.")));
+  });
+
+  it("warns when the till address is not on the restaurant's network (the bridge would refuse it)", async () => {
+    const { runBridgeSetup } = await import("../src/setup.mjs");
+    const lines = [];
+    await runBridgeSetup({
+      apiUrl: "https://api.example", code: "K7QF-92XM", configPath: path.join(tmp(), "c.json"), cli: CLI, dir: DIR, service: false, out: (l) => lines.push(l),
+      deps: { pairImpl: async () => ({ token: "tbr_x", bridgeId: "b1", label: "L", tillHost: "testapi.untill.com", tillPort: 3063 }), canReachImpl: async () => ({ ok: true }) },
+    });
+    assert.ok(lines.some((l) => /not an address on the restaurant's network/.test(l)));
+  });
+
+  it("the running helper starts the bridge it finds in the settings, beside the printers", async () => {
+    const dir = tmp();
+    const configPath = path.join(dir, "helper.config.json");
+    writeConfigFile(configPath, { apiUrl: "https://a", printers: [{ id: "p1", label: "P", token: "pht_1" }], bridges: [{ id: "b1", label: "Till", token: "tbr_1" }], allowTillHosts: ["testapi.untill.com"] });
+    const started = [];
+    const h = supervise({
+      configPath, env: {}, log: () => {},
+      startImpl: (o) => { started.push(["printer", o.token]); return { stop: async () => {} }; },
+      startBridgeImpl: (o) => { started.push(["bridge", o.token, o.allowHosts]); return { stop: async () => {} }; },
+    });
+    await h.ready;
+    await h.stop();
+    assert.deepEqual(started.sort(), [["bridge", "tbr_1", ["testapi.untill.com"]], ["printer", "pht_1"]]);
+  });
+});

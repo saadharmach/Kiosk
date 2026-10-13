@@ -19,6 +19,10 @@ async function bootstrap(): Promise<void> {
     index: false, dotfiles: "deny", fallthrough: true, immutable: true, maxAge: "365d",
     setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
   }));
+  // The till's answers come back from the restaurant's bridge: a whole menu can be a few megabytes. Wrapped on
+  // purpose: Nest leaves out its own JSON reading for every route when it finds express.json (named jsonParser) here.
+  const bridgeJson = express.json({ limit: "30mb" });
+  app.use("/api/bridge/jobs", (req: express.Request, res: express.Response, next: express.NextFunction) => bridgeJson(req, res, next));
   app.use(cookieParser());
   app.set("trust proxy", 1);
   app.enableCors({ origin: corsOrigins, credentials: true });

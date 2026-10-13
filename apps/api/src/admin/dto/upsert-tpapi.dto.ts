@@ -1,5 +1,5 @@
 import {
-  IsBoolean, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
+  IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
 } from "class-validator";
 
 export class UpsertTpapiDto {
@@ -27,6 +27,10 @@ export class UpsertTpapiDto {
 
   @IsOptional() @IsBoolean()
   isEnabled?: boolean;
+
+  /** DIRECT: the server reaches host:port over the internet. BRIDGE: through the bridge at the restaurant. */
+  @IsOptional() @IsIn(["DIRECT", "BRIDGE"])
+  route?: "DIRECT" | "BRIDGE";
 
   /** Credentials are optional on update: leave them out to keep the stored ones. */
   @IsOptional() @IsString() @MinLength(1) @MaxLength(200)

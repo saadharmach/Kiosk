@@ -34,6 +34,13 @@ export async function pair({ apiUrl, code, fetchImpl = fetch }) {
   return r;
 }
 
+/** Trades the one-time code from the admin for the till bridge's secret. */
+export async function pairBridge({ apiUrl, code, fetchImpl = fetch }) {
+  const r = await post(`${trim(apiUrl)}/api/bridge/pair`, {}, { code }, fetchImpl);
+  if (!r?.token || !r?.bridgeId) throw new Error("The API's answer was not what a bridge expects: is this the right address?");
+  return r;
+}
+
 /** Asks for a test ticket on this helper's own printer. */
 export const requestTest = ({ apiUrl, token, fetchImpl = fetch }) =>
   post(`${trim(apiUrl)}/api/print/test`, { Authorization: `Bearer ${token}` }, null, fetchImpl);

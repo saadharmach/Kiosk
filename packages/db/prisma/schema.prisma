@@ -197,6 +197,19 @@ model TpapiConnection {
   /// Since when the pings fail (null while it answers).
   unreachableSince      DateTime?
 
+  /// How the server reaches the till: DIRECT over the internet (host and port above are reachable from the server), or
+  /// BRIDGE: through the helper program at the restaurant, which connects out to us and runs each call on the
+  /// restaurant's own network (host and port above are then the till's address there, e.g. 192.168.0.106).
+  route                 TillRoute  @default(DIRECT)
+  /// The bridge's secret (SHA-256 of it); given once at setup, never stored in clear.
+  bridgeTokenHash       String?    @unique
+  bridgeTokenIssuedAt   DateTime?
+  /// A one-time setup code from the admin (SHA-256), and when it stops working.
+  bridgePairingCodeHash String?    @unique
+  bridgePairingExpiresAt DateTime?
+  /// When the bridge last asked for work: it asks continuously, so this says whether it is running.
+  bridgeLastSeenAt      DateTime?
+
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
@@ -207,6 +220,11 @@ model TpapiConnection {
 
 
 // ============================================================ enums
+
+enum TillRoute {
+  DIRECT
+  BRIDGE
+}
 
 enum PresentationScope {
   GROUP

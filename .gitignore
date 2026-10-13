@@ -35,4 +35,5 @@ apps/api/.media/
 
 # The print helper zip the back office offers (made by tools/print-helper/pack.mjs at dev/build time)
 apps/backoffice/public/downloads/
+apps/admin/public/downloads/
 deploy/config.resolved.sh
