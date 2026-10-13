@@ -4,11 +4,12 @@ import { OrdersService } from "../src/kiosk/orders.service.js";
 
 interface Captured { dto?: Record<string, unknown>; printed: string[] }
 
-function setup(settings: Record<string, unknown> | null, restaurantLocale = "fr", subscribed = true) {
+function setup(settings: Record<string, unknown> | null, restaurantLocale = "fr", subscribed = true, tillDown = false) {
   const captured: Captured = { printed: [] };
   const restaurant = { id: "r1", currency: "MAD", status: "ACTIVE", locale: restaurantLocale, settings };
   const prisma = {
     subscriptionPeriod: { findFirst: async () => (subscribed ? { id: "running" } : null) },
+    tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: tillDown ? 2 : 0 }) },
     restaurant: { findUnique: async () => restaurant },
     order: { findFirst: async () => null },
   };
@@ -82,6 +83,7 @@ describe("OrdersService.create: idempotency", () => {
     };
     const prisma = {
       subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 0 }) }, // the till answers
       restaurant: { findUnique: async () => ({ id: "r1", currency: "MAD", status: "ACTIVE", locale: "fr", settings: all }) },
       order: { findFirst: async (a: { where: Record<string, unknown> }) => (a.where.clientRequestId === "same-id" ? existing : null) },
     };
@@ -103,5 +105,37 @@ describe("without a running subscription", () => {
     await assert.rejects(svc.create("resto-a", dto("TAKE_AWAY", { clientOrderId: "11111111-1111-4111-8111-111111111111" })), unavailable);
     assert.equal(captured.dto, undefined);
     assert.deepEqual(captured.printed, []);
+  });
+});
+
+describe("while the till does not answer", () => {
+  const noConnection = (e: any) => e.getStatus?.() === 503 && e.getResponse?.().code === "TILL_UNREACHABLE";
+  it("a price quote and a new order get the 'no connection' answer, and nothing is priced or printed", async () => {
+    const { svc, captured } = setup(all, "fr", true, true);
+    await assert.rejects(svc.preview("resto-a", dto("TAKE_AWAY")), noConnection);
+    await assert.rejects(svc.create("resto-a", dto("TAKE_AWAY", { clientOrderId: "11111111-1111-4111-8111-111111111111" })), noConnection);
+    assert.equal(captured.dto, undefined);
+    assert.deepEqual(captured.printed, []);
+  });
+
+  it("an order already placed is still given back when the kiosk asks again (the till check comes after)", async () => {
+    const existing = { reference: "K0-0930-001", status: "PENDING", orderType: "EAT_IN", tableNumber: 705, total: 5, currency: "MAD", itemCount: 1, createdAt: new Date(), items: [] };
+    const prisma = {
+      subscriptionPeriod: { findFirst: async () => ({ id: "running" }) },
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 5 }) },
+      restaurant: { findUnique: async () => ({ id: "r1", currency: "MAD", status: "ACTIVE", locale: "fr", settings: all }) },
+      order: { findFirst: async () => existing },
+    };
+    const svc = new OrdersService(prisma as never, {} as never, { enqueueForOrder: async () => undefined } as never);
+    assert.equal((await svc.create("resto-a", { clientOrderId: "same-id", orderType: "EAT_IN", salesAreaId: "1", lines: [] } as never)).reference, "K0-0930-001");
+  });
+
+  it("one lost ping is not an outage; a connection switched off by the platform team is", async () => {
+    const { tillReachable } = await import("../src/common/till-health.js");
+    assert.equal(tillReachable({ isEnabled: true, pingFailures: 0 }), true);
+    assert.equal(tillReachable({ isEnabled: true, pingFailures: 1 }), true);
+    assert.equal(tillReachable({ isEnabled: true, pingFailures: 2 }), false);
+    assert.equal(tillReachable({ isEnabled: false, pingFailures: 0 }), false);
+    assert.equal(tillReachable(null), false);
   });
 });

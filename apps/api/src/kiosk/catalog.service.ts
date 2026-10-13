@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
 import { isSubscribed } from "../common/subscription.js";
+import { tillReachable } from "../common/till-health.js";
 import { StorageService, isVideoPath } from "../common/storage.service.js";
 import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
@@ -13,7 +14,8 @@ const dec = (v: { toNumber(): number } | null | undefined): number | null =>
 const pick = pickLocalized;
 
 /** What /version and the start-up data say, so the kiosk can compare them. */
-export const versionOf = (changedAt: Date, subscribed: boolean) => `${changedAt.toISOString()}${subscribed ? "" : "|off"}`;
+export const versionOf = (changedAt: Date, subscribed: boolean, tillOk = true) =>
+  `${changedAt.toISOString()}${subscribed ? "" : "|off"}${tillOk ? "" : "|till"}`;
 
 @Injectable()
 export class CatalogService {
@@ -27,18 +29,23 @@ export class CatalogService {
    * for a switched-off restaurant too, so a kiosk notices when it is switched back on.
    */
   async version(slug: string) {
-    const r = await this.prisma.restaurant.findUnique({ where: { slug }, select: { id: true, contentChangedAt: true, timezone: true } });
+    const r = await this.prisma.restaurant.findUnique({
+      where: { slug },
+      select: { id: true, contentChangedAt: true, timezone: true, tpapi: { select: { isEnabled: true, pingFailures: true } } },
+    });
     if (!r) throw new NotFoundException("Restaurant not found");
-    // Whether a subscription period runs is part of it: at the midnight one starts or ends nobody saves anything,
-    // yet the kiosk must notice.
-    return { version: versionOf(r.contentChangedAt, await isSubscribed(this.prisma, r.id, r.timezone)) };
+    // Whether a subscription period runs, and whether the till answers, are part of it: nobody saves anything when
+    // they change, yet the kiosk must notice.
+    const tillOk = tillReachable(r.tpapi);
+    // tillReachable is also said on its own, so a kiosk in the middle of an order stops at once (not only after it).
+    return { version: versionOf(r.contentChangedAt, await isSubscribed(this.prisma, r.id, r.timezone), tillOk), tillReachable: tillOk };
   }
 
   /** Branding, settings and the zones a customer can choose from. */
   async bootstrap(slug: string, borneCode?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true } } },
+      include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true, pingFailures: true } } },
     });
     requireOrderable(restaurant);
     await requireSubscribed(this.prisma, restaurant);
@@ -117,8 +124,10 @@ export class CatalogService {
         lastSyncAt: restaurant.tpapi?.lastSyncAt ?? null,
       },
       catalogReady: Boolean(restaurant.tpapi?.lastSyncAt),
+      // false: the till does not answer, so the kiosk shows "no connection" (and the server refuses new orders).
+      tillReachable: tillReachable(restaurant.tpapi),
       // Compared with what /version says later: when it moves, the kiosk reloads this.
-      version: versionOf(restaurant.contentChangedAt, true),
+      version: versionOf(restaurant.contentChangedAt, true, tillReachable(restaurant.tpapi)),
     };
   }
 

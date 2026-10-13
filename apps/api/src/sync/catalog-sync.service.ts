@@ -297,7 +297,7 @@ export class CatalogSyncService {
       const durationMs = Date.now() - startedAt;
       await this.prisma.tpapiConnection.update({
         where: { restaurantId },
-        data: { lastSyncAt: new Date(), lastSuccessAt: new Date() },
+        data: { lastSyncAt: new Date(), lastSuccessAt: new Date(), pingFailures: 0, unreachableSince: null },
       });
       // A new menu: the restaurant's kiosks reload what they show.
       await markChanged(this.prisma, restaurantId);

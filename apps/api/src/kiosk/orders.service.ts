@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
+import { requireOrderable, requireSubscribed, requireTillReachable, resolveBorne } from "./availability.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
@@ -36,6 +36,7 @@ export class OrdersService {
     if (existing) return this.present(existing);
     if ("e" in borne) throw borne.e;
     const borneInfo = borne.b;
+    await requireTillReachable(this.prisma, restaurantId);
 
     this.assertOrderTypeEnabled(restaurant.settings, dto.orderType);
 
@@ -126,6 +127,7 @@ export class OrdersService {
       .then(async (r) => {
         requireOrderable(r);
         await requireSubscribed(this.prisma, r);
+        await requireTillReachable(this.prisma, r.id);
         // Same rule as create(): no point quoting a price for an order that would be refused.
         this.assertOrderTypeEnabled(r.settings, dto.orderType);
         return this.pricing.price(r.id, r.currency, {

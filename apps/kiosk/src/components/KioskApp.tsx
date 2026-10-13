@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
 import { VERSION_POLL_MS, decideRefresh } from "@/lib/refresh";
 import { readBorne } from "@/lib/borne";
-import { api, getCatalog, isConnectionError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { api, getCatalog, isConnectionError, isTillError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { OFFLINE_POLL_MS, connectionState } from "@/lib/connection";
 import { brandColors } from "@/lib/theme";
 import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
 import { BrandContext } from "@/state/brand";
@@ -76,6 +77,7 @@ function KioskFlow({ slug }: { slug: string }) {
       (d) => {
         if (cancelled) return;
         setBoot(d);
+        setTillOk(d.tillReachable !== false);
         if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
       },
       (e) => !cancelled && setError(toKioskError(e)),
@@ -100,12 +102,36 @@ function KioskFlow({ slug }: { slug: string }) {
 
   // The restaurant changed something (back office, admin, a menu sync): reload what the kiosk shows. Asked every
   // 20 seconds; done at once on the welcome screen or a problem screen, otherwise once the customer's order is over.
+  // The same question tells whether there is a connection: no answer twice in a row means no internet, and the
+  // server says whether it can reach the till. While something is missing it asks every 5 seconds instead.
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [browserOnline, setBrowserOnline] = useState(true);
+  const [failedPolls, setFailedPolls] = useState(0);
+  const [tillOk, setTillOk] = useState(true);
+  const [pollNow, setPollNow] = useState(0);
+  // Set by "Try again" and by the internet coming back: the next question is asked at once, not after the usual wait.
+  const askAtOnce = useRef(true);
+  const askAgainNow = () => { askAtOnce.current = true; setPollNow((n) => n + 1); };
+  const connection = connectionState({ browserOnline, failedPolls, tillOk });
   useEffect(() => {
-    const ask = () => api.version(slug).then((v) => setLatestVersion(v.version), () => undefined);
-    const timer = setInterval(ask, VERSION_POLL_MS);
-    return () => clearInterval(timer);
-  }, [slug]);
+    const wait = askAtOnce.current ? 0 : connection === "ok" ? VERSION_POLL_MS : OFFLINE_POLL_MS;
+    const timer = setTimeout(() => {
+      askAtOnce.current = false;
+      api.version(slug).then(
+        (v) => { setLatestVersion(v.version); setFailedPolls(0); setTillOk(v.tillReachable !== false); },
+        (e) => { if (isConnectionError(e)) setFailedPolls((n) => n + 1); },
+      ).finally(() => setPollNow((n) => n + 1));
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [slug, pollNow, connection]);
+  useEffect(() => {
+    setBrowserOnline(navigator.onLine);
+    const on = () => { setBrowserOnline(true); askAgainNow(); };
+    const off = () => setBrowserOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
   const problem = Boolean(error) || Boolean(boot && (!boot.catalogReady || !boot.orderTypes.some((o) => o.configured)));
   useEffect(() => {
     if (decideRefresh({ known: boot?.version ?? null, latest: latestVersion, screen, problem }) !== "now") return;
@@ -192,6 +218,17 @@ function KioskFlow({ slug }: { slug: string }) {
   const startOver = () => { setError(null); reset(); setAttempt((n) => n + 1); };
   const header = boot ? { name: boot.restaurant.name, locale, onLocale: setLocale } : undefined;
 
+  // No connection (the kiosk's own internet, or our server's link to the till): nothing can be ordered. Over an order in
+  // progress it is laid on top, so the customer comes back to exactly where they were; never over a ticket already
+  // given (the order went through, its number must stay readable).
+  const noConnection = connection !== "ok" && screen !== "TICKET" ? (
+    <StatusScreen header={header} icon="warning" title={t.noConnectionTitle}
+      text={cart.lines.length > 0 ? `${t.noConnectionText} ${t.orderKept}` : t.noConnectionText}
+      action={{ label: t.retry, icon: "refresh", onClick: askAgainNow }}
+      note={connection === "no-internet" ? t.staffNoInternet : t.staffNoTill} />
+  ) : null;
+  // Nothing to keep underneath (start-up, or already a problem screen): the message is the whole screen.
+  if (noConnection && (!boot || problem)) return withBrand(noConnection);
   if (error?.unavailable) {
     const named = error.name ? { name: error.name, locale, onLocale: setLocale } : header;
     return withBrand(
@@ -272,7 +309,7 @@ function KioskFlow({ slug }: { slug: string }) {
         onBack={() => setScreen("MENU")}
         onPlaced={(o) => { setOrder(o); setScreen("TICKET"); }}
         borneCode={borne ?? undefined}
-        onUnavailable={(e) => setError(toKioskError(e))}
+        onUnavailable={(e) => (isTillError(e) ? setTillOk(false) : setError(toKioskError(e)))}
       />
     );
   }
@@ -303,6 +340,7 @@ function KioskFlow({ slug }: { slug: string }) {
         <IdleWarning locale={locale} secondsLeft={idleLeft} totalSeconds={warnSec}
           onContinue={() => keepAlive.current()} onDiscard={reset} />
       ) : null}
+      {noConnection ? <div className="fixed inset-0 z-[80] overflow-y-auto bg-(--color-page)">{noConnection}</div> : null}
     </>,
   );
 }

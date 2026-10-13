@@ -82,7 +82,7 @@ function setup(over: Record<string, unknown[]> = {}, settings: Record<string, un
   const rest = {
     id: "r1", slug: "resto-a", name: "Resto A", currency: "MAD", status: "ACTIVE", locale: "fr",
     logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null, contentChangedAt: new Date("2026-10-07T10:00:00Z"),
-    settings, tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: new Date() }, ...restaurantOver,
+    settings, tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: new Date(), pingFailures: 0 }, ...restaurantOver,
   };
   const prisma: Record<string, unknown> = {
     subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
@@ -327,7 +327,7 @@ describe("CatalogService.bootstrap: the restaurant's look", () => {
   });
 
   it("says the catalog is not ready before the first sync", async () => {
-    const { svc } = setup({}, { showAllergens: true }, { tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: null } });
+    const { svc } = setup({}, { showAllergens: true }, { tpapi: { isEnabled: true, lastSuccessAt: null, lastSyncAt: null, pingFailures: 0 } });
     assert.equal((await svc.bootstrap("resto-a")).catalogReady, false);
   });
 });

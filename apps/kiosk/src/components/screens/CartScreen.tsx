@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
-import { ApiError, createOrder, isConnectionError, isUnavailableError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
+import { ApiError, createOrder, isConnectionError, isTillError, isUnavailableError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
 import { useCart, type CartLine } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
@@ -37,6 +37,7 @@ export default function CartScreen({
   onBack: () => void;
   onPlaced: (order: PlacedOrder) => void;
   /** The restaurant was switched off while the customer was ordering: the cart is kept, the kiosk shows its calm screen. */
+  /** The restaurant stopped taking orders, or its till does not answer: the kiosk shows the matching screen. */
   onUnavailable: (e: ApiError) => void;
 }) {
   const t = STRINGS[locale];
@@ -76,7 +77,7 @@ export default function CartScreen({
       (p) => !cancelled && setServerTotal(p.total),
       (e) => {
         if (cancelled) return;
-        if (isUnavailableError(e)) return onUnavailable(e);
+        if (isUnavailableError(e) || isTillError(e)) return onUnavailable(e);
         setError(isConnectionError(e) ? t.connectionInline : e.message);
       },
     );
@@ -102,7 +103,7 @@ export default function CartScreen({
       onPlaced(order);
     } catch (e) {
       const err = e as ApiError;
-      if (isUnavailableError(err)) return onUnavailable(err);
+      if (isUnavailableError(err) || isTillError(err)) return onUnavailable(err);
       setError(
         err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message,
       );

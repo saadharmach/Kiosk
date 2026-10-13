@@ -1,5 +1,6 @@
 import { NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { isSubscribed } from "../common/subscription.js";
+import { tillReachable } from "../common/till-health.js";
 
 /** The kiosk recognises this code and shows its calm "temporarily unavailable" screen. */
 export const RESTAURANT_UNAVAILABLE = "RESTAURANT_UNAVAILABLE";
@@ -51,4 +52,22 @@ export async function requireSubscribed(
   restaurant: { id: string; name: string; timezone: string },
 ): Promise<void> {
   if (!(await isSubscribed(prisma, restaurant.id, restaurant.timezone))) throw unavailable(restaurant.name);
+}
+
+/** The kiosk recognises this code and shows its "no connection" screen until the till answers again. */
+export const TILL_UNREACHABLE = "TILL_UNREACHABLE";
+
+/**
+ * No new order while the till does not answer: it could not be sent to the kitchen. (A kiosk that retries an order
+ * it already placed still gets it back: that check comes first.)
+ */
+export async function requireTillReachable(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Prisma client, or a test's stand-in
+  prisma: { tpapiConnection: { findUnique: (a: any) => Promise<{ isEnabled: boolean; pingFailures: number } | null> } },
+  restaurantId: string,
+): Promise<void> {
+  const t = await prisma.tpapiConnection.findUnique({ where: { restaurantId }, select: { isEnabled: true, pingFailures: true } });
+  if (!tillReachable(t)) {
+    throw new ServiceUnavailableException({ code: TILL_UNREACHABLE, message: "The restaurant's till cannot be reached right now" });
+  }
 }

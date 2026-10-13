@@ -57,6 +57,7 @@ type Dict = {
   unavailableTitle: string; unavailableText: string;
   startOrder: string; startHint: string; discover: string; fromPrice: string; needHelp: string;
   staffMenuNotRead: string; staffNoOrderType: string;
+  noConnectionTitle: string; noConnectionText: string; orderKept: string; staffNoInternet: string; staffNoTill: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -93,6 +94,11 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableText: "Nous ne pouvons pas prendre de commande sur cette borne pour le moment. Merci de vous adresser à un membre de notre équipe.",
     startOrder: "Commencer ma commande", startHint: "Touchez le bouton et laissez-vous tenter.", discover: "À découvrir", fromPrice: "Dès", needHelp: "Besoin d’aide ?",
     staffMenuNotRead: "Pour l’équipe : le menu n’a pas encore été lu depuis unTill. Vérifiez la connexion à unTill.", staffNoOrderType: "Pour l’équipe : aucune façon de commander n’est prête. Back-office › Settings › Order types (un secteur de vente a peut-être changé dans unTill).",
+    noConnectionTitle: "Pas de connexion",
+    noConnectionText: "Cette borne ne peut pas prendre de commande pour le moment. Merci de commander au comptoir. Elle reprend toute seule dès que la connexion revient.",
+    orderKept: "Votre commande est conservée.",
+    staffNoInternet: "Pour l’équipe : cette borne ne joint pas le serveur. Vérifiez son accès à Internet (Wi-Fi ou câble).",
+    staffNoTill: "Pour l’équipe : le serveur ne joint pas la caisse unTill. Vérifiez que la caisse est allumée et connectée à Internet.",
   },
   en: {
     welcome: "Welcome", tapToStart: "Touch the screen to order", loading: "Loading…",
@@ -126,6 +132,11 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableText: "We can't take orders on this kiosk right now. Please ask a member of our staff.",
     startOrder: "Start my order", startHint: "Tap the button and treat yourself.", discover: "Discover", fromPrice: "From", needHelp: "Need help?",
     staffMenuNotRead: "For staff: the menu has not been read from unTill yet. Check the connection to unTill.", staffNoOrderType: "For staff: no way of ordering is ready. Back office › Settings › Order types (a sales area may have changed in unTill).",
+    noConnectionTitle: "No connection",
+    noConnectionText: "This kiosk can't take orders right now. Please order at the counter. It starts again by itself as soon as the connection is back.",
+    orderKept: "Your order is kept.",
+    staffNoInternet: "For staff: this kiosk cannot reach the server. Check its internet (Wi-Fi or cable).",
+    staffNoTill: "For staff: the server can't reach the unTill till. Check that the till is on and connected to the internet.",
   },   
   ar: {
     welcome: "أهلاً وسهلاً", tapToStart: "المس الشاشة للطلب", loading: "جارٍ التحميل…",
@@ -159,6 +170,11 @@ export const STRINGS: Record<Locale, Dict> = {
     unavailableText: "لا يمكننا استلام الطلبات على هذه الشاشة حاليًا. يُرجى التوجّه إلى أحد موظفينا.",
     startOrder: "ابدأ طلبي", startHint: "المس الزر واستمتع.", discover: "اكتشف", fromPrice: "ابتداءً من", needHelp: "تحتاج مساعدة؟",
     staffMenuNotRead: "للموظفين: لم تتم قراءة القائمة من unTill بعد. تحقق من الاتصال بـ unTill.", staffNoOrderType: "للموظفين: لا توجد طريقة طلب جاهزة. لوحة الإدارة › Settings › Order types (ربما تغيّرت منطقة البيع في unTill).",
+    noConnectionTitle: "لا يوجد اتصال",
+    noConnectionText: "لا يمكن لهذه الشاشة استلام الطلبات حاليًا. يُرجى الطلب من الكاونتر. ستعود للعمل تلقائيًا فور عودة الاتصال.",
+    orderKept: "طلبك محفوظ.",
+    staffNoInternet: "للموظفين: هذه الشاشة لا تصل إلى الخادم. تحقّق من اتصالها بالإنترنت (Wi-Fi أو كابل).",
+    staffNoTill: "للموظفين: الخادم لا يصل إلى صندوق unTill. تحقّق من أن الصندوق يعمل ومتصل بالإنترنت.",
   },
 };
 

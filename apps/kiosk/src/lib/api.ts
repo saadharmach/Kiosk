@@ -8,6 +8,9 @@ export class ApiError extends Error {
 /** The restaurant exists but is not taking orders right now (switched off by the platform). */
 export const isUnavailableError = (e: unknown): boolean => e instanceof ApiError && e.code === "RESTAURANT_UNAVAILABLE";
 
+/** The restaurant's till does not answer: the server takes no orders until it does. */
+export const isTillError = (e: unknown): boolean => e instanceof ApiError && e.code === "TILL_UNREACHABLE";
+
 /** The request never reached the API, or an intermediary answered instead of it. */
 export const isConnectionError = (e: unknown): boolean => e instanceof ApiError && e.code === "NETWORK";
 
@@ -97,11 +100,13 @@ export interface Bootstrap {
   catalogReady: boolean;
   /** When what the kiosk shows last changed; the kiosk reloads when /version says otherwise. */
   version?: string;
+  /** false: the server cannot reach the restaurant's till, so the kiosk shows "no connection". */
+  tillReachable?: boolean;
 }
 
 export const api = {
   /** When the restaurant last changed something the kiosk shows (answers even when it is switched off). */
-  version: (slug: string) => request<{ version: string }>(`/kiosk/${slug}/version`),
+  version: (slug: string) => request<{ version: string; tillReachable?: boolean }>(`/kiosk/${slug}/version`),
   bootstrap: (slug: string, borne?: string | null) =>
     request<Bootstrap>(`/kiosk/${slug}/bootstrap${borne ? `?borne=${encodeURIComponent(borne)}` : ""}`),
 };

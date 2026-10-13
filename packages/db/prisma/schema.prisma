@@ -191,6 +191,11 @@ model TpapiConnection {
   lastErrorMessage      String?
   lastLatencyMs         Int?
   lastSyncAt            DateTime?
+  /// The server pings the till every 30 seconds: how many pings in a row have failed (0 = it answered last time).
+  /// From 2, the restaurant's kiosks show "no connection" and take no orders until a ping succeeds again.
+  pingFailures          Int        @default(0)
+  /// Since when the pings fail (null while it answers).
+  unreachableSince      DateTime?
 
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt

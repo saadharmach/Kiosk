@@ -144,7 +144,7 @@ export class TpapiConnectionService {
     await this.prisma.tpapiConnection.update({
       where: { restaurantId },
       data: ping.ok
-        ? { lastSuccessAt: new Date(), lastLatencyMs: ping.durationMs, lastErrorMessage: null }
+        ? { lastSuccessAt: new Date(), lastLatencyMs: ping.durationMs, lastErrorMessage: null, pingFailures: 0, unreachableSince: null }
         : {
             lastFailureAt: new Date(),
             lastLatencyMs: ping.durationMs,

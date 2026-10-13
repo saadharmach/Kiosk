@@ -58,13 +58,26 @@ describe("marking it changed", () => {
 describe("what the kiosk asks every 20 seconds", () => {
   const svc = (row: unknown, subscribed = true) => new CatalogService({ restaurant: { findUnique: async () => row }, subscriptionPeriod: { findFirst: async () => (subscribed ? { id: "s" } : null) } } as never, {} as never);
   it("answers with when the restaurant last changed — also when it is switched off", async () => {
-    assert.deepEqual(await svc({ id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z") }).version("resto-a"), { version: "2026-10-07T10:00:00.000Z" });
+    assert.deepEqual(await svc({ id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z"), tpapi: { isEnabled: true, pingFailures: 0 } }).version("resto-a"), { version: "2026-10-07T10:00:00.000Z", tillReachable: true });
   });
   it("it also changes when a subscription period starts or ends (at midnight nobody saves anything)", async () => {
-    const row = { id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z") };
+    const row = { id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z"), tpapi: { isEnabled: true, pingFailures: 0 } };
     assert.notEqual((await svc(row, false).version("resto-a")).version, (await svc(row, true).version("resto-a")).version);
   });
   it("an unknown restaurant is a 404", async () => {
     await assert.rejects(svc(null).version("nope"), /not found/i);
+  });
+});
+
+describe("the kiosk notices the till going away and coming back", () => {
+  const svc = (pingFailures: number) => new CatalogService({
+    restaurant: { findUnique: async () => ({ id: "r1", timezone: "UTC", contentChangedAt: new Date("2026-10-07T10:00:00Z"), tpapi: { isEnabled: true, pingFailures } }) },
+    subscriptionPeriod: { findFirst: async () => ({ id: "s" }) },
+  } as never, {} as never);
+  it("the version changes when the till stops answering, and changes back when it answers again", async () => {
+    const up = (await svc(0).version("resto-a")).version;
+    const down = (await svc(2).version("resto-a")).version;
+    assert.notEqual(up, down);
+    assert.equal((await svc(1).version("resto-a")).version, up, "one lost ping changes nothing");
   });
 });

@@ -33,6 +33,7 @@ describe("managing bornes", () => {
     let failed = false;
     const prisma: any = {
       subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 0 }) }, // the till answers
       kiosk: {
         ...model(kiosks, calls, "kiosk"),
         create: async (a: any) => {
@@ -120,6 +121,7 @@ describe("the kiosk's start-up tells which borne it is", () => {
     const rest = { id: "r1", slug: "chez", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", logoPath: null, welcomeSlides: [], subtitle: null, tagline: null, primaryColor: null, contentChangedAt: new Date(0), settings: {}, tpapi: null };
     const prisma: any = {
       subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 0 }) }, // the till answers
       restaurant: { findUnique: async () => rest },
       tpapiSalesArea: { findMany: async () => [] },
       orderTypeMapping: { findMany: async () => [] },
@@ -150,6 +152,7 @@ describe("placing an order from a borne", () => {
     };
     const prisma: any = {
       subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 0 }) }, // the till answers
       ...tx,
       restaurant: { findUnique: async () => ({ id: "r1", name: "Chez", currency: "MAD", status: "ACTIVE", locale: "fr", settings: { takeAwayEnabled: true } }) },
       order: { findFirst: async () => existing, findMany: async () => [], create: tx.order.create },
@@ -199,6 +202,7 @@ describe("tickets go to the right printer", () => {
     const calls: Call[] = []; const jobs: any[] = [];
     const prisma: any = {
       subscriptionPeriod: { findFirst: async () => ({ id: "running" }) }, // a running subscription, unless a test says otherwise
+      tpapiConnection: { findUnique: async () => ({ isEnabled: true, pingFailures: 0 }) }, // the till answers
       printer: model(printers, calls, "printer"),
       kiosk: model(kiosks, calls, "kiosk"),
       restaurant: model([{ id: "r1", name: "Chez", timezone: "Africa/Casablanca", settings: { ticketFooterText: null, askTableForEatIn: false } }], calls, "restaurant"),

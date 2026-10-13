@@ -12,7 +12,8 @@ export class TpapiClientFactory {
     private readonly crypto: CryptoService,
   ) {}
 
-  async forRestaurant(restaurantId: string): Promise<{ client: TpapiClient; endpoint: string }> {
+  /** `timeoutMs`: a shorter wait than the usual one (at least a minute), for a quick "are you there?". */
+  async forRestaurant(restaurantId: string, opts: { timeoutMs?: number } = {}): Promise<{ client: TpapiClient; endpoint: string }> {
     const conn = await this.prisma.tpapiConnection.findUnique({ where: { restaurantId } });
     if (!conn) throw new NotFoundException("No TPAPI configuration for this restaurant");
     if (!conn.isEnabled) throw new BadRequestException("TPAPI connection is disabled");
@@ -31,7 +32,7 @@ export class TpapiClientFactory {
       endpoint,
       client: new TpapiClient({
         endpoint,
-        timeoutMs: Math.max(conn.timeoutMs, 60_000),
+        timeoutMs: opts.timeoutMs ?? Math.max(conn.timeoutMs, 60_000),
         credentials: { ...creds, appName: conn.appName },
       }),
     };
