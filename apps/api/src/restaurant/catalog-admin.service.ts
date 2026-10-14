@@ -206,14 +206,39 @@ export class CatalogAdminService {
         color: p?.color ?? null,
         isVisible: p?.isVisible ?? true,
         sortOrder: p?.sortOrder ?? order,
+        /** unTill's own number: "unTill's order" in the back office sorts by it. */
+        untillNumber: order,
         translatedInto: filled(p?.displayName),
       };
     };
 
     return {
       groups: groups.map((g) => shape("GROUP", g.untillId, g.name, 0)),
-      departments: departments.map((d) => shape("DEPARTMENT", d.untillId, d.name, d.number)),
+      // In the order the kiosk shows them (the same rule as the kiosk's menu).
+      departments: departments
+        .map((d) => shape("DEPARTMENT", d.untillId, d.name, d.number))
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.posName.localeCompare(b.posName)),
     };
+  }
+
+  /**
+   * The kiosk's order of the departments, as the restaurant arranged it. Every department of this restaurant gets its
+   * place (10, 20, 30… so one can later slot in between); one the list forgot keeps its turn after the others. Ids
+   * that are not this restaurant's departments are refused: nothing is written.
+   */
+  async setDepartmentOrder(restaurantId: string, departmentIds: string[]) {
+    const departments = await this.prisma.tpapiDepartment.findMany({ where: { restaurantId }, orderBy: { number: "asc" }, select: { untillId: true } });
+    const known = new Set(departments.map((d) => d.untillId.toString()));
+    const unknown = departmentIds.filter((id) => !known.has(id));
+    if (unknown.length) throw new BadRequestException(`Not departments of this restaurant: ${unknown.slice(0, 5).join(", ")}`);
+    const ordered = [...new Set(departmentIds)];
+    for (const d of departments) if (!ordered.includes(d.untillId.toString())) ordered.push(d.untillId.toString());
+    await this.prisma.$transaction(ordered.map((id, i) => this.prisma.categoryPresentation.upsert({
+      where: { restaurantId_scope_untillId: { restaurantId, scope: "DEPARTMENT", untillId: BigInt(id) } },
+      create: { restaurantId, scope: "DEPARTMENT", untillId: BigInt(id), sortOrder: (i + 1) * 10 },
+      update: { sortOrder: (i + 1) * 10 },
+    })));
+    return this.listCategories(restaurantId);
   }
 
   async upsertCategory(
@@ -223,10 +248,10 @@ export class CatalogAdminService {
     dto: UpdateCategoryPresentationDto,
   ) {
     const id = BigInt(untillId);
-    const exists =
+    const exists: { id: string; number?: number } | null =
       scope === "GROUP"
         ? await this.prisma.tpapiGroup.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } })
-        : await this.prisma.tpapiDepartment.findFirst({ where: { restaurantId, untillId: id }, select: { id: true } });
+        : await this.prisma.tpapiDepartment.findFirst({ where: { restaurantId, untillId: id }, select: { id: true, number: true } });
     if (!exists) throw new NotFoundException(`No such ${scope.toLowerCase()} in this restaurant's catalog`);
     // Only a path this restaurant's own signed category upload produced. Otherwise one
     // tenant could reference another's file, or a typo becomes a broken tile.
@@ -251,7 +276,9 @@ export class CatalogAdminService {
 
     const saved = await this.prisma.categoryPresentation.upsert({
       where: { restaurantId_scope_untillId: { restaurantId, scope, untillId: id } },
-      create: { restaurantId, scope, untillId: id, ...data },
+      // A first edit (a name, a photo) must not move the department: it keeps its place (unTill's number) unless an
+      // order is given. Without this it got 0 and jumped to the top of the kiosk menu.
+      create: { restaurantId, scope, untillId: id, sortOrder: exists.number ?? 0, ...data },
       update: data,
     });
     // A replaced photo is deleted once nothing points at it; a failed delete only leaves an orphan.

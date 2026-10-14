@@ -7,7 +7,7 @@ import {
   SetAllergensDto,
   UpdateCategoryPresentationDto,
   UpdateProductPresentationDto,
-  SignImageUploadDto, SetVisibilityDto } from "./dto/presentation.dto.js";
+  SignImageUploadDto, SetVisibilityDto, SetCategoryOrderDto } from "./dto/presentation.dto.js";
 
 interface TenantCtx { restaurantId: string; slug: string }
 
@@ -60,6 +60,12 @@ export class CatalogAdminController {
   @Get("categories")
   listCategories(@Tenant() tenant: TenantCtx) {
     return this.catalog.listCategories(tenant.restaurantId);
+  }
+
+  /** The order of the departments on the kiosk menu, all at once. */
+  @Put("categories/order")
+  setCategoryOrder(@Tenant() tenant: TenantCtx, @Body() dto: SetCategoryOrderDto) {
+    return this.catalog.setDepartmentOrder(tenant.restaurantId, dto.departmentIds);
   }
 
   @Patch("categories/:scope/:untillId")

@@ -64,3 +64,10 @@ export class SetVisibilityDto {
 
   @IsOptional() @IsIn(["translation", "image"]) missing?: "translation" | "image";
 }
+
+/** The kiosk's order of the departments: every one of them, first first. */
+export class SetCategoryOrderDto {
+  @IsArray() @ArrayMaxSize(1000)
+  @Matches(/^[0-9]{1,19}$/, { each: true, message: "ids must be numeric unTill ids" })
+  departmentIds!: string[];
+}

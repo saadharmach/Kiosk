@@ -37,6 +37,8 @@ export interface AdminCategory {
   imageUrl: string | null;
   isVisible: boolean;
   sortOrder: number;
+  /** unTill's own number for it (its place in the till's order). */
+  untillNumber: number;
 }
 
 const qs = (o: Record<string, string | undefined>) =>
@@ -58,6 +60,12 @@ export const updateProduct = (slug: string, articleId: string, body: unknown) =>
   request<unknown>(`/restaurant/${slug}/catalog/products/${articleId}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+
+/** The kiosk's order of the departments, first first. Answers with the categories in their new order. */
+export const setCategoryOrder = (slug: string, departmentIds: string[]) =>
+  request<{ groups: AdminCategory[]; departments: AdminCategory[] }>(`/restaurant/${slug}/catalog/categories/order`, {
+    method: "PUT", body: JSON.stringify({ departmentIds }),
   });
 
 export const listCategories = (slug: string) =>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { LOCALES, clearCategoryImage, listCategories, updateCategory, uploadCategoryImage,
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LOCALES, clearCategoryImage, listCategories, setCategoryOrder, updateCategory, uploadCategoryImage,
   type AdminCategory, type I18n, type Locale } from "@/lib/catalog";
 
 const LABEL: Record<Locale, string> = { fr: "Français", en: "English", ar: "العربية" };
@@ -122,23 +122,135 @@ function Row({ slug, row, onSaved }: { slug: string; row: AdminCategory; onSaved
   );
 }
 
+/**
+ * Arranging the departments in the order the kiosk menu shows them: drag a row by its handle (mouse or finger), or use
+ * the arrows; nothing changes on the kiosk until Save.
+ */
+function OrderEditor({ slug, rows, onDone }: {
+  slug: string; rows: AdminCategory[];
+  /** Called with the categories as saved (already in their new order), or null when cancelled. */
+  onDone: (saved: { groups: AdminCategory[]; departments: AdminCategory[] } | null) => void;
+}) {
+  const [list, setList] = useState(rows);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const items = useRef(new Map<string, HTMLLIElement>());
+  const changed = list.some((r, i) => r.untillId !== rows[i]?.untillId);
+
+  const move = (from: number, to: number) => setList((l) => {
+    if (to < 0 || to >= l.length || from === to) return l;
+    const next = [...l];
+    const [it] = next.splice(from, 1);
+    next.splice(to, 0, it!);
+    return next;
+  });
+
+  // While dragging, the row goes where the finger or the pointer is: past the middle of a row, it takes that place.
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    const from = list.findIndex((r) => r.untillId === dragging);
+    // Its new place: how many of the other rows are above the pointer.
+    const to = list.filter((r) => {
+      if (r.untillId === dragging) return false;
+      const box = items.current.get(r.untillId)?.getBoundingClientRect();
+      return box ? box.top + box.height / 2 < e.clientY : false;
+    }).length;
+    move(from, to);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await setCategoryOrder(slug, list.map((r) => r.untillId)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <button onClick={save} disabled={busy || !changed}
+          className="h-10 rounded-lg bg-(--color-brand) px-5 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50">
+          {busy ? "Saving…" : "Save order"}
+        </button>
+        <button onClick={() => onDone(null)} disabled={busy} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">Cancel</button>
+        <button onClick={() => setList([...list].sort((a, b) => a.untillNumber - b.untillNumber || a.posName.localeCompare(b.posName)))}
+          disabled={busy} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">
+          unTill&apos;s order
+        </button>
+        <span className="text-sm text-(--color-ink-muted)">Drag a row by ⠿, or use the arrows. The kiosk changes when you save.</span>
+      </div>
+      {error ? <p role="alert" className="mb-3 text-sm text-(--color-danger)">{error}</p> : null}
+      <ol className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)"
+        onPointerMove={onPointerMove} onPointerUp={() => setDragging(null)} onPointerCancel={() => setDragging(null)}>
+        {list.map((r, i) => (
+          <li key={r.untillId} ref={(el) => { if (el) items.current.set(r.untillId, el); else items.current.delete(r.untillId); }}
+            className={`flex items-center gap-3 p-2 ${dragging === r.untillId ? "bg-(--color-surface-2) shadow-md" : ""} ${r.isVisible ? "" : "opacity-60"}`}>
+            <button type="button" aria-label={`Drag ${r.posName}`} title="Drag to move"
+              className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded text-xl text-(--color-ink-muted) select-none active:cursor-grabbing"
+              onPointerDown={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); setDragging(r.untillId); }}>
+              ⠿
+            </button>
+            <span className="w-7 shrink-0 text-end text-sm text-(--color-ink-muted) tabular-nums">{i + 1}</span>
+            <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--color-surface-2)">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {r.imageUrl ? <img src={r.imageUrl} alt="" className="size-full object-cover" /> : null}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{r.displayName?.fr ?? r.posName}</span>
+              {!r.isVisible ? <span className="text-xs text-(--color-ink-muted)">hidden on the kiosk</span> : null}
+            </span>
+            <button type="button" aria-label={`Move ${r.posName} up`} disabled={i === 0 || busy} onClick={() => move(i, i - 1)}
+              className="h-10 w-10 shrink-0 rounded-lg border border-(--color-line) disabled:opacity-30">↑</button>
+            <button type="button" aria-label={`Move ${r.posName} down`} disabled={i === list.length - 1 || busy} onClick={() => move(i, i + 1)}
+              className="h-10 w-10 shrink-0 rounded-lg border border-(--color-line) disabled:opacity-30">↓</button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default function CategoriesPage({ slug }: { slug: string }) {
   const [data, setData] = useState<{ groups: AdminCategory[]; departments: AdminCategory[] } | null>(null);
   const load = useCallback(() => { listCategories(slug).then(setData).catch(() => undefined); }, [slug]);
   useEffect(load, [load]);
+  const [ordering, setOrdering] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   if (!data) return <p className="text-(--color-ink-muted)">Loading…</p>;
 
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h2 className="mb-1 text-lg font-medium">Departments</h2>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-medium">Departments</h2>
+          {!ordering ? (
+            <button onClick={() => { setOrdering(true); setNotice(null); }} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">
+              Change order
+            </button>
+          ) : null}
+        </div>
         <p className="mb-3 text-sm text-(--color-ink-muted)">
-          The categories listed on the left of the kiosk menu. Switch one off to hide it and all its products.
+          The categories listed on the left of the kiosk menu, in this order. Switch one off to hide it and all its products.
         </p>
-        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
-          {data.departments.map((d) => <Row key={d.untillId} slug={slug} row={d} onSaved={load} />)}
-        </ul>
+        {notice ? <p role="status" className="mb-3 text-sm text-green-700">{notice}</p> : null}
+        {ordering ? (
+          <OrderEditor slug={slug} rows={data.departments} onDone={(saved) => {
+            // The answer to the save is the new list: shown at once, no second request to wait for.
+            if (saved) { setData(saved); setNotice("Order saved. The kiosks show it within a few seconds."); }
+            setOrdering(false);
+          }} />
+        ) : (
+          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
+            {data.departments.map((d) => <Row key={d.untillId} slug={slug} row={d} onSaved={load} />)}
+          </ul>
+        )}
       </section>
     </div>
   );
