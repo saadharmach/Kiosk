@@ -180,7 +180,7 @@ export const BACKOFFICE_URL = process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "http://
 
 // ---------------------------------------------------------------------- orders
 
-export type OrderStatus = "DRAFT" | "PENDING" | "SENT" | "CONFIRMED" | "PAID" | "FAILED" | "CANCELLED";
+export type OrderStatus = "AWAITING_PAYMENT" | "DRAFT" | "PENDING" | "SENT" | "CONFIRMED" | "PAID" | "FAILED" | "CANCELLED";
 
 export interface OrderRow {
   id: string; reference: string; status: OrderStatus; orderType: string; tableNumber: number | null;

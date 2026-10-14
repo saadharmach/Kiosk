@@ -146,8 +146,24 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      // Orders to close in unTill whose closing has not gone through yet (the till was busy): try again.
+      const toClose = await this.prisma.order.findMany({
+        where: { status: "SENT", closeInUntill: true, closedInUntillAt: null },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: { id: true, restaurantId: true, reference: true },
+      });
+      for (const o of toClose) {
+        try {
+          await this.close(o.restaurantId, o.id);
+        } catch (e) {
+          this.logger.warn(`Sweep close: ${o.reference} — ${(e as Error).message}`);
+        }
+      }
+
+      // An order we close ourselves is never among the open ones: nothing to verify.
       const toVerify = await this.prisma.order.findMany({
-        where: { status: "SENT", sentAt: { gte: new Date(Date.now() - VERIFY_WINDOW_MS) } },
+        where: { status: "SENT", closeInUntill: false, sentAt: { gte: new Date(Date.now() - VERIFY_WINDOW_MS) } },
         orderBy: { createdAt: "asc" },
         take: 20,
         select: { id: true, restaurantId: true, reference: true },
@@ -386,7 +402,64 @@ export class OrderSubmitService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`Order ${order.reference} sent to unTill in ${durationMs}ms`);
+    // Paid by card (or cash closed at once): close its bill now, with the payment type the restaurant chose. If unTill
+    // refuses or cannot be reached, the order stays SENT and the sweep tries again.
+    if (order.closeInUntill) {
+      await this.close(restaurantId, order.id).catch((e) => this.logger.warn(`CloseOrder ${order.reference}: ${(e as Error).message}`));
+    }
     return { ...result, correlationId, durationMs };
+  }
+
+  /**
+   * Closes a sent order's bill in unTill (TPAPI CloseOrder: its table and part, with the unTill payment type chosen for
+   * how it was paid). Success: the order is PAID. The table part is the one the order was created with.
+   */
+  async close(restaurantId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, restaurantId },
+      select: { id: true, reference: true, status: true, closeInUntill: true, closedInUntillAt: true, untillPaymentId: true, tableNumber: true, tablePart: true, orderType: true, tpapiRequestSnapshot: true },
+    });
+    if (!order) throw new NotFoundException("Order not found");
+    if (order.status !== "SENT" || !order.closeInUntill || order.closedInUntillAt) {
+      throw new BadRequestException(`${order.reference} is not waiting to be closed in unTill`);
+    }
+    if (!order.untillPaymentId) {
+      throw new BadRequestException(`${order.reference} has no unTill payment type to close it with: set it in the back office (Settings › Payment)`);
+    }
+    const sent = order.tpapiRequestSnapshot as { TablePart?: string } | null;
+    const tablePart = sent?.TablePart ? this.checkPart(sent.TablePart) : await this.resolveTablePart(restaurantId, order.orderType, order.tablePart);
+    const request = { TableNumber: order.tableNumber, TablePart: tablePart, PaymentId: Number(order.untillPaymentId), Extra: [] };
+
+    const correlationId = randomUUID();
+    const started = Date.now();
+    const { client } = await this.clients.forRestaurant(restaurantId);
+    let returnCode: number | null = null;
+    let returnMessage = "";
+    let thrown: Error | null = null;
+    try {
+      const res = await client.call<{ ReturnCode: number; ReturnMessage: string }>("CloseOrder", request, { ignoreReturnCode: true });
+      returnCode = typeof res.ReturnCode === "number" ? res.ReturnCode : null;
+      returnMessage = res.ReturnMessage ?? "";
+    } catch (e) {
+      thrown = e instanceof Error ? e : new Error(String(e));
+    }
+    const ok = thrown === null && returnCode === 0;
+    const errorText = thrown ? `${thrown.name}: ${thrown.message}` : ok ? null : `unTill returned ${returnCode}: ${returnMessage}`;
+    await this.writeLog({
+      restaurantId, orderId: order.id, operation: "CloseOrder", correlationId, ok, returnCode,
+      durationMs: Date.now() - started, message: errorText ?? (returnMessage || "Closed"), requestSummary: request,
+    });
+    if (!ok) {
+      await this.prisma.order.updateMany({ where: { id: order.id, restaurantId }, data: { tpapiLastError: `Closing in unTill: ${errorText}` } });
+      throw new ServiceUnavailableException(errorText ?? "CloseOrder failed");
+    }
+    const result = await this.status.transition({
+      restaurantId, orderId: order.id, to: "PAID", actor: "SYSTEM", reason: "Closed in unTill",
+      meta: { correlationId, paymentId: String(order.untillPaymentId) },
+      patch: { closedInUntillAt: new Date(), tpapiLastError: null },
+    });
+    this.logger.log(`Order ${order.reference} closed in unTill`);
+    return result;
   }
 
   /**

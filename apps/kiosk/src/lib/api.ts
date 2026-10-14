@@ -66,7 +66,20 @@ export interface WelcomeSlide {
   product: { id: string; name: string; names: Partial<Record<"fr" | "en" | "ar", string>>; price: number; fromPrice: boolean } | null;
 }
 
+/** The ways to pay this borne offers (the Règlement screen). */
+export interface PaymentOptions {
+  /** Card on this borne's TPE. */
+  card: boolean;
+  cash: boolean;
+  /** Cash is closed in unTill at once; otherwise paid at the counter. */
+  cashClosed: boolean;
+  /** The TPE is the test simulator: show approve/decline buttons. */
+  simulator: boolean;
+}
+
 export interface Bootstrap {
+  /** The Règlement screen's choices. Missing on an older server: cash only, as before. */
+  payment?: PaymentOptions;
   /** Which borne this machine is, as the restaurant named it (null when it is not one of its bornes). */
   borne?: { code: string; name: string } | null;
   restaurant: {
@@ -232,12 +245,20 @@ export interface WireCartLine {
 
 export interface PlacedOrder {
   reference: string;
+  /** AWAITING_PAYMENT while the borne's TPE is charging it. */
   status: string;
   tableNumber: number | null;
   total: number;
   currency: string;
   itemCount: number;
   items: { name: string; quantity: number; total: number }[];
+  payment?: {
+    by: "CARD" | "CASH";
+    /** Paid by card: the TPE approved it. */
+    paid: boolean;
+    /** The latest card attempt: PENDING while the TPE works, then APPROVED, DECLINED, CANCELLED or FAILED. */
+    attempt: { status: "PENDING" | "APPROVED" | "DECLINED" | "CANCELLED" | "FAILED"; message: string | null } | null;
+  };
 }
 
 export const priceCart = (
@@ -257,6 +278,20 @@ export const createOrder = (
     displayedTotalCents?: number;
     /** Which borne placed the order (its code): the ticket prints on that borne's printer. */
     borneCode?: string;
+    /** How the customer pays (the Règlement screen). */
+    payment?: "CARD" | "CASH";
     lines: WireCartLine[];
   },
 ) => request<PlacedOrder>(`/kiosk/${slug}/orders`, { method: "POST", body: JSON.stringify(body) });
+
+/** The order as it stands (the kiosk asks while the TPE works). */
+export const getOrder = (slug: string, clientOrderId: string) => request<PlacedOrder>(`/kiosk/${slug}/orders/${clientOrderId}`);
+/** After a card payment that did not go through: the card again, or cash. */
+export const payOrder = (slug: string, clientOrderId: string, method: "CARD" | "CASH") =>
+  request<PlacedOrder>(`/kiosk/${slug}/orders/${clientOrderId}/pay`, { method: "POST", body: JSON.stringify({ method }) });
+/** The customer stops at the TPE screen. */
+export const cancelPayment = (slug: string, clientOrderId: string) =>
+  request<PlacedOrder>(`/kiosk/${slug}/orders/${clientOrderId}/payment/cancel`, { method: "POST" });
+/** Test only (the simulator): approve or decline the waiting payment. */
+export const simulatePayment = (slug: string, clientOrderId: string, approve: boolean) =>
+  request<PlacedOrder>(`/kiosk/${slug}/orders/${clientOrderId}/payment/simulate`, { method: "POST", body: JSON.stringify({ approve }) });

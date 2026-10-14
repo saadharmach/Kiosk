@@ -17,7 +17,7 @@ function setup(settings: Record<string, unknown> | null, restaurantLocale = "fr"
     price: async (_rid: string, _cur: string, dto: Record<string, unknown>) => { captured.dto = dto; return { total: 1, lines: [] }; },
   };
   const printing = { enqueueForOrder: async (_r: string, id: string) => { captured.printed.push(id); } };
-  return { svc: new OrdersService(prisma as never, pricing as never, printing as never), captured };
+  return { svc: new OrdersService(prisma as never, pricing as never, printing as never, {} as never), captured };
 }
 
 const dto = (orderType: string, extra: Record<string, unknown> = {}) => ({ orderType, salesAreaId: "1", lines: [], ...extra }) as never;
@@ -89,7 +89,7 @@ describe("OrdersService.create: idempotency", () => {
     };
     const pricing = { price: async () => { captured.dto = {}; return {}; } };
     const printing = { enqueueForOrder: async (_r: string, id: string) => { captured.printed.push(id); } };
-    const svc = new OrdersService(prisma as never, pricing as never, printing as never);
+    const svc = new OrdersService(prisma as never, pricing as never, printing as never, {} as never);
     const order = await svc.create("resto-a", { clientOrderId: "same-id", orderType: "EAT_IN", salesAreaId: "1", lines: [] } as never);
     assert.equal(order.reference, "K0-0930-001");
     assert.equal(captured.dto, undefined, "pricing was not called");
@@ -126,7 +126,7 @@ describe("while the till does not answer", () => {
       restaurant: { findUnique: async () => ({ id: "r1", currency: "MAD", status: "ACTIVE", locale: "fr", settings: all }) },
       order: { findFirst: async () => existing },
     };
-    const svc = new OrdersService(prisma as never, {} as never, { enqueueForOrder: async () => undefined } as never);
+    const svc = new OrdersService(prisma as never, {} as never, { enqueueForOrder: async () => undefined } as never, {} as never);
     assert.equal((await svc.create("resto-a", { clientOrderId: "same-id", orderType: "EAT_IN", salesAreaId: "1", lines: [] } as never)).reference, "K0-0930-001");
   });
 

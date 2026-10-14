@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
-import { ApiError, createOrder, isConnectionError, isTillError, isUnavailableError, priceCart, type CatalogProduct, type PlacedOrder, type WireCartLine } from "@/lib/api";
+import {
+  ApiError, cancelPayment, createOrder, getOrder, isConnectionError, isTillError, isUnavailableError, payOrder, priceCart, simulatePayment,
+  type CatalogProduct, type PaymentOptions, type PlacedOrder, type WireCartLine,
+} from "@/lib/api";
 import { useCart, type CartLine } from "@/state/cart";
 import KioskHeader from "../KioskHeader";
 import { Icon } from "../icons";
 import ProductSheet from "../ProductSheet";
+import PaymentPanel from "../PaymentPanel";
 import { newId } from "../../lib/uuid";
 
 /** Cart thumbnail that quietly disappears if the image cannot be loaded. */
@@ -19,8 +23,12 @@ function Thumb({ src }: { src: string }) {
   return <img src={src} alt="" onError={() => setFailed(true)} className="size-36 shrink-0 rounded-3xl object-cover" />;
 }
 
+/** A server that does not say (older): cash, paid at the counter, as before. */
+const CASH_ONLY: PaymentOptions = { card: false, cash: true, cashClosed: false, simulator: false };
+
 export default function CartScreen({
   slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, borneCode, onLocale, onBack, onPlaced, onUnavailable,
+  payment = CASH_ONLY, onPaying,
 }: {
   slug: string;
   locale: Locale;
@@ -39,6 +47,10 @@ export default function CartScreen({
   /** The restaurant was switched off while the customer was ordering: the cart is kept, the kiosk shows its calm screen. */
   /** The restaurant stopped taking orders, or its till does not answer: the kiosk shows the matching screen. */
   onUnavailable: (e: ApiError) => void;
+  /** The ways to pay this borne offers (the Règlement screen). */
+  payment?: PaymentOptions;
+  /** True while the borne's TPE is working: the kiosk must not reset itself for inactivity then. */
+  onPaying?: (paying: boolean) => void;
 }) {
   const t = STRINGS[locale];
   const cart = useCart();
@@ -56,6 +68,76 @@ export default function CartScreen({
   // One id for this cart. Reused on every retry so a repeated tap or a dropped
   // response can never produce two orders.
   const clientOrderId = useRef<string>(newId());
+
+  // The Règlement screen over the cart, then the TPE screen for a card. Once a card order exists (waiting for its
+  // payment), choosing again pays that same order instead of creating another one.
+  const [stage, setStage] = useState<"cart" | "choose" | "card">("cart");
+  const [problem, setProblem] = useState<string | null>(null);
+  const orderWaiting = useRef(false);
+  useEffect(() => { onPaying?.(stage === "card"); }, [stage, onPaying]);
+  useEffect(() => () => onPaying?.(false), [onPaying]);
+
+  /** Where an answer from the server leads: paid or cash → the ticket; a card still to pay → the TPE screen. */
+  const follow = (order: PlacedOrder) => {
+    if (order.status !== "AWAITING_PAYMENT") { setStage("cart"); onPlaced(order); return; }
+    orderWaiting.current = true;
+    const attempt = order.payment?.attempt;
+    // PENDING: the TPE is working. APPROVED while the order still waits: the server is moving it on this very moment
+    // (two steps), so keep waiting on the terminal screen; the next look finds it paid.
+    if (attempt?.status === "PENDING" || attempt?.status === "APPROVED") { setProblem(null); setStage("card"); return; }
+    setProblem(attempt?.message ?? null);
+    setStage("choose");
+  };
+
+  // While the TPE works, look at the order every moment and a half: approved, declined, failed.
+  useEffect(() => {
+    if (stage !== "card") return;
+    const id = window.setInterval(() => {
+      getOrder(slug, clientOrderId.current).then(follow, () => undefined);
+    }, 1500);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, slug]);
+
+  const handle = (e: unknown) => {
+    const err = e as ApiError;
+    if (isUnavailableError(err) || isTillError(err)) return onUnavailable(err);
+    setError(err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message);
+    setStage("cart");
+    if (err.code === "PRICES_CHANGED") {
+      priceCart(slug, { orderType, salesAreaId, locale, lines: wire() }).then((p) => setServerTotal(p.total)).catch(() => undefined);
+    }
+  };
+
+  const pick = async (method: "CARD" | "CASH") => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      follow(orderWaiting.current ? await payOrder(slug, clientOrderId.current, method) : await place(method));
+    } catch (e) {
+      handle(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stopCard = async () => {
+    setBusy(true);
+    try { follow(await cancelPayment(slug, clientOrderId.current)); } catch (e) { handle(e); } finally { setBusy(false); }
+    setProblem(null);
+  };
+
+  /** Back to the cart from the Règlement screen: an order waiting for a card is left behind, edits make a new one. */
+  const backToCart = () => {
+    if (orderWaiting.current) {
+      void cancelPayment(slug, clientOrderId.current).catch(() => undefined);
+      clientOrderId.current = newId();
+      orderWaiting.current = false;
+    }
+    setProblem(null);
+    setStage("cart");
+  };
 
   const wire = (): WireCartLine[] =>
     cart.lines.map((l) => ({
@@ -85,37 +167,23 @@ export default function CartScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, orderType, salesAreaId, cart.lines]);
 
-  const confirm = async () => {
-    if (serverTotal === null || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const order = await createOrder(slug, {
+  /** The order itself, created once (its id makes a repeated tap harmless), paid as chosen. */
+  const place = (method: "CARD" | "CASH") => createOrder(slug, {
         clientOrderId: clientOrderId.current,
         orderType,
         salesAreaId,
         locale,
         ...(tableNumber !== null ? { tableNumber } : {}),
         ...(borneCode ? { borneCode } : {}),
-        displayedTotalCents: Math.round(serverTotal * 100),
+        displayedTotalCents: Math.round((serverTotal ?? 0) * 100),
+        payment: method,
         lines: wire(),
       });
-      onPlaced(order);
-    } catch (e) {
-      const err = e as ApiError;
-      if (isUnavailableError(err) || isTillError(err)) return onUnavailable(err);
-      setError(
-        err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message,
-      );
-      // A price change invalidates what the customer agreed to, so re-price.
-      if (err.code === "PRICES_CHANGED") {
-        priceCart(slug, { orderType, salesAreaId, locale, lines: wire() })
-          .then((p) => setServerTotal(p.total))
-          .catch(() => undefined);
-      }
-    } finally {
-      setBusy(false);
-    }
+
+  /** The Règlement screen: the total, and how to pay (also when cash is the only way, so it is the same everywhere). */
+  const confirm = () => {
+    if (serverTotal === null || busy) return;
+    setStage("choose");
   };
 
   return (
@@ -201,7 +269,7 @@ export default function CartScreen({
               <button onClick={confirm} disabled={busy || serverTotal === null}
                 className="flex min-h-30 flex-1 items-center justify-center gap-4 rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
                 <Icon name="check" className="size-9" strokeWidth={2.6} />
-                {busy ? t.sending : t.confirmOrder}
+                {busy ? t.sending : t.toPayment}
               </button>
             </div>
           </div>
@@ -211,6 +279,12 @@ export default function CartScreen({
       {editing ? (
         <ProductSheet product={editing.product} editing={editing.line} currency={currency} locale={locale}
           onClose={() => setEditing(null)} />
+      ) : null}
+
+      {stage !== "cart" && serverTotal !== null ? (
+        <PaymentPanel stage={stage} options={payment} total={serverTotal} currency={currency} locale={locale} busy={busy} problem={problem}
+          onPick={(m) => void pick(m)} onCancelCard={() => void stopCard()} onBack={backToCart}
+          onSimulate={payment.simulator ? (approve) => { void simulatePayment(slug, clientOrderId.current, approve).then(follow, () => undefined); } : undefined} />
       ) : null}
     </main>
   );

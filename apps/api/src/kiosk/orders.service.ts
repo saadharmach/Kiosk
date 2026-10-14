@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { resolveLocale } from "../common/locale.js";
 import { PrintingService, type LoadedOrder } from "../printing/printing.service.js";
 import { readTableRanges, tableInRanges } from "../common/table-ranges.js";
+import { PaymentsService } from "../payments/payments.service.js";
 
 @Injectable()
 export class OrdersService {
@@ -16,6 +17,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
     private readonly printing: PrintingService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async create(slug: string, dto: CreateOrderDto) {
@@ -33,12 +35,21 @@ export class OrdersService {
       this.prisma.order.findFirst({ where: { restaurantId, clientRequestId: dto.clientOrderId }, include: { items: true } }),
       resolveBorne(this.prisma, restaurantId, restaurant.name, dto.borneCode).then((b) => ({ b }), (e: unknown) => ({ e })),
     ]);
-    if (existing) return this.present(existing);
+    if (existing) return this.present(existing, await this.latestPayment(restaurantId, existing));
     if ("e" in borne) throw borne.e;
     const borneInfo = borne.b;
     await requireTillReachable(this.prisma, restaurantId);
 
     this.assertOrderTypeEnabled(restaurant.settings, dto.orderType);
+
+    // ---- how the customer pays. Card: only on a borne whose TPE is set up; the order waits for the TPE before it
+    // goes to unTill, where it is closed with the card payment type. Cash: open as before, or closed at once.
+    const payBy = dto.payment ?? "CASH";
+    const terminal = payBy === "CARD" ? await this.payments.cardTerminal(restaurantId, restaurant.settings, borneInfo?.id ?? null) : null;
+    if (payBy === "CARD") PaymentsService.assertMethod(Boolean(terminal), "Card");
+    else PaymentsService.assertMethod(restaurant.settings?.cashPaymentEnabled ?? true, "Cash");
+    const closing = this.closingFor(payBy, restaurant.settings);
+    const firstStatus = payBy === "CARD" ? "AWAITING_PAYMENT" : "PENDING";
 
     const priced = await this.pricing.price(restaurantId, restaurant.currency, {
       ...dto,
@@ -92,7 +103,10 @@ export class OrdersService {
           businessDate,
           dailySequence: seq,
           orderType: dto.orderType,
-          status: "PENDING",
+          status: firstStatus,
+          paymentMethod: payBy === "CARD" ? "PAYMENT_TERMINAL" : "PAY_AT_CASHIER",
+          closeInUntill: closing.closeInUntill,
+          untillPaymentId: closing.untillPaymentId,
           salesAreaId: BigInt(priced.salesAreaId),
           tableNumber,
           tablePart,
@@ -109,16 +123,83 @@ export class OrdersService {
       });
 
       await tx.orderStatusHistory.create({
-        data: { orderId: created.id, restaurantId, toStatus: "PENDING", actor: "KIOSK" },
+        data: { orderId: created.id, restaurantId, toStatus: firstStatus, actor: "KIOSK" },
       });
       return created;
     });
 
-    this.logger.log(`Order ${order.reference} created (${priced.total} ${priced.currency})`);
+    this.logger.log(`Order ${order.reference} created (${priced.total} ${priced.currency}, ${payBy.toLowerCase()})`);
+    if (terminal) {
+      // Card: the TPE is asked to charge; the ticket prints once it is paid (PaymentsService.complete).
+      return this.present(order, await this.payments.startCard(restaurantId, order, terminal));
+    }
     // The ticket is queued once the order is safely stored. It never fails the order, and the
     // promise has its own catch so a printing problem can never become an unhandled rejection.
     void this.printing.enqueueForOrder(restaurantId, order.id, true, order as unknown as LoadedOrder).catch(() => undefined);
     return this.present(order);
+  }
+
+  /** Close the order in unTill right away? Card always; cash only when the restaurant chose so (and said with what). */
+  private closingFor(payBy: "CARD" | "CASH", settings: { cardUntillPaymentId?: bigint | null; cashUntillPaymentId?: bigint | null; cashClosesOrder?: boolean } | null) {
+    if (payBy === "CARD") return { closeInUntill: true, untillPaymentId: settings?.cardUntillPaymentId ?? null };
+    const close = Boolean(settings?.cashClosesOrder && settings.cashUntillPaymentId);
+    return { closeInUntill: close, untillPaymentId: close ? settings!.cashUntillPaymentId! : null };
+  }
+
+  /** A card order's latest payment attempt (a cash order has none). */
+  private latestPayment(restaurantId: string, order: { id: string; paymentMethod?: string }) {
+    return order.paymentMethod === "PAYMENT_TERMINAL" ? this.payments.latest(restaurantId, order.id) : Promise.resolve(null);
+  }
+
+  /** The order a kiosk is paying for: only one still waiting for its payment. */
+  private async awaitingOrder(slug: string, clientOrderId: string) {
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { slug }, select: { id: true, name: true, status: true, settings: true, timezone: true },
+    });
+    requireOrderable(restaurant);
+    const order = await this.prisma.order.findFirst({ where: { restaurantId: restaurant.id, clientRequestId: clientOrderId }, include: { items: true } });
+    if (!order) throw new NotFoundException("Order not found");
+    if (order.status !== "AWAITING_PAYMENT") throw new ConflictException({ code: "NOT_AWAITING_PAYMENT", message: `This order is ${order.status.toLowerCase()}, not waiting for a payment` });
+    return { restaurant, order };
+  }
+
+  /**
+   * After a declined, cancelled or failed card payment the customer chooses again: the card once more (a new attempt
+   * on the borne's TPE), or cash (the order goes on, to be paid at the counter or closed as the restaurant chose).
+   */
+  async pay(slug: string, clientOrderId: string, method: "CARD" | "CASH") {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+    await requireTillReachable(this.prisma, restaurant.id);
+    if (method === "CARD") {
+      const terminal = await this.payments.cardTerminal(restaurant.id, restaurant.settings, order.kioskId);
+      PaymentsService.assertMethod(Boolean(terminal), "Card");
+      return this.present(order, await this.payments.startCard(restaurant.id, order, terminal!));
+    }
+    PaymentsService.assertMethod(restaurant.settings?.cashPaymentEnabled ?? true, "Cash");
+    await this.payments.cancel(restaurant.id, order.id);
+    const closing = this.closingFor("CASH", restaurant.settings);
+    await this.prisma.order.updateMany({
+      where: { id: order.id, restaurantId: restaurant.id, status: "AWAITING_PAYMENT" },
+      data: { paymentMethod: "PAY_AT_CASHIER", ...closing },
+    });
+    await this.payments.moveOn(restaurant.id, order.id, "Pays cash instead of card");
+    void this.printing.enqueueForOrder(restaurant.id, order.id, true).catch(() => undefined);
+    const after = await this.prisma.order.findFirstOrThrow({ where: { id: order.id, restaurantId: restaurant.id }, include: { items: true } });
+    return this.present(after);
+  }
+
+  /** The customer stopped at the TPE screen: the order waits for their next choice. */
+  async cancelPayment(slug: string, clientOrderId: string) {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+    await this.payments.cancel(restaurant.id, order.id);
+    return this.present(order, await this.payments.latest(restaurant.id, order.id));
+  }
+
+  /** The kiosk's test buttons, while the TPE is the simulator (never on the live server). */
+  async simulatePayment(slug: string, clientOrderId: string, approve: boolean) {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+    await this.payments.simulate(restaurant.id, order.id, approve);
+    return this.getByClientOrderId(slug, clientOrderId);
   }
 
   preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
@@ -248,7 +329,8 @@ export class OrdersService {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private present(order: any) {
+  private present(order: any, payment?: { id: string; status: string; message: string | null } | null) {
+    const card = order.paymentMethod === "PAYMENT_TERMINAL";
     return {
       reference: order.reference,
       status: order.status,
@@ -258,7 +340,16 @@ export class OrdersService {
       currency: order.currency,
       itemCount: order.itemCount,
       createdAt: order.createdAt,
-      payment: { method: "PAY_AT_CASHIER", instruction: "Please pay at the cashier with this number" },
+      payment: {
+        // Kept for kiosk pages that only know these two.
+        method: card ? "PAYMENT_TERMINAL" : "PAY_AT_CASHIER",
+        instruction: card ? "Paid by card" : "Please pay at the cashier with this number",
+        by: card ? "CARD" : "CASH",
+        /** Paid by card: the TPE approved it. */
+        paid: card && order.status !== "AWAITING_PAYMENT" && order.status !== "CANCELLED",
+        /** The latest card attempt, while the kiosk waits on the TPE. */
+        attempt: payment ? { status: payment.status, message: payment.message } : null,
+      },
       items: order.items
         .filter((i: { kind: string }) => i.kind === "PRODUCT")
         .map((i: { articleName: string; quantity: number; lineTotal: unknown }) => ({
@@ -287,6 +378,6 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException("Order not found");
 
-    return this.present(order);
+    return this.present(order, await this.latestPayment(restaurant.id, order));
   }
 }

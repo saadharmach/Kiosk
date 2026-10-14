@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { OrderStatusService, type OrderStatusName } from "../orders/order-status.service.js";
 
 const ORDER_STATUSES: OrderStatusName[] = [
+  "AWAITING_PAYMENT",
   "DRAFT",
   "PENDING",
   "SENT",

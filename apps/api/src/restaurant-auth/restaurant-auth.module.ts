@@ -12,6 +12,8 @@ import { RestaurantController } from "../restaurant/restaurant.controller.js";
 import { RestaurantOrdersController } from "../restaurant/restaurant-orders.controller.js";
 import { RestaurantOrdersService } from "../restaurant/restaurant-orders.service.js";
 import { SettingsController } from "../restaurant/settings.controller.js";
+import { PaymentSettingsController } from "../restaurant/payment-settings.controller.js";
+import { PaymentSettingsService } from "../restaurant/payment-settings.service.js";
 import { SettingsService } from "../restaurant/settings.service.js";
 import { SuggestionsController } from "../restaurant/suggestions.controller.js";
 import { SuggestionsService } from "../restaurant/suggestions.service.js";
@@ -36,8 +38,8 @@ import { PrintingModule } from "../printing/printing.module.js";
     OrderPrintController,
     SettingsController,
     SuggestionsController,
-    KiosksController, RestaurantSubscriptionController],
-  providers: [
+    KiosksController, RestaurantSubscriptionController, PaymentSettingsController],
+  providers: [PaymentSettingsService, 
     RestaurantAuthService,
     RestaurantAuthGuard,
     TenantGuard,

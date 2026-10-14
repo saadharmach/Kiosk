@@ -8,6 +8,7 @@ import {
 import { ErrorText, input, secondary, when } from "./ui";
 
 const TONE: Record<OrderStatus, string> = {
+  AWAITING_PAYMENT: "bg-violet-100 text-violet-900",
   DRAFT: "bg-(--color-surface-2) text-(--color-ink-muted)",
   PENDING: "bg-amber-100 text-amber-900",
   SENT: "bg-sky-100 text-sky-900",
@@ -17,6 +18,7 @@ const TONE: Record<OrderStatus, string> = {
   CANCELLED: "bg-(--color-surface-2) text-(--color-ink-muted)",
 };
 const STATUS_HELP: Partial<Record<OrderStatus, string>> = {
+  AWAITING_PAYMENT: "Paying by card at the borne: not sent to the till until the card terminal approves it.",
   PENDING: "Waiting to be sent to the till.",
   SENT: "The till accepted it, but it has not been confirmed there yet.",
   CONFIRMED: "Found on the till.",

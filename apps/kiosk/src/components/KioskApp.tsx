@@ -169,13 +169,15 @@ function KioskFlow({ slug }: { slug: string }) {
   // the next customer. The last seconds are a visible warning, so nobody loses a
   // half-built order without a chance to keep it.
   const [idleLeft, setIdleLeft] = useState<number | null>(null);
+  // While the borne's TPE is charging the customer (PIN, contactless…), the kiosk must not reset for inactivity.
+  const [paying, setPaying] = useState(false);
   const idleTotal = boot ? Math.max(15, boot.ordering.idleTimeoutSec) : 90;
   const warnSec = Math.min(30, Math.floor(idleTotal / 2));
   const keepAlive = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     // Nothing to protect on the welcome screen, and the ticket resets itself.
-    if (!boot || screen === "WELCOME" || screen === "TICKET") return;
+    if (!boot || screen === "WELCOME" || screen === "TICKET" || paying) return;
     let warnTimer: number | undefined;
     let tick: number | undefined;
     let warning = false;
@@ -207,7 +209,7 @@ function KioskFlow({ slug }: { slug: string }) {
       stop();
       setIdleLeft(null);
     };
-  }, [boot, screen, reset, idleTotal, warnSec]);
+  }, [boot, screen, reset, idleTotal, warnSec, paying]);
 
   const t = STRINGS[locale];
 
@@ -310,6 +312,8 @@ function KioskFlow({ slug }: { slug: string }) {
         onPlaced={(o) => { setOrder(o); setScreen("TICKET"); }}
         borneCode={borne ?? undefined}
         onUnavailable={(e) => (isTillError(e) ? setTillOk(false) : setError(toKioskError(e)))}
+        payment={boot.payment}
+        onPaying={setPaying}
       />
     );
   }

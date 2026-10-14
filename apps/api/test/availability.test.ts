@@ -42,7 +42,7 @@ describe("every public kiosk route refuses a restaurant that is not active", () 
     order: { findFirst: async () => null },
   });
   const catalog = (status: string) => new CatalogService(prisma(status) as never, {} as never);
-  const orders = (status: string) => new OrdersService(prisma(status) as never, {} as never, {} as never);
+  const orders = (status: string) => new OrdersService(prisma(status) as never, {} as never, {} as never, {} as never);
   const unavailable = (e: unknown) => e instanceof ServiceUnavailableException && body(e).code === RESTAURANT_UNAVAILABLE;
   const dto = { orderType: "EAT_IN", salesAreaId: "1", lines: [], clientOrderId: "11111111-1111-4111-8111-111111111111" } as never;
 

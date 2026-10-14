@@ -12,7 +12,8 @@ import BornesPage from "./BornesPage";
 import SuggestionsPage from "./SuggestionsPage";
 import BrandingPage from "./BrandingPage";
 import SubscriptionBanner from "./SubscriptionBanner";
-const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Branding", "Settings"] as const;
+import PaymentPage from "./PaymentPage";
+const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Payment", "Branding", "Settings"] as const;
 
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
@@ -142,6 +143,7 @@ export default function Shell() {
           : section === "Allergens" && slug ? <AllergensPage slug={slug} />
           : section === "Orders" && slug ? <OrdersPage slug={slug} />
           : section === "Bornes" && slug ? <BornesPage slug={slug} />
+          : section === "Payment" && slug ? <PaymentPage slug={slug} />
           : section === "Branding" && slug ? <BrandingPage slug={slug} />
           : section === "Settings" && slug ? <SettingsPage slug={slug} />
           : <p className="text-(--color-ink-muted)">Coming in the next step.</p>}

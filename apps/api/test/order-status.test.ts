@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { OrderStatusService, type OrderStatusName } from "../src/orders/order-status.service.js";
 
-const ALL: OrderStatusName[] = ["DRAFT", "PENDING", "SENT", "CONFIRMED", "PAID", "FAILED", "CANCELLED"];
+const ALL: OrderStatusName[] = ["AWAITING_PAYMENT", "DRAFT", "PENDING", "SENT", "CONFIRMED", "PAID", "FAILED", "CANCELLED"];
 
 describe("order status machine: the rules", () => {
   it("lists exactly the legal moves", () => {
     assert.deepEqual(OrderStatusService.allowedFrom("DRAFT"), ["PENDING", "CANCELLED"]);
     assert.deepEqual(OrderStatusService.allowedFrom("PENDING"), ["SENT", "FAILED", "CANCELLED"]);
-    assert.deepEqual(OrderStatusService.allowedFrom("SENT"), ["CONFIRMED", "FAILED", "CANCELLED"]);
+    assert.deepEqual(OrderStatusService.allowedFrom("SENT"), ["CONFIRMED", "PAID", "FAILED", "CANCELLED"]);
+    // Card at the borne: paid → on to unTill; never paid → cancelled. It can never skip straight to SENT or PAID.
+    assert.deepEqual(OrderStatusService.allowedFrom("AWAITING_PAYMENT"), ["PENDING", "CANCELLED"]);
     assert.deepEqual(OrderStatusService.allowedFrom("CONFIRMED"), ["PAID", "CANCELLED"]);
     assert.deepEqual(OrderStatusService.allowedFrom("FAILED"), ["PENDING", "CANCELLED"]);
   });
@@ -18,7 +20,7 @@ describe("order status machine: the rules", () => {
       assert.equal(OrderStatusService.isTerminal(s), true);
       for (const to of ALL) assert.equal(OrderStatusService.can(s, to), false, `${s} -> ${to}`);
     }
-    for (const s of ["DRAFT", "PENDING", "SENT", "CONFIRMED", "FAILED"] as const) assert.equal(OrderStatusService.isTerminal(s), false);
+    for (const s of ["AWAITING_PAYMENT", "DRAFT", "PENDING", "SENT", "CONFIRMED", "FAILED"] as const) assert.equal(OrderStatusService.isTerminal(s), false);
   });
 
   it("never lets a confirmed order go back to an earlier state", () => {

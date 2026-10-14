@@ -162,7 +162,7 @@ describe("placing an order from a borne", () => {
     };
     const pricing: any = { price: async () => ({ total: 10, subtotal: 9, taxTotal: 1, itemCount: 1, salesAreaId: "1", priceLevelId: "2", currency: "MAD", lines: [] }) };
     const printing: any = { enqueueForOrder: async (_r: string, _o: string, _a: boolean, loaded: any) => { printed.push(loaded); } };
-    return { svc: new OrdersService(prisma, pricing, printing), created, printed };
+    return { svc: new OrdersService(prisma, pricing, printing, {} as never), created, printed };
   }
   const dto = (extra: any = {}) => ({ clientOrderId: "11111111-1111-4111-8111-111111111111", orderType: "TAKE_AWAY", salesAreaId: "1", lines: [], ...extra }) as never;
   const rows = [{ id: "k2", restaurantId: "r1", code: "K2", name: "Terrasse", isEnabled: true }, { id: "k3", restaurantId: "r1", code: "K3", name: "Off", isEnabled: false }];

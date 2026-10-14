@@ -43,6 +43,8 @@ export interface LoadedOrder {
   reference: string;
   orderType: string;
   tableNumber: number | null;
+  /** PAYMENT_TERMINAL: paid by card at the borne. */
+  paymentMethod?: string;
   total: unknown;
   currency: string;
   createdAt: Date;
@@ -368,7 +370,7 @@ export class PrintingService {
       lines,
       total: Number(order.total),
       currency: order.currency,
-      payNote: "Présentez ce numéro en caisse pour payer",
+      payNote: order.paymentMethod === "PAYMENT_TERMINAL" ? "PAYÉ PAR CARTE - Merci !" : "Présentez ce numéro en caisse pour payer",
       footer: restaurant.settings?.ticketFooterText ?? null,
     };
   }

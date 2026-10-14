@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
 import { isSubscribed } from "../common/subscription.js";
 import { tillReachable } from "../common/till-health.js";
+import { findCardTerminal } from "../payments/payments.service.js";
 import { StorageService, isVideoPath } from "../common/storage.service.js";
 import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
@@ -123,11 +124,29 @@ export class CatalogService {
         lastSuccessAt: restaurant.tpapi?.lastSuccessAt ?? null,
         lastSyncAt: restaurant.tpapi?.lastSyncAt ?? null,
       },
+      // The Règlement screen: card only on a borne whose TPE is set up; cash as the restaurant chose.
+      payment: await this.paymentOptions(restaurant.id, restaurant.settings, borne?.id ?? null),
       catalogReady: Boolean(restaurant.tpapi?.lastSyncAt),
       // false: the till does not answer, so the kiosk shows "no connection" (and the server refuses new orders).
       tillReachable: tillReachable(restaurant.tpapi),
       // Compared with what /version says later: when it moves, the kiosk reloads this.
       version: versionOf(restaurant.contentChangedAt, true, tillReachable(restaurant.tpapi)),
+    };
+  }
+
+  private async paymentOptions(
+    restaurantId: string,
+    settings: { cardPaymentEnabled?: boolean; cardUntillPaymentId?: bigint | null; cashPaymentEnabled?: boolean; cashClosesOrder?: boolean; cashUntillPaymentId?: bigint | null } | null,
+    kioskId: string | null,
+  ) {
+    const terminal = await findCardTerminal(this.prisma as never, restaurantId, settings, kioskId);
+    return {
+      card: Boolean(terminal),
+      cash: settings?.cashPaymentEnabled ?? true,
+      /** Cash is closed in unTill at once (otherwise: paid at the counter, as before). */
+      cashClosed: Boolean(settings?.cashClosesOrder && settings.cashUntillPaymentId),
+      /** The TPE is the test simulator: the kiosk shows approve/decline buttons. Never on the live server. */
+      simulator: terminal?.provider === "SIMULATOR",
     };
   }
 

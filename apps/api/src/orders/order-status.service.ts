@@ -13,6 +13,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
  * Keep in sync with enum OrderStatus / OrderActor in schema.prisma.
  */
 export type OrderStatusName =
+  | "AWAITING_PAYMENT"
   | "DRAFT"
   | "PENDING"
   | "SENT"
@@ -37,9 +38,12 @@ export interface TransitionParams {
 
 /** The only legal moves. Anything not listed here is rejected. */
 const ALLOWED: Record<OrderStatusName, OrderStatusName[]> = {
+  // Card at the borne: once the TPE approves it goes to unTill (PENDING); abandoned or never paid, it is cancelled.
+  AWAITING_PAYMENT: ["PENDING", "CANCELLED"],
   DRAFT: ["PENDING", "CANCELLED"],
   PENDING: ["SENT", "FAILED", "CANCELLED"],
-  SENT: ["CONFIRMED", "FAILED", "CANCELLED"],
+  // PAID straight from SENT: an order we closed in unTill ourselves (paid by card, or cash closed at once).
+  SENT: ["CONFIRMED", "PAID", "FAILED", "CANCELLED"],
   CONFIRMED: ["PAID", "CANCELLED"],
   FAILED: ["PENDING", "CANCELLED"],
   PAID: [],

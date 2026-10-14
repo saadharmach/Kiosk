@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import {
-  ArrayMaxSize, IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID,
+  ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID,
   Matches, Max, MaxLength, Min, ValidateNested,
 } from "class-validator";
 
@@ -62,4 +62,18 @@ export class CreateOrderDto extends PriceCartDto {
   /** What the kiosk displayed. Used only to detect a price change. */
   @IsOptional() @IsInt() @Min(0)
   displayedTotalCents?: number;
+
+  /** How the customer pays. Not sent by older kiosk pages: cash, as it always was. */
+  @IsOptional() @IsIn(["CARD", "CASH"])
+  payment?: "CARD" | "CASH";
+}
+
+export class PayDto {
+  @IsIn(["CARD", "CASH"])
+  method!: "CARD" | "CASH";
+}
+
+export class SimulatePaymentDto {
+  @IsBoolean()
+  approve!: boolean;
 }

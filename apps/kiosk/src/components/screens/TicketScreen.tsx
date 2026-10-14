@@ -54,7 +54,8 @@ export default function TicketScreen({
             <Icon name="card" className="size-11" strokeWidth={1.8} />
           </span>
           <div className="flex-1">
-            <p className="font-display text-3xl leading-tight font-bold">{t.payAtCashier}</p>
+            {/* Paid by card at the borne: nothing left to do at the counter. */}
+            <p className="font-display text-3xl leading-tight font-bold">{order.payment?.paid ? `✓ ${t.paidByCard}` : t.payAtCashier}</p>
           </div>
           <p className="font-display text-4xl font-bold tabular-nums">
             {money(order.total, order.currency, locale)}
