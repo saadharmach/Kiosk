@@ -63,7 +63,7 @@ export async function logout() {
   setToken(null);
 }
 
-export interface Me { id: string; email: string; fullName: string | null; role: "SUPER_ADMIN" | "SUPPORT"; mustChangePassword: boolean }
+export interface Me { id: string; email: string; fullName: string | null; role: "SUPER_ADMIN" | "SUPPORT"; mustChangePassword: boolean; isOwner?: boolean }
 export const me = () => request<Me>("/admin/auth/me");
 
 /** The person chooses their own password. Their other sessions end; this one carries on. */

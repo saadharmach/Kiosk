@@ -10,6 +10,8 @@ const schema = z.object({
   ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, "ENCRYPTION_KEY must be 64 hex characters"),
   ACCESS_TOKEN_TTL_MIN: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** The platform owner's email (from deploy/config.sh OWNER_EMAIL). Not set: nobody can delete admin accounts. */
+  PLATFORM_OWNER_EMAIL: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

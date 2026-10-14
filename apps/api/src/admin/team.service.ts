@@ -7,7 +7,7 @@ import { AuditService } from "../common/audit.service.js";
 import { EmailCheckService } from "../common/real-email.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { CreateTeamMemberDto, UpdateTeamMemberDto } from "./dto/team.dto.js";
-import { checkRemove, checkReset, checkTeamChange, type TeamRole } from "./team-rules.js";
+import { checkOwnerDeletes, checkOwnerProtected, checkRemove, checkReset, checkTeamChange, isOwnerEmail, type TeamRole } from "./team-rules.js";
 import { generateTemporaryPassword } from "./temporary-password.js";
 
 /** Everything about a person that may leave the server. Never the password hash. */
@@ -39,6 +39,7 @@ export class TeamService {
     const hasLink = new Set(live.map((t) => t.userId));
     return users.map(({ passwordSetAt, ...u }) => ({
       ...u,
+      isOwner: isOwnerEmail(u.email),
       /** none: they have a password. pending: an invitation is out. expired: it ran out and needs sending again. */
       invitation: passwordSetAt !== null ? ("none" as const) : hasLink.has(u.id) ? ("pending" as const) : ("expired" as const),
     }));
@@ -68,8 +69,15 @@ export class TeamService {
     return { user: safe, invitation: await this.sendLink("INVITE", user) };
   }
 
+  /** Is the person acting the platform owner? Asked from the account itself, never from the token. */
+  private async actorIsOwner(actor: Actor): Promise<boolean> {
+    const me = await this.prisma.platformUser.findUnique({ where: { id: actor.id }, select: { email: true } });
+    return isOwnerEmail(me?.email);
+  }
+
   async update(id: string, dto: UpdateTeamMemberDto, actor: Actor, req?: Request) {
     const before = await this.require(id);
+    checkOwnerProtected(await this.actorIsOwner(actor), isOwnerEmail(before.email));
     const activeSuperAdmins = await this.prisma.platformUser.count({ where: { role: "SUPER_ADMIN", isActive: true } });
     checkTeamChange(actor.id, { id, role: before.role as TeamRole, isActive: before.isActive }, { isActive: dto.isActive, role: dto.role }, activeSuperAdmins);
 
@@ -107,6 +115,7 @@ export class TeamService {
   async resetPassword(id: string, actor: Actor, req?: Request) {
     checkReset(actor.id, id);
     const user = await this.require(id);
+    checkOwnerProtected(await this.actorIsOwner(actor), isOwnerEmail(user.email));
     await this.prisma.$transaction([
       this.prisma.platformUser.update({
         where: { id },
@@ -125,6 +134,7 @@ export class TeamService {
   /** The email went missing, or the link ran out: send a fresh one. Only for someone who has not chosen a password yet. */
   async resendInvitation(id: string, actor: Actor, req?: Request) {
     const user = await this.require(id);
+    checkOwnerProtected(await this.actorIsOwner(actor), isOwnerEmail(user.email));
     if (user.passwordSetAt !== null) throw new BadRequestException("They have already chosen a password. If they cannot sign in, use Reset password.");
     await this.audit.record(
       { actorType: "PLATFORM_USER", actorId: actor.id, action: "platform_user.invite_resent", entityType: "PlatformUser", entityId: id, after: { email: user.email } },
@@ -142,6 +152,7 @@ export class TeamService {
    * What they did stays in the history, under their name as it was.
    */
   async remove(id: string, actor: Actor, req?: Request) {
+    checkOwnerDeletes(await this.actorIsOwner(actor));
     const user = await this.require(id);
     const others = await this.prisma.platformUser.count({ where: { role: "SUPER_ADMIN", isActive: true, id: { not: id } } });
     checkRemove(actor.id, { id, role: user.role as TeamRole, isActive: user.isActive }, others);

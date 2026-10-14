@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, before, after } from "node:test";
 import "reflect-metadata";
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { PasswordService } from "../src/auth/password.service.js";
 import { PlatformUserDirectory, STANDING_TTL_MS } from "../src/auth/platform-user-directory.js";
 import { AllowWhilePasswordChangeRequired } from "../src/auth/decorators/allow-while-password-change.decorator.js";
-import { checkRemove, checkReset, checkTeamChange, type Member } from "../src/admin/team-rules.js";
+import { checkOwnerDeletes, checkOwnerProtected, checkRemove, checkReset, checkTeamChange, isOwnerEmail, type Member } from "../src/admin/team-rules.js";
 import { TeamService } from "../src/admin/team.service.js";
 
 Object.assign(process.env, {
@@ -49,6 +49,24 @@ describe("what a platform admin may not do to the team", () => {
   });
 });
 
+describe("the platform owner", () => {
+  it("is named on the server only; case and spaces do not matter; not set means nobody", () => {
+    assert.equal(isOwnerEmail("SaadHMK13@gmail.com ", { PLATFORM_OWNER_EMAIL: "saadhmk13@gmail.com" }), true);
+    assert.equal(isOwnerEmail("saadhmk@gmail.com", { PLATFORM_OWNER_EMAIL: "saadhmk13@gmail.com" }), false);
+    assert.equal(isOwnerEmail("anyone@x.co", {}), false);
+    assert.equal(isOwnerEmail("", { PLATFORM_OWNER_EMAIL: "" }), false);
+  });
+  it("deletes; the others are refused", () => {
+    assert.doesNotThrow(() => checkOwnerDeletes(true));
+    assert.throws(() => checkOwnerDeletes(false), ForbiddenException);
+  });
+  it("is the only one who can change the owner's account; anyone may change the others'", () => {
+    assert.throws(() => checkOwnerProtected(false, true), ForbiddenException);
+    assert.doesNotThrow(() => checkOwnerProtected(true, true));
+    assert.doesNotThrow(() => checkOwnerProtected(false, false));
+  });
+});
+
 describe("deleting a team member for good", () => {
   it("never yourself, only after switching off, and never the last super admin", () => {
     assert.throws(() => checkRemove("a", sa("a", { isActive: false }), 2), /cannot delete yourself/);
@@ -60,6 +78,10 @@ describe("deleting a team member for good", () => {
 });
 
 describe("TeamService", () => {
+  // The owner is a server setting: in these tests it is "me@x.co", the acting admin's address.
+  const before0 = process.env.PLATFORM_OWNER_EMAIL;
+  before(() => { process.env.PLATFORM_OWNER_EMAIL = "me@x.co"; });
+  after(() => { if (before0 === undefined) delete process.env.PLATFORM_OWNER_EMAIL; else process.env.PLATFORM_OWNER_EMAIL = before0; });
   function setup(users: any[], liveLinks: { userId: string }[] = []) {
     const writes: { op: string; args: any }[] = [];
     const audits: any[] = [];
@@ -196,9 +218,33 @@ describe("TeamService", () => {
     await assert.rejects(svc.remove("admin", actor), BadRequestException);
     await assert.rejects(svc.remove("nope", actor), NotFoundException);
     // actor is not in the table as an active super admin: the one switched-off super admin would be the last
-    const solo = setup([{ id: "lone", role: "SUPER_ADMIN", email: "lone@x.co", isActive: false }]);
-    await assert.rejects(solo.svc.remove("lone", { id: "someone" }), ConflictException);
+    const solo = setup([{ id: "owner", role: "SUPPORT", email: "me@x.co" }, { id: "lone", role: "SUPER_ADMIN", email: "lone@x.co", isActive: false }]);
+    await assert.rejects(solo.svc.remove("lone", { id: "owner" }), ConflictException);
     assert.equal([...writes, ...solo.writes].filter((w) => ["deleteTokens", "deleteUser"].includes(w.op)).length, 0);
+  });
+
+  it("only the owner can delete an admin account; another super admin is refused and nothing is written", async () => {
+    const { svc, writes } = setup([{ id: "admin", role: "SUPER_ADMIN", email: "me@x.co" }, { id: "other", role: "SUPER_ADMIN", email: "other@x.co" }, { id: "u1", role: "SUPPORT", email: "gone@x.co", isActive: false }]);
+    await assert.rejects(svc.remove("u1", { id: "other" }), (e: unknown) => e instanceof ForbiddenException && /Only the platform owner can delete/.test((e as Error).message));
+    assert.equal(writes.filter((w) => ["deleteTokens", "deleteUser"].includes(w.op)).length, 0);
+    assert.deepEqual(await svc.remove("u1", actor), { removed: true }, "the owner can");
+  });
+
+  it("nobody but the owner can switch off, demote, rename or reset the owner's account", async () => {
+    const { svc, writes } = setup([{ id: "admin", role: "SUPER_ADMIN", email: "me@x.co" }, { id: "other", role: "SUPER_ADMIN", email: "other@x.co" }]);
+    const other = { id: "other" };
+    await assert.rejects(svc.update("admin", { isActive: false }, other), ForbiddenException);
+    await assert.rejects(svc.update("admin", { role: "SUPPORT" }, other), ForbiddenException);
+    await assert.rejects(svc.update("admin", { fullName: "x" }, other), ForbiddenException);
+    await assert.rejects(svc.resetPassword("admin", other), /only the owner can change it/);
+    assert.equal(writes.filter((w) => w.op === "update" || w.op === "revokeSessions").length, 0);
+    // The other admins still manage each other as before.
+    await assert.doesNotReject(svc.update("other", { fullName: "Other" }, actor));
+  });
+
+  it("the list marks the owner", async () => {
+    const { svc } = setup([{ id: "admin", role: "SUPER_ADMIN", email: "me@x.co", passwordSetAt: new Date() }, { id: "other", role: "SUPER_ADMIN", email: "other@x.co", passwordSetAt: new Date() }]);
+    assert.deepEqual((await svc.list()).map((u: any) => [u.email, u.isOwner]), [["me@x.co", true], ["other@x.co", false]]);
   });
 
   it("the team's activity still names a deleted person, from the address the history kept", async () => {

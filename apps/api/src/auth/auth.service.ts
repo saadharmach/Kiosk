@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
 import { AuditService } from "../common/audit.service.js";
+import { isOwnerEmail } from "../admin/team-rules.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { PasswordService } from "./password.service.js";
 import { PlatformUserDirectory } from "./platform-user-directory.js";
@@ -94,7 +95,8 @@ export class AuthService {
       select: { id: true, email: true, fullName: true, role: true, lastLoginAt: true, mustChangePassword: true },
     });
     if (!user) throw new UnauthorizedException();
-    return user;
+    // The owner alone can delete admin accounts: the screens show the button only to them.
+    return { ...user, isOwner: isOwnerEmail(user.email) };
   }
 
   /**

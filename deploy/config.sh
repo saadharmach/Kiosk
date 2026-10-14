@@ -11,6 +11,9 @@ BACKOFFICE_DOMAIN="${BACKOFFICE_DOMAIN:-backoffice.amsatech.ma}"
 ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.amsatech.ma}"
 # Let's Encrypt writes here when a certificate is about to expire and could not renew.
 CERT_EMAIL="${CERT_EMAIL:-saadhmk13@gmail.com}"
+# The platform owner: the only admin account that can delete other admin accounts, and the only one that can change
+# its own account. It is a server setting on purpose: nobody can change it from the admin screens.
+OWNER_EMAIL="${OWNER_EMAIL:-saadhmk13@gmail.com}"
 # Who gets the server's alert emails (a service down, disk nearly full, backup missing...). Default: CERT_EMAIL.
 ALERT_EMAIL="${ALERT_EMAIL:-$CERT_EMAIL}"
 

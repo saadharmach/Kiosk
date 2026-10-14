@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 
 export type TeamRole = "SUPER_ADMIN" | "SUPPORT";
 export interface Member { id: string; role: TeamRole; isActive: boolean }
@@ -42,4 +42,26 @@ export function checkRemove(actorId: string, target: Member, activeSuperAdminsOt
   if (target.role === "SUPER_ADMIN" && activeSuperAdminsOtherThanTarget < 1) {
     throw new ConflictException("There must always be at least one active super admin.");
   }
+}
+
+/**
+ * The platform owner: one admin account, named on the server (PLATFORM_OWNER_EMAIL, from deploy/config.sh) and never
+ * from the admin screens, so no other admin can make themselves owner or take it away.
+ */
+export function ownerEmail(env: Record<string, string | undefined> = process.env): string | null {
+  return (env.PLATFORM_OWNER_EMAIL ?? "").trim().toLowerCase() || null;
+}
+export const isOwnerEmail = (email: string | null | undefined, env: Record<string, string | undefined> = process.env) => {
+  const owner = ownerEmail(env);
+  return owner !== null && (email ?? "").trim().toLowerCase() === owner;
+};
+
+/** Deleting an admin account for good is the owner's alone; the others can still switch an account off. */
+export function checkOwnerDeletes(actorIsOwner: boolean): void {
+  if (!actorIsOwner) throw new ForbiddenException("Only the platform owner can delete an admin account. You can switch it off instead.");
+}
+
+/** Nobody but the owner touches the owner's account (switch off, role, password reset, name). */
+export function checkOwnerProtected(actorIsOwner: boolean, targetIsOwner: boolean): void {
+  if (targetIsOwner && !actorIsOwner) throw new ForbiddenException("This is the platform owner's account: only the owner can change it.");
 }

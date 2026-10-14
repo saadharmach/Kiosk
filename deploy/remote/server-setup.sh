@@ -103,6 +103,7 @@ set_value KIOSK_APP_URL "https://$KIOSK_DOMAIN"
 set_value BACKOFFICE_APP_URL "https://$BACKOFFICE_DOMAIN"
 set_value ADMIN_APP_URL "https://$ADMIN_DOMAIN"
 set_value CORS_ORIGINS "https://$KIOSK_DOMAIN,https://$BACKOFFICE_DOMAIN,https://$ADMIN_DOMAIN"
+[ -n "${OWNER_EMAIL:-}" ] && set_value PLATFORM_OWNER_EMAIL "$(printf '%s' "$OWNER_EMAIL" | tr '[:upper:]' '[:lower:]')"
 if [ "$urls_changed" = 1 ] && systemctl is-active -q kiosk-api; then systemctl restart kiosk-api; echo "Site addresses updated; kiosk-api restarted."; fi
 # A fresh signing key for this server: everyone signs in once more after the move, nothing else changes.
 set_default JWT_SECRET "$(openssl rand -hex 48)"

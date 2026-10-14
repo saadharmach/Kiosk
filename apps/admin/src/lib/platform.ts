@@ -127,6 +127,8 @@ export type TeamRole = "SUPER_ADMIN" | "SUPPORT";
 export interface TeamMember {
   id: string; email: string; fullName: string | null; role: TeamRole; isActive: boolean;
   lastLoginAt: string | null; lockedUntil: string | null; mustChangePassword: boolean; createdAt: string; invitation: Invitation;
+  /** The platform owner (a server setting): the only one who deletes admin accounts or changes the owner's own. */
+  isOwner: boolean;
 }
 export const listTeam = () => request<TeamMember[]>("/admin/team");
 export const createTeamMember = (body: { email: string; role: TeamRole; fullName?: string }) =>

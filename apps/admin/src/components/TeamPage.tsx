@@ -31,6 +31,7 @@ export default function TeamPage({ myId }: { myId: string }) {
   };
 
   if (!team) return <><ErrorText message={error} />{!error ? <p className="text-(--color-ink-muted)">Loading…</p> : null}</>;
+  const iAmOwner = team.some((m) => m.id === myId && m.isOwner);
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,7 +39,7 @@ export default function TeamPage({ myId }: { myId: string }) {
         <h1 className="me-auto text-2xl font-semibold">Team</h1>
         {!adding ? <button className={primary} onClick={() => setAdding(true)}>Add a team member</button> : null}
       </div>
-      <p className="-mt-3 text-sm text-(--color-ink-muted)">The people who can sign in to this admin. A super admin can change everything; support can look and run a menu sync or re-check an order.</p>
+      <p className="-mt-3 text-sm text-(--color-ink-muted)">The people who can sign in to this admin. A super admin can change everything; support can look and run a menu sync or re-check an order. Only the owner can delete an account (the others can switch it off), and only the owner changes the owner&apos;s own account.</p>
 
       {notice ? <p role="status" className={`rounded-lg p-3 text-sm ${notice.tone === "ok" ? "bg-(--color-surface-2)" : "bg-amber-100 text-amber-950"}`}>{notice.text}</p> : null}
       <ErrorText message={error} />
@@ -77,13 +78,15 @@ export default function TeamPage({ myId }: { myId: string }) {
           <tbody className="divide-y divide-(--color-line)">
             {team.map((m) => {
               const me = m.id === myId;
+              // The owner's account is the owner's alone; and only the owner deletes accounts.
+              const ownersOnly = m.isOwner && !iAmOwner;
               const locked = m.lockedUntil !== null && Date.parse(m.lockedUntil) > Date.now();
               return (
                 <tr key={m.id} className={m.isActive ? "" : "opacity-60"}>
-                  <td className="px-4 py-3"><div className="font-medium">{m.fullName ?? m.email}{me ? <span className="ms-2 rounded-full bg-(--color-surface-2) px-2 py-0.5 text-xs font-normal">you</span> : null}</div>{m.fullName ? <div className="text-(--color-ink-muted)">{m.email}</div> : null}</td>
+                  <td className="px-4 py-3"><div className="font-medium">{m.fullName ?? m.email}{m.isOwner ? <span className="ms-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">owner</span> : null}{me ? <span className="ms-2 rounded-full bg-(--color-surface-2) px-2 py-0.5 text-xs font-normal">you</span> : null}</div>{m.fullName ? <div className="text-(--color-ink-muted)">{m.email}</div> : null}</td>
                   <td className="px-4 py-3">
-                    <select aria-label={`Role of ${m.email}`} className="h-9 rounded-lg border border-(--color-line) bg-(--color-surface) px-2 disabled:opacity-60" value={m.role} disabled={me || busy !== null}
-                      title={me ? "Ask another super admin to change your own role" : undefined}
+                    <select aria-label={`Role of ${m.email}`} className="h-9 rounded-lg border border-(--color-line) bg-(--color-surface) px-2 disabled:opacity-60" value={m.role} disabled={me || ownersOnly || busy !== null}
+                      title={me ? "Ask another super admin to change your own role" : ownersOnly ? "Only the owner can change the owner's account" : undefined}
                       onChange={(e) => void act(m.id, async () => { await updateTeamMember(m.id, { role: e.target.value as TeamRole }); })}>
                       <option value="SUPER_ADMIN">{ROLE_LABEL.SUPER_ADMIN}</option><option value="SUPPORT">{ROLE_LABEL.SUPPORT}</option>
                     </select>
@@ -92,7 +95,8 @@ export default function TeamPage({ myId }: { myId: string }) {
                   <td className="px-4 py-3 text-(--color-ink-muted)">{when(m.lastLoginAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
-                      {!me ? (
+                      {ownersOnly ? <span className="text-xs text-(--color-ink-muted)">Only the owner changes this account</span> : null}
+                      {!me && !ownersOnly ? (
                         m.invitation !== "none" ? (
                           <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => void act(m.id, async () => { const r = await resendTeamInvitation(m.id); setNotice(invitationNotice(m.email, "invitation", r.invitation)); })}>Resend invitation</button>
                         ) : (
@@ -103,14 +107,15 @@ export default function TeamPage({ myId }: { myId: string }) {
                           }}>Send reset link</button>
                         )
                       ) : null}
-                      {!me ? (
+                      {!me && !ownersOnly ? (
                         <button className={secondary + " h-9"} disabled={busy !== null} onClick={() => {
                           if (!m.isActive || window.confirm(`Switch off ${m.email}? They are signed out within seconds and cannot sign in until you switch them back on.`)) {
                             void act(m.id, async () => { await updateTeamMember(m.id, { isActive: !m.isActive }); });
                           }
                         }}>{m.isActive ? "Switch off" : "Switch on"}</button>
                       ) : null}
-                      {!me && !m.isActive ? (
+                      {!me && !m.isActive && !iAmOwner ? <span className="self-center text-xs text-(--color-ink-muted)">Only the owner can delete</span> : null}
+                      {!me && !m.isActive && iAmOwner ? (
                         <button className={secondary + " h-9 text-(--color-danger)"} disabled={busy !== null} onClick={() => {
                           if (window.confirm(`Delete ${m.email} permanently?\n\nTheir account is removed and cannot be brought back (you could invite the address again later as a new account). What they did stays in the history.`)) {
                             void act(m.id, async () => { await deleteTeamMember(m.id); setNotice({ tone: "ok", text: `${m.email} was deleted.` }); });
