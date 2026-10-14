@@ -254,12 +254,12 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
       <section className={card}>
         <h2 className="mb-1 text-lg font-medium">Print helper</h2>
         <p className="mb-3 text-sm text-(--color-ink-muted)">
-          A small program on a computer at the restaurant (on the same network as the printer). It fetches new tickets and
-          sends them to the printer. Setting it up takes one command, with a code from here.
+          A small app on a computer at the restaurant (on the same network as the printer). It fetches new tickets and
+          sends them to the printer. Install it, then paste a code from here into it.
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <a href="/downloads/kiosk-print-helper.zip" download className={`${secondary} inline-flex items-center`}>
-            Download the helper (zip)
+          <a href="/downloads/NEXBORN-Helper.exe" download className={`${secondary} inline-flex items-center`}>
+            Download NEXBORN Helper (Windows)
           </a>
           <button type="button" className={primary} disabled={busy || !configured} onClick={getCode}>
             {pairing ? "Get a new code" : "Set up the helper"}
@@ -275,25 +275,26 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
             <p className="text-sm">Your setup code (works once, until {new Date(pairing.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}):</p>
             <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{pairing.code}</p>
             <ol className="list-decimal space-y-1 pl-5 text-sm">
-              <li>On the restaurant computer, install <b>Node.js 20 or newer</b> (nodejs.org, the LTS version), if it is not there yet.</li>
-              <li><a href="/downloads/kiosk-print-helper.zip" download className="underline">Download the helper</a> and unzip it somewhere it will stay (for example <code>C:\kiosk-print-helper</code>).</li>
-              <li>Open a terminal in the unzipped <code>kiosk-print-helper</code> folder (on Windows: PowerShell with <i>Run as administrator</i>) and run:</li>
+              <li>On the restaurant computer, <a href="/downloads/NEXBORN-Helper.exe" download className="underline">download NEXBORN Helper</a> and open it. The first time, Windows asks to allow it: choose <b>Yes</b> (if a blue &quot;Windows protected your PC&quot; box appears: <i>More info</i> › <i>Run anyway</i>). It installs itself and starts with Windows.</li>
+              <li>Its page opens in the browser: paste this code, press <b>Add</b>. A test ticket prints.</li>
             </ol>
-            <pre className="mt-2 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs select-all">
-{`node src/cli.mjs setup ${typeof window !== "undefined" ? window.location.origin : ""} ${pairing.code}`}
-            </pre>
             <div className="mt-2 flex items-center gap-3">
-              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(
-                `node src/cli.mjs setup ${window.location.origin} ${pairing.code}`).then(() => setNotice("Command copied."))}>
-                Copy the command
+              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(pairing.code).then(() => setNotice("Code copied."))}>
+                Copy the code
               </button>
               <button type="button" className="underline" onClick={() => setPairing(null)}>Hide</button>
             </div>
             <p className={`${hint} mt-3`}>
-              It saves its settings, checks that the computer can reach the printer, starts itself at every boot and queues a test
-              ticket. This page shows <b>Online</b> when it works. To add another borne's printer to the same computer, run it again
-              with that printer's own code.
+              This page shows <b>Online</b> when it works. To add another borne&apos;s printer to the same computer, paste that
+              printer&apos;s own code in the same app (open NEXBORN Helper again to see its page).
             </p>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm text-(--color-ink-muted)">Not Windows? Use the command instead</summary>
+              <p className={`${hint} mt-2`}>Needs Node.js 20 or newer. <a href="/downloads/kiosk-print-helper.zip" download className="underline">Download the helper (zip)</a>, unzip it, and in its folder run:</p>
+              <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs select-all">
+{`node src/cli.mjs setup ${typeof window !== "undefined" ? window.location.origin : ""} ${pairing.code}`}
+              </pre>
+            </details>
           </div>
         ) : null}
 

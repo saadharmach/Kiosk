@@ -46,6 +46,10 @@ mkdir -p "$OUT/kiosk/apps/kiosk/.next" && cp -r apps/kiosk/.next/static "$OUT/ki
 # Back office and admin: plain files.
 cp -r apps/backoffice/out "$OUT/backoffice"
 cp -r apps/admin/out "$OUT/admin"
+# The Windows app for restaurants. Its build number follows the helper's own code, so an unchanged app is
+# byte-for-byte the same and is not uploaded again.
+DEFAULT_API_URL="https://$BACKOFFICE_DOMAIN" APP_BUILD="$(git log -1 --format=%h -- tools/print-helper)" \
+  node tools/print-helper/build-exe.mjs "$OUT/downloads/NEXBORN-Helper.exe"
 mkdir -p "$OUT/deploy" && cp -r deploy/config.sh deploy/remote deploy/systemd deploy/nginx "$OUT/deploy/"
 bash "$ROOT/deploy/remote/write-resolved-config.sh" "$OUT/deploy/config.resolved.sh"
 echo "$REV $(git log -1 --format=%s | cut -c1-80)" > "$OUT/REVISION"

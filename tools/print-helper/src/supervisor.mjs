@@ -24,7 +24,7 @@ export function supervise({ configPath, env = process.env, log, reloadMs = 10000
       // Keep serving with what is running: a half-edited file must not stop the printing.
       return problem(`${e.message}. Keeping the current settings.`);
     }
-    if (!settings.apiUrl) return problem("No API address yet: run the setup command from the back office.");
+    if (!settings.apiUrl) return problem("Nothing set up yet: paste a setup code on the app's page, or run the setup command.");
     lastProblem = null;
     // Printers and bridges side by side; a bridge's key cannot clash with a printer's.
     const allow = JSON.stringify(settings.allowTillHosts);
@@ -57,6 +57,10 @@ export function supervise({ configPath, env = process.env, log, reloadMs = 10000
   return {
     ready,
     count: () => running.size,
+    /** Read the settings again now (the app calls this right after adding a code). */
+    reload: () => tick(),
+    /** Everything being served, with its live state, for the app's status page. */
+    entries: () => [...running.entries()].map(([key, r]) => ({ key, kind: key.startsWith("bridge:") ? "bridge" : "printer", label: r.label, state: r.handle.state ?? null })),
     stop: async () => {
       stopped = true;
       clearInterval(timer);

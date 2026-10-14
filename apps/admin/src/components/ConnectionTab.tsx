@@ -116,14 +116,21 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
               </button>
             ) : null}
             {code ? (
+              <>
               <ol className="mt-4 flex list-decimal flex-col gap-2 ps-5 text-sm">
-                <li>On a computer at the restaurant that is always on and on the same network as the till (the print helper&apos;s computer is fine): <a href="/downloads/kiosk-print-helper.zip" download className="underline">download the helper</a> and unzip it (skip if the print helper is already there). It needs Node.js 20 or newer.</li>
-                <li>In the helper&apos;s folder, open a terminal (Windows: PowerShell with <i>Run as administrator</i>) and run:
-                  <code className="mt-1 block overflow-x-auto rounded bg-(--color-surface) p-2 select-all">node src/cli.mjs setup-bridge {typeof window === "undefined" ? "" : window.location.origin} {code.code}</code>
-                  The code works once, until {new Date(code.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Setting up again replaces the old bridge.
+                <li>On a computer at the restaurant that is always on and on the same network as the till (the printer&apos;s computer is fine): <a href="/downloads/NEXBORN-Helper.exe" download className="underline">download NEXBORN Helper</a> and open it (if it is already installed, opening it shows its page). The first time Windows asks to allow it: <b>Yes</b> (a blue &quot;Windows protected your PC&quot; box: <i>More info</i> › <i>Run anyway</i>).</li>
+                <li>In its page, paste this code and press <b>Add</b>:
+                  <span className="mt-1 block font-mono text-2xl font-semibold tracking-widest select-all">{code.code}</span>
+                  It works once, until {new Date(code.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Setting up again replaces the old bridge.
                 </li>
                 <li>This page shows the bridge as <b>connected</b> within a few seconds. Then press <b>Test connection</b>.</li>
               </ol>
+              <details className="mt-2 text-sm">
+                <summary className="cursor-pointer text-(--color-ink-muted)">Not Windows? Use the command instead</summary>
+                <p className="mt-1 text-(--color-ink-muted)">Needs Node.js 20 or newer. <a href="/downloads/kiosk-print-helper.zip" download className="underline">Download the helper (zip)</a>, unzip it, and in its folder run:</p>
+                <code className="mt-1 block overflow-x-auto rounded bg-(--color-surface) p-2 select-all">node src/cli.mjs setup-bridge {typeof window === "undefined" ? "" : window.location.origin} {code.code}</code>
+              </details>
+              </>
             ) : null}
           </div>
         ) : null}

@@ -25,9 +25,14 @@ export function windowsTaskScript({ node, cli, dir }) {
     `Unregister-ScheduledTask -TaskName ${psQuote(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`,
     `$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument ${psQuote(cmd)}`,
     "$trigger = New-ScheduledTaskTrigger -AtStartup",
-    "$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable",
+    // Windows' defaults would keep it from starting on a laptop on battery, and stop it when the charger is pulled.
+    "$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -MultipleInstances IgnoreNew",
     `Register-ScheduledTask -TaskName ${psQuote(TASK_NAME)} -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest | Out-Null`,
     `Start-ScheduledTask -TaskName ${psQuote(TASK_NAME)}`,
+    // Say so if Windows did not actually start it, instead of reporting success.
+    "Start-Sleep -Seconds 3",
+    `$state = (Get-ScheduledTask -TaskName ${psQuote(TASK_NAME)}).State`,
+    "if ($state -ne 'Running') { throw \"The task was registered but Windows did not start it (state: $state)\" }",
   ].join("\n");
 }
 

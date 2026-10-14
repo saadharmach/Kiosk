@@ -107,7 +107,11 @@ describe("start at boot", () => {
     assert.match(ps, /helper\.log 2>&1/);
     assert.ok(ps.includes("Sam''s Kiosk"), "a single quote is doubled inside PowerShell strings");
     assert.ok(ps.indexOf("Unregister-ScheduledTask") < ps.indexOf("Register-ScheduledTask -TaskName"), "an old task is replaced, not duplicated");
-    assert.ok(ps.trim().endsWith("Start-ScheduledTask -TaskName 'Kiosk Print Helper'"));
+    assert.ok(ps.includes("Start-ScheduledTask -TaskName 'Kiosk Print Helper'"));
+    // A laptop on battery: Windows' defaults would refuse to start it (this happened on the first real setup).
+    assert.match(ps, /-AllowStartIfOnBatteries/);
+    assert.match(ps, /-DontStopIfGoingOnBatteries/);
+    assert.ok(ps.indexOf("Get-ScheduledTask") > ps.indexOf("Start-ScheduledTask"), "it checks the task really runs");
   });
   it("the systemd unit restarts always and quotes paths with spaces", () => {
     const u = systemdUnit(spec);

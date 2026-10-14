@@ -91,6 +91,8 @@ export function startHelper(options) {
   const base = apiUrl.replace(/\/+$/, "");
   const abort = new AbortController();
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  /** What the app's status page shows: is the server reachable, and how did the last ticket go. */
+  const state = { api: "starting", apiError: null, lastTicket: null };
 
   async function api(path, init, timeoutMs = 15000) {
     let res;
@@ -128,9 +130,11 @@ export function startHelper(options) {
     try {
       await sendImpl({ host: job.host, port: job.port, data: Buffer.from(job.dataBase64, "base64") });
       log("INFO", `Ticket ${job.id.slice(0, 8)} printed`);
+      state.lastTicket = { at: new Date().toISOString(), ok: true, error: null };
       await report(job.id, true);
     } catch (e) {
       log("ERROR", `Ticket ${job.id.slice(0, 8)} failed: ${e.message}`);
+      state.lastTicket = { at: new Date().toISOString(), ok: false, error: e.message };
       await report(job.id, false, e.message);
     }
     return true;
@@ -143,6 +147,7 @@ export function startHelper(options) {
       try {
         const started = Date.now();
         const worked = await poll();
+        state.api = "ok"; state.apiError = null;
         if (announcedDown) log("INFO", "Connection to the API restored");
         failures = 0;
         announcedDown = false;
@@ -154,6 +159,7 @@ export function startHelper(options) {
       } catch (e) {
         // Nothing in here may end the loop: a printer PC has to keep trying by itself.
         failures += 1;
+        state.api = "down"; state.apiError = e.message;
         if (!announcedDown) log("ERROR", `${e.message}. Will keep trying.`);
         announcedDown = true;
         // 2s, 4s, 8s ... up to 30s; a rejected token is retried slowly, it may be replaced.
@@ -163,6 +169,7 @@ export function startHelper(options) {
   })();
 
   return {
+    state,
     stop: async () => { abort.abort(); await loop; },
   };
 }

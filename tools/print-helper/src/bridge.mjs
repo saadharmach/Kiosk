@@ -86,6 +86,8 @@ export function startBridge(options) {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const running = new Set();
   let lastTillProblem = null;
+  /** What the app's status page shows: is the server reachable, does the till answer. */
+  const state = { api: "starting", apiError: null, till: "unknown", tillError: null, lastCallAt: null };
 
   async function api(path, init, timeoutMs = 30000) {
     let res;
@@ -104,6 +106,7 @@ export function startBridge(options) {
     const result = await runOnTill(job, { allowHosts, fetchImpl: tillFetchImpl });
     // Said once when the till stops answering, and once when it answers again: not for every call.
     const problem = result.ok ? null : result.error;
+    state.till = problem ? "error" : "ok"; state.tillError = problem; state.lastCallAt = new Date().toISOString();
     if (problem !== lastTillProblem) log(problem ? "ERROR" : "INFO", problem ?? "The till answers");
     lastTillProblem = problem;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -126,6 +129,7 @@ export function startBridge(options) {
         while (running.size >= maxParallel && !abort.signal.aborted) await Promise.race(running);
         const started = Date.now();
         const { jobs = [] } = await api(waitSec > 0 ? `/bridge/next?wait=${waitSec}` : "/bridge/next", undefined, (waitSec + 15) * 1000);
+        state.api = "ok"; state.apiError = null;
         if (announcedDown) log("INFO", "Connection to the API restored");
         failures = 0;
         announcedDown = false;
@@ -137,6 +141,7 @@ export function startBridge(options) {
         await sleep(intervalMs, abort.signal);
       } catch (e) {
         failures += 1;
+        state.api = "down"; state.apiError = e.message;
         if (!announcedDown) log("ERROR", `${e.message}. Will keep trying.`);
         announcedDown = true;
         await sleep(e.fatal ? 30000 : Math.min(30000, intervalMs * 2 ** Math.min(failures, 5)), abort.signal);
@@ -145,5 +150,5 @@ export function startBridge(options) {
     await Promise.allSettled([...running]);
   })();
 
-  return { stop: async () => { abort.abort(); await loop; } };
+  return { state, stop: async () => { abort.abort(); await loop; } };
 }
