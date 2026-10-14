@@ -84,12 +84,15 @@ export default function MenuScreen({
   // All-or-nothing per department: a grid where half the tiles have a photo and
   // half don't reads as broken rather than sparse.
   const showImageSlot = showImages && products.some(hasPhoto);
-  /** After something is added: offer that department's own suggestions, once per department per order. */
+  /**
+   * After something is added (not from the suggestions themselves): offer that department's own suggestions. Every
+   * time: "No thanks" only closes this offer, the next product added offers again. What is already in the order is
+   * left out, so once everything suggested has been taken, nothing more is offered.
+   */
   const offerAfterAdding = (p: CatalogProduct) => {
-    if (!p.categoryId || cart.suggested.has(p.categoryId)) return;
+    if (!p.categoryId) return;
     const picks = pickSuggestions(catalog, p.categoryId, [...cart.lines.map((l) => l.articleId), p.id]);
     if (picks.length === 0) return;
-    cart.markSuggested(p.categoryId);
     setOffer(picks);
   };
 
