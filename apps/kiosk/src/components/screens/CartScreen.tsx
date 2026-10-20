@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
 import {
-  ApiError, cancelPayment, createOrder, getOrder, isConnectionError, isTillError, isUnavailableError, payOrder, priceCart, simulatePayment,
+  ApiError, cancelPayment, createOrder, getOrder, isConnectionError, isNotRegisteredError, isTillError, isUnavailableError, payOrder, priceCart, simulatePayment,
   type CatalogProduct, type PaymentOptions, type PlacedOrder, type WireCartLine,
 } from "@/lib/api";
 import { useCart, type CartLine } from "@/state/cart";
@@ -101,7 +101,7 @@ export default function CartScreen({
 
   const handle = (e: unknown) => {
     const err = e as ApiError;
-    if (isUnavailableError(err) || isTillError(err)) return onUnavailable(err);
+    if (isUnavailableError(err) || isTillError(err) || isNotRegisteredError(err)) return onUnavailable(err);
     setError(err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message);
     setStage("cart");
     if (err.code === "PRICES_CHANGED") {
@@ -159,7 +159,7 @@ export default function CartScreen({
       (p) => !cancelled && setServerTotal(p.total),
       (e) => {
         if (cancelled) return;
-        if (isUnavailableError(e) || isTillError(e)) return onUnavailable(e);
+        if (isUnavailableError(e) || isTillError(e) || isNotRegisteredError(e)) return onUnavailable(e);
         setError(isConnectionError(e) ? t.connectionInline : e.message);
       },
     );

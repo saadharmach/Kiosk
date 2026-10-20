@@ -77,3 +77,7 @@ export class SimulatePaymentDto {
   @IsBoolean()
   approve!: boolean;
 }
+export class RegisterScreenDto {
+  @IsString() @MaxLength(40)
+  code!: string;
+}

@@ -24,3 +24,28 @@ export function readBorne(slug: string, search: string): string | null {
   } catch { /* not remembered, still works for this visit */ }
   return borne;
 }
+
+// ---- the screen's secret: given once when the screen is registered as one of the restaurant's bornes
+
+const secretKey = (slug: string) => `kiosk.screen.${slug}`;
+
+/** The secret this screen got when it was registered, if any. */
+export function readScreenSecret(slug: string): string | null {
+  try { return window.localStorage.getItem(secretKey(slug)); } catch { return null; }
+}
+
+/** Keeps the secret (and the borne's code, so the address may lose its ?borne=). Returns false if it could not be kept. */
+export function saveScreenSecret(slug: string, secret: string, borneCode: string): boolean {
+  try {
+    window.localStorage.setItem(secretKey(slug), secret);
+    window.localStorage.setItem(key(slug), borneCode);
+    return window.localStorage.getItem(secretKey(slug)) === secret;
+  } catch {
+    return false;
+  }
+}
+
+/** The server no longer knows this screen (unregistered in the back office): forget the secret. */
+export function forgetScreenSecret(slug: string): void {
+  try { window.localStorage.removeItem(secretKey(slug)); } catch { /* nothing kept */ }
+}

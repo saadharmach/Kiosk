@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createBorne, deleteBorne, listBornes, printerState, updateBorne, type Borne } from "@/lib/kiosks";
+import {
+  createBorne, deleteBorne, getRegistration, listBornes, printerState, screenCode, setRegistration, unregisterScreen, updateBorne, type Borne,
+} from "@/lib/kiosks";
 import PrinterPage from "./PrinterPage";
 
 const field = "h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3";
@@ -18,7 +20,9 @@ function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
   const [name, setName] = useState(b.name);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const state = printerState(b.printer);
+  const registerUrl = `${b.url}${b.url.includes("?") ? "&" : "?"}register`;
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true); onError(null);
@@ -32,6 +36,9 @@ function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
         <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-start">
           <span className="block truncate text-lg font-medium">{b.name}</span>
           <span className={`block text-sm ${TONE[state.tone]}`}>● {state.text}{b.orders ? ` · ${b.orders} order${b.orders === 1 ? "" : "s"}` : ""}</span>
+          <span className={`block text-sm ${b.screen.registered ? "text-green-700" : "text-(--color-ink-muted)"}`}>
+            {b.screen.registered ? "● Screen registered" : "○ Screen not registered"}
+          </span>
         </button>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={b.isEnabled} disabled={busy}
@@ -69,6 +76,40 @@ function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
           </section>
 
           <section>
+            <h3 className="mb-2 font-medium">Screen</h3>
+            {b.screen.registered ? (
+              <p className="text-sm">Registered{b.screen.registeredAt ? ` on ${new Date(b.screen.registeredAt).toLocaleString()}` : ""}: this machine is {b.code}, whatever its address says.</p>
+            ) : (
+              <p className="text-sm text-(--color-ink-muted)">Not registered yet. Register the machine&apos;s screen so the server knows it is really this borne.</p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className={secondary} disabled={busy}
+                onClick={() => void act(async () => setCode(await screenCode(slug, b.id)))}>
+                {b.screen.registered ? "Register another screen" : "Register a screen"}
+              </button>
+              {b.screen.registered ? (
+                <button type="button" className={`${secondary} text-(--color-danger)`} disabled={busy}
+                  onClick={() => { if (window.confirm(`Unregister ${b.name}'s screen? If only registered screens may order, it stops at once until it is registered again.`)) void act(() => unregisterScreen(slug, b.id)); }}>
+                  Unregister
+                </button>
+              ) : null}
+            </div>
+            {code ? (
+              <div className="mt-3 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
+                <ol className="list-decimal space-y-1 pl-5 text-sm">
+                  <li>On the kiosk machine, open <a className="font-mono underline" href={registerUrl} target="_blank" rel="noreferrer">{registerUrl}</a> (when only registered screens are allowed, any unregistered screen shows this page by itself).</li>
+                  <li>Type this code with the keys on the screen and press <b>Enregistrer</b>:</li>
+                </ol>
+                <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{code.code}</p>
+                <p className="text-xs text-(--color-ink-muted)">
+                  It works once, until {new Date(code.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Registering a screen replaces this
+                  borne&apos;s previous one.
+                </p>
+              </div>
+            ) : null}
+          </section>
+
+          <section>
             <h3 className="mb-2 font-medium">This borne&apos;s printer</h3>
             <PrinterPage slug={slug} kioskId={b.id} />
           </section>
@@ -99,7 +140,12 @@ export default function BornesPage({ slug }: { slug: string }) {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
 
-  const load = useCallback(() => { listBornes(slug).then(setBornes).catch((e) => setError((e as Error).message)); }, [slug]);
+  const [required, setRequired] = useState<boolean | null>(null);
+  const [savingRequired, setSavingRequired] = useState(false);
+  const load = useCallback(() => {
+    listBornes(slug).then(setBornes).catch((e) => setError((e as Error).message));
+    getRegistration(slug).then((r) => setRequired(r.required)).catch(() => undefined);
+  }, [slug]);
   useEffect(() => { load(); const t = setInterval(load, 10_000); return () => clearInterval(t); }, [load]);
 
   if (!bornes) return error ? <p className="text-(--color-danger)">{error}</p> : <p className="text-(--color-ink-muted)">Loading…</p>;
@@ -111,6 +157,27 @@ export default function BornesPage({ slug }: { slug: string }) {
         Orders from a machine with no borne, or from a borne whose printer is off, go to the default printer below.
       </p>
       {error ? <p className="text-sm text-(--color-danger)" role="alert">{error}</p> : null}
+
+      {required !== null ? (
+        <section className={`${card} p-4`}>
+          <label className="flex items-start gap-3">
+            <input type="checkbox" className="mt-1 h-5 w-5" checked={required} disabled={savingRequired}
+              onChange={async (e) => {
+                const next = e.target.checked;
+                if (next && !window.confirm("Only registered screens will show the menu and take orders. Any other device, and any borne whose screen is not registered yet, sees “Register this screen”. Continue?")) return;
+                setSavingRequired(true); setError(null);
+                try { setRequired((await setRegistration(slug, next)).required); } catch (err) { setError((err as Error).message); } finally { setSavingRequired(false); }
+              }} />
+            <span>
+              <span className="block font-medium">Only registered screens can show the menu and take orders</span>
+              <span className="block text-sm text-(--color-ink-muted)">
+                Recommended once every borne&apos;s screen is registered. Then the kiosk address alone is worth nothing: someone opening it
+                on their phone sees only &ldquo;Register this screen&rdquo;, and no one can pretend to be one of your bornes.
+              </span>
+            </span>
+          </label>
+        </section>
+      ) : null}
 
       <form
         className="flex flex-wrap items-end gap-3"

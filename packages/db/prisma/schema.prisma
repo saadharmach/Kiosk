@@ -164,6 +164,10 @@ model RestaurantSettings {
   cashUntillPaymentId BigInt?
   cashClosesOrder     Boolean    @default(false)
 
+  /// Only screens registered as one of the restaurant's bornes can show the menu and take orders; any other device
+  /// that opens the kiosk address sees "this screen is not registered".
+  requireRegisteredBornes Boolean @default(false)
+
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
@@ -908,10 +912,14 @@ model Kiosk {
   status           DeviceStatus @default(PROVISIONING)
   isEnabled        Boolean      @default(true)
 
-  /// SHA-256 of the device token. The plaintext is shown once, at provisioning.
+  /// SHA-256 of the screen's secret: the screen got it once, when it was registered with a code from the back office,
+  /// and sends it with every request. The server knows the borne from it (never from the address).
   tokenHash        String?      @unique
   tokenIssuedAt    DateTime?
   tokenRevokedAt   DateTime?
+  /// A one-time code (SHA-256) to register a screen as this borne, and when it stops working.
+  registrationCodeHash  String?  @unique
+  registrationExpiresAt DateTime?
 
   /// Optional override of the restaurant's default sales area.
   salesAreaId      BigInt?

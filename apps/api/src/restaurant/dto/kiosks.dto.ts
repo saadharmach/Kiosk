@@ -12,3 +12,7 @@ export class UpdateKioskDto {
   @IsOptional() @IsBoolean()
   isEnabled?: boolean;
 }
+
+export class RegistrationDto {
+  @IsBoolean() required!: boolean;
+}

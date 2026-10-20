@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { summarizePrinter } from "../printing/printing.service.js";
+import { createHash } from "node:crypto";
+import { PAIRING_TTL_MIN, newPairingCode, normalizePairingCode, summarizePrinter } from "../printing/printing.service.js";
 
 /** More than this is a typo or a mistake, not a restaurant. */
 export const MAX_BORNES = 20;
@@ -36,6 +37,12 @@ export class KiosksService {
     return kiosks.map((k) => ({
       id: k.id, code: k.code, name: k.name, isEnabled: k.isEnabled,
       url: borneUrl(slug, k.code),
+      /** Its screen: registered (it has a secret) since when; a code waiting to be typed on it. */
+      screen: {
+        registered: Boolean(k.tokenHash && !k.tokenRevokedAt),
+        registeredAt: k.tokenHash && !k.tokenRevokedAt ? k.tokenIssuedAt : null,
+        codePending: Boolean(k.registrationCodeHash && k.registrationExpiresAt && k.registrationExpiresAt.getTime() > Date.now()),
+      },
       orders: ordersOf.get(k.id) ?? 0,
       printer: summarizePrinter(printerOf.get(k.id) ?? null),
     }));
@@ -84,6 +91,51 @@ export class KiosksService {
       this.prisma.kiosk.deleteMany({ where: { id, restaurantId } }),
     ]);
     return { removed: true };
+  }
+
+  /**
+   * A one-time code to register a screen as this borne (typed on the kiosk's "register this screen" page). Works once,
+   * for 15 minutes; a newer code replaces an older one. Only its hash is kept.
+   */
+  async screenCode(restaurantId: string, id: string) {
+    await this.require(restaurantId, id);
+    const code = newPairingCode();
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MIN * 60_000);
+    await this.prisma.kiosk.updateMany({
+      where: { id, restaurantId },
+      data: { registrationCodeHash: createHash("sha256").update(normalizePairingCode(code)!).digest("hex"), registrationExpiresAt: expiresAt },
+    });
+    return { code, expiresAt };
+  }
+
+  /** The borne's screen loses its secret at once (a stolen tablet, a replaced PC): it is a stranger again. */
+  async unregisterScreen(restaurantId: string, id: string) {
+    await this.require(restaurantId, id);
+    await this.prisma.kiosk.updateMany({
+      where: { id, restaurantId },
+      data: { tokenHash: null, tokenRevokedAt: new Date(), registrationCodeHash: null, registrationExpiresAt: null, status: "PROVISIONING" },
+    });
+    return { unregistered: true };
+  }
+
+  /** Do only registered screens show the menu and take orders? */
+  async registration(restaurantId: string) {
+    const s = await this.prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { requireRegisteredBornes: true } });
+    return { required: s?.requireRegisteredBornes ?? false };
+  }
+
+  async setRegistration(restaurantId: string, required: boolean) {
+    if (required) {
+      // Switching it on with no registered screen would stop every kiosk of the restaurant at once.
+      const registered = await this.prisma.kiosk.count({ where: { restaurantId, isEnabled: true, tokenHash: { not: null }, tokenRevokedAt: null } });
+      if (registered === 0) throw new BadRequestException("Register at least one borne's screen first: otherwise no kiosk could take orders.");
+    }
+    await this.prisma.restaurantSettings.upsert({
+      where: { restaurantId },
+      create: { restaurantId, requireRegisteredBornes: required },
+      update: { requireRegisteredBornes: required },
+    });
+    return this.registration(restaurantId);
   }
 
   /** Throws unless the borne belongs to this restaurant: a borne of another restaurant is "not found". */

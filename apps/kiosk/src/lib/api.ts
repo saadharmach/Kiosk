@@ -8,6 +8,13 @@ export class ApiError extends Error {
 /** The restaurant exists but is not taking orders right now (switched off by the platform). */
 export const isUnavailableError = (e: unknown): boolean => e instanceof ApiError && e.code === "RESTAURANT_UNAVAILABLE";
 
+/** This screen is not (or no longer) registered as one of the restaurant's bornes, and the restaurant requires it. */
+export const isNotRegisteredError = (e: unknown): boolean => e instanceof ApiError && e.code === "SCREEN_NOT_REGISTERED";
+
+/** The secret of this screen, sent with every request once it is registered (see lib/borne). */
+let screenSecret: string | null = null;
+export const setScreenSecret = (s: string | null) => { screenSecret = s; };
+
 /** The restaurant's till does not answer: the server takes no orders until it does. */
 export const isTillError = (e: unknown): boolean => e instanceof ApiError && e.code === "TILL_UNREACHABLE";
 
@@ -19,7 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`/api${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: { "Content-Type": "application/json", ...(screenSecret ? { "X-Kiosk-Screen": screenSecret } : {}), ...(init?.headers ?? {}) },
       cache: "no-store",
     });
   } catch {
@@ -283,6 +290,10 @@ export const createOrder = (
     lines: WireCartLine[];
   },
 ) => request<PlacedOrder>(`/kiosk/${slug}/orders`, { method: "POST", body: JSON.stringify(body) });
+
+/** Registers this screen as one of the restaurant's bornes with the one-time code from the back office. */
+export const registerScreen = (slug: string, code: string) =>
+  request<{ secret: string; borne: { code: string; name: string } }>(`/kiosk/${slug}/register`, { method: "POST", body: JSON.stringify({ code }) });
 
 /** The order as it stands (the kiosk asks while the TPE works). */
 export const getOrder = (slug: string, clientOrderId: string) => request<PlacedOrder>(`/kiosk/${slug}/orders/${clientOrderId}`);

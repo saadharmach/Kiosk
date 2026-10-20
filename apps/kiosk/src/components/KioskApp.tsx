@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
 import { VERSION_POLL_MS, decideRefresh } from "@/lib/refresh";
-import { readBorne } from "@/lib/borne";
-import { api, getCatalog, isConnectionError, isTillError, isUnavailableError, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import { forgetScreenSecret, readBorne, readScreenSecret } from "@/lib/borne";
+import { api, getCatalog, isConnectionError, isNotRegisteredError, isTillError, isUnavailableError, setScreenSecret, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import RegisterScreen from "./screens/RegisterScreen";
 import { OFFLINE_POLL_MS, connectionState } from "@/lib/connection";
 import { brandColors } from "@/lib/theme";
 import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
@@ -34,7 +35,7 @@ export default function KioskApp({ slug }: { slug: string }) {
 
 /** What the kiosk needs to know about a failed request. */
 function toKioskError(e: Error & { restaurantName?: string }) {
-  return { message: e.message, connection: isConnectionError(e), unavailable: isUnavailableError(e), name: e.restaurantName };
+  return { message: e.message, connection: isConnectionError(e), unavailable: isUnavailableError(e), notRegistered: isNotRegisteredError(e), name: e.restaurantName };
 }
 
 function KioskFlow({ slug }: { slug: string }) {
@@ -44,12 +45,26 @@ function KioskFlow({ slug }: { slug: string }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   // `connection` marks a request that never got an answer, as opposed to the server refusing it.
   // `unavailable` marks a restaurant that is switched off: a calm screen, not an error, and `name` is its name.
-  const [error, setError] = useState<{ message: string; connection: boolean; unavailable: boolean; name?: string } | null>(null);
+  const [error, setError] = useState<{ message: string; connection: boolean; unavailable: boolean; notRegistered?: boolean; name?: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   // Which borne this machine is (K1, K2...), from the address it was opened with. undefined: not read yet. Read once the page
   // is in the browser (it is not available while the server builds the page).
   const [borne, setBorne] = useState<string | null | undefined>(undefined);
-  useEffect(() => { setBorne(readBorne(slug, window.location.search)); }, [slug]);
+  // Registering this screen: asked for with ?register in the address, or because the server does not know it.
+  const [registering, setRegistering] = useState(false);
+  useEffect(() => {
+    // The screen's secret (if it was registered) goes with every request; the server knows the borne from it.
+    setScreenSecret(readScreenSecret(slug));
+    setRegistering(new URLSearchParams(window.location.search).has("register"));
+    setBorne(readBorne(slug, window.location.search));
+  }, [slug]);
+  // The server says this screen is not (or no longer) registered: its secret, if any, is worth nothing now.
+  const notRegistered = Boolean(error?.notRegistered);
+  useEffect(() => {
+    if (!notRegistered) return;
+    forgetScreenSecret(slug);
+    setScreenSecret(null);
+  }, [notRegistered, slug]);
   const [locale, setLocale] = useState<Locale>("fr");
   const [screen, setScreen] = useState<Screen>("WELCOME");
   const [choice, setChoice] = useState<OrderTypeOption | null>(null);
@@ -231,6 +246,21 @@ function KioskFlow({ slug }: { slug: string }) {
   ) : null;
   // Nothing to keep underneath (start-up, or already a problem screen): the message is the whole screen.
   if (noConnection && (!boot || problem)) return withBrand(noConnection);
+  if (registering || error?.notRegistered) {
+    return (
+      <RegisterScreen slug={slug} locale={locale} onRegistered={(secret, code) => {
+        setScreenSecret(secret);
+        setBorne(code);
+        setRegistering(false);
+        // The address may still say ?register: drop it, so a reload is the kiosk, not this page.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("register");
+        window.history.replaceState(null, "", url.toString());
+        setError(null);
+        setAttempt((n) => n + 1);
+      }} />
+    );
+  }
   if (error?.unavailable) {
     const named = error.name ? { name: error.name, locale, onLocale: setLocale } : header;
     return withBrand(

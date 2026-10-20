@@ -61,6 +61,7 @@ type Dict = {
   toPayment: string; paymentTitle: string; payByCard: string; payByCardSub: string; payByCash: string; payByCashSub: string;
   cardWaitTitle: string; cardWaitText: string; cardNotThrough: string; chooseAgain: string; cancel: string; paidByCard: string;
   simApprove: string; simDecline: string;
+  registerTitle: string; registerText: string; registerButton: string; registerNotKept: string;
 };
 
 export const STRINGS: Record<Locale, Dict> = {
@@ -101,6 +102,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "Carte bancaire", payByCardSub: "Payez ici, sur le terminal", payByCash: "Espèces", payByCashSub: "Payez au comptoir avec votre numéro",
     cardWaitTitle: "Suivez les instructions sur le terminal", cardWaitText: "Insérez, approchez ou glissez votre carte.",
     cardNotThrough: "Le paiement n’a pas abouti.", chooseAgain: "Choisissez à nouveau comment payer.", cancel: "Annuler", paidByCard: "Payé par carte",
+        registerTitle: "Enregistrer cet écran", registerButton: "Enregistrer",
+    registerText: "Cet écran n’est pas une borne du restaurant. Pour l’équipe : Back-office › Bornes › Register a screen, puis saisissez le code ici.",
+    registerNotKept: "Ce navigateur ne peut pas garder l’enregistrement (navigation privée ?). Utilisez une fenêtre normale.",
     simApprove: "Test : accepter", simDecline: "Test : refuser",
     noConnectionTitle: "Pas de connexion",
     noConnectionText: "Cette borne ne peut pas prendre de commande pour le moment. Merci de commander au comptoir. Elle reprend toute seule dès que la connexion revient.",
@@ -144,6 +148,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "Card", payByCardSub: "Pay here, on the terminal", payByCash: "Cash", payByCashSub: "Pay at the counter with your number",
     cardWaitTitle: "Follow the instructions on the terminal", cardWaitText: "Insert, tap or swipe your card.",
     cardNotThrough: "The payment did not go through.", chooseAgain: "Choose again how to pay.", cancel: "Cancel", paidByCard: "Paid by card",
+        registerTitle: "Register this screen", registerButton: "Register",
+    registerText: "This screen is not one of the restaurant's bornes. For staff: Back office › Bornes › Register a screen, then type the code here.",
+    registerNotKept: "This browser cannot keep the registration (private window?). Use a normal window.",
     simApprove: "Test: approve", simDecline: "Test: decline",
     noConnectionTitle: "No connection",
     noConnectionText: "This kiosk can't take orders right now. Please order at the counter. It starts again by itself as soon as the connection is back.",
@@ -187,6 +194,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "بطاقة بنكية", payByCardSub: "ادفع هنا على جهاز الدفع", payByCash: "نقدًا", payByCashSub: "ادفع عند الكاونتر برقم طلبك",
     cardWaitTitle: "اتبع التعليمات على جهاز الدفع", cardWaitText: "أدخل بطاقتك أو قرّبها أو مرّرها.",
     cardNotThrough: "لم تتم عملية الدفع.", chooseAgain: "اختر مرة أخرى طريقة الدفع.", cancel: "إلغاء", paidByCard: "تم الدفع بالبطاقة",
+        registerTitle: "تسجيل هذه الشاشة", registerButton: "تسجيل",
+    registerText: "هذه الشاشة ليست من شاشات المطعم. للموظفين: لوحة الإدارة › Bornes › Register a screen، ثم أدخل الرمز هنا.",
+    registerNotKept: "لا يستطيع هذا المتصفح حفظ التسجيل (نافذة خاصة؟). استخدم نافذة عادية.",
     simApprove: "Test : accepter", simDecline: "Test : refuser",
     noConnectionTitle: "لا يوجد اتصال",
     noConnectionText: "لا يمكن لهذه الشاشة استلام الطلبات حاليًا. يُرجى الطلب من الكاونتر. ستعود للعمل تلقائيًا فور عودة الاتصال.",

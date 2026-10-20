@@ -12,7 +12,19 @@ export interface Borne {
   url: string;
   orders: number;
   printer: PrinterView;
+  /** Its screen: registered (it holds a secret) since when; a code waiting to be typed on it. */
+  screen: { registered: boolean; registeredAt: string | null; codePending: boolean };
 }
+
+/** Only registered screens show the menu and take orders? */
+export const getRegistration = (slug: string) => request<{ required: boolean }>(`/restaurant/${slug}/kiosks/registration`);
+export const setRegistration = (slug: string, required: boolean) =>
+  request<{ required: boolean }>(`/restaurant/${slug}/kiosks/registration`, { method: "PUT", body: JSON.stringify({ required }) });
+/** A one-time code (15 minutes) to type on the kiosk screen that becomes this borne. */
+export const screenCode = (slug: string, id: string) =>
+  request<{ code: string; expiresAt: string }>(`/restaurant/${slug}/kiosks/${id}/screen/code`, { method: "POST" });
+export const unregisterScreen = (slug: string, id: string) =>
+  request<{ unregistered: boolean }>(`/restaurant/${slug}/kiosks/${id}/screen`, { method: "DELETE" });
 
 export const listBornes = (slug: string) => request<Borne[]>(`/restaurant/${slug}/kiosks`);
 export const createBorne = (slug: string, name: string) =>

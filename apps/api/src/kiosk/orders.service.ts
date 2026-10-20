@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable, requireSubscribed, requireTillReachable, resolveBorne } from "./availability.js";
+import { requireOrderable, requireSubscribed, requireTillReachable } from "./availability.js";
+import { resolveScreen } from "./screen.js";
 import { PricingService, type PricedCart } from "./pricing.service.js";
 import type { CreateOrderDto } from "./dto/cart.dto.js";
 import type { Prisma } from "@prisma/client";
@@ -20,7 +21,7 @@ export class OrdersService {
     private readonly payments: PaymentsService,
   ) {}
 
-  async create(slug: string, dto: CreateOrderDto) {
+  async create(slug: string, dto: CreateOrderDto, screen?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       select: { id: true, name: true, currency: true, status: true, settings: true, locale: true, timezone: true },
@@ -33,7 +34,7 @@ export class OrdersService {
     // same time; a switched-off borne only matters if this turns out to be a new order.)
     const [existing, borne] = await Promise.all([
       this.prisma.order.findFirst({ where: { restaurantId, clientRequestId: dto.clientOrderId }, include: { items: true } }),
-      resolveBorne(this.prisma, restaurantId, restaurant.name, dto.borneCode).then((b) => ({ b }), (e: unknown) => ({ e })),
+      resolveScreen(this.prisma, restaurant, screen, dto.borneCode).then((b) => ({ b }), (e: unknown) => ({ e })),
     ]);
     if (existing) return this.present(existing, await this.latestPayment(restaurantId, existing));
     if ("e" in borne) throw borne.e;
@@ -152,11 +153,12 @@ export class OrdersService {
   }
 
   /** The order a kiosk is paying for: only one still waiting for its payment. */
-  private async awaitingOrder(slug: string, clientOrderId: string) {
+  private async awaitingOrder(slug: string, clientOrderId: string, screen?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug }, select: { id: true, name: true, status: true, settings: true, timezone: true },
     });
     requireOrderable(restaurant);
+    await resolveScreen(this.prisma, restaurant, screen);
     const order = await this.prisma.order.findFirst({ where: { restaurantId: restaurant.id, clientRequestId: clientOrderId }, include: { items: true } });
     if (!order) throw new NotFoundException("Order not found");
     if (order.status !== "AWAITING_PAYMENT") throw new ConflictException({ code: "NOT_AWAITING_PAYMENT", message: `This order is ${order.status.toLowerCase()}, not waiting for a payment` });
@@ -167,8 +169,8 @@ export class OrdersService {
    * After a declined, cancelled or failed card payment the customer chooses again: the card once more (a new attempt
    * on the borne's TPE), or cash (the order goes on, to be paid at the counter or closed as the restaurant chose).
    */
-  async pay(slug: string, clientOrderId: string, method: "CARD" | "CASH") {
-    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+  async pay(slug: string, clientOrderId: string, method: "CARD" | "CASH", screen?: string) {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId, screen);
     await requireTillReachable(this.prisma, restaurant.id);
     if (method === "CARD") {
       const terminal = await this.payments.cardTerminal(restaurant.id, restaurant.settings, order.kioskId);
@@ -189,25 +191,26 @@ export class OrdersService {
   }
 
   /** The customer stopped at the TPE screen: the order waits for their next choice. */
-  async cancelPayment(slug: string, clientOrderId: string) {
-    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+  async cancelPayment(slug: string, clientOrderId: string, screen?: string) {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId, screen);
     await this.payments.cancel(restaurant.id, order.id);
     return this.present(order, await this.payments.latest(restaurant.id, order.id));
   }
 
   /** The kiosk's test buttons, while the TPE is the simulator (never on the live server). */
-  async simulatePayment(slug: string, clientOrderId: string, approve: boolean) {
-    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId);
+  async simulatePayment(slug: string, clientOrderId: string, approve: boolean, screen?: string) {
+    const { restaurant, order } = await this.awaitingOrder(slug, clientOrderId, screen);
     await this.payments.simulate(restaurant.id, order.id, approve);
-    return this.getByClientOrderId(slug, clientOrderId);
+    return this.getByClientOrderId(slug, clientOrderId, screen);
   }
 
-  preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2]) {
+  preview(slug: string, dto: CreateOrderDto | Parameters<PricingService["price"]>[2], screen?: string) {
     return this.prisma.restaurant
       .findUnique({ where: { slug }, select: { id: true, name: true, currency: true, status: true, settings: true, locale: true, timezone: true } })
       .then(async (r) => {
         requireOrderable(r);
         await requireSubscribed(this.prisma, r);
+        await resolveScreen(this.prisma, r, screen);
         await requireTillReachable(this.prisma, r.id);
         // Same rule as create(): no point quoting a price for an order that would be refused.
         this.assertOrderTypeEnabled(r.settings, dto.orderType);
@@ -365,12 +368,13 @@ export class OrdersService {
    * never by reference: K0-0925-003 is trivial to enumerate and this route is
    * unauthenticated. Returns exactly the same shape as create().
    */
-  async getByClientOrderId(slug: string, clientOrderId: string) {
+  async getByClientOrderId(slug: string, clientOrderId: string, screen?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, settings: { select: { requireRegisteredBornes: true } } },
     });
     requireOrderable(restaurant);
+    await resolveScreen(this.prisma, restaurant, screen);
 
     const order = await this.prisma.order.findFirst({
       where: { restaurantId: restaurant.id, clientRequestId: clientOrderId },

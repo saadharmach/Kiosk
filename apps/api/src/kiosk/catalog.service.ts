@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { requireOrderable, requireSubscribed, resolveBorne } from "./availability.js";
+import { requireOrderable, requireSubscribed } from "./availability.js";
 import { isSubscribed } from "../common/subscription.js";
 import { tillReachable } from "../common/till-health.js";
 import { findCardTerminal } from "../payments/payments.service.js";
+import { resolveScreen } from "./screen.js";
 import { StorageService, isVideoPath } from "../common/storage.service.js";
 import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
@@ -43,7 +44,7 @@ export class CatalogService {
   }
 
   /** Branding, settings and the zones a customer can choose from. */
-  async bootstrap(slug: string, borneCode?: string) {
+  async bootstrap(slug: string, borneCode?: string, screen?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       include: { settings: true, tpapi: { select: { isEnabled: true, lastSuccessAt: true, lastSyncAt: true, pingFailures: true } } },
@@ -51,7 +52,8 @@ export class CatalogService {
     requireOrderable(restaurant);
     await requireSubscribed(this.prisma, restaurant);
     // Which borne is asking, if it says so. Unknown: none. Switched off: the calm unavailable answer.
-    const borne = borneCode && /^[A-Za-z0-9]{1,4}$/.test(borneCode) ? await resolveBorne(this.prisma, restaurant.id, restaurant.name, borneCode) : null;
+    // A registered screen is its borne; an unregistered one is refused where the restaurant requires registration.
+    const borne = await resolveScreen(this.prisma, restaurant, screen, borneCode && /^[A-Za-z0-9]{1,4}$/.test(borneCode) ? borneCode : null);
 
     const salesAreas = await this.prisma.tpapiSalesArea.findMany({
       where: { restaurantId: restaurant.id },
@@ -199,7 +201,7 @@ export class CatalogService {
    * The full menu for one sales area, priced at that area's price level,
    * with the local presentation layer merged on top.
    */
-  async catalog(slug: string, salesAreaIdParam?: string, localeParam?: string) {
+  async catalog(slug: string, salesAreaIdParam?: string, localeParam?: string, screen?: string) {
     // Sales area ids are unTill numbers; reject anything else before BigInt() throws a 500.
     if (salesAreaIdParam && !/^\d{1,20}$/.test(salesAreaIdParam)) {
       throw new BadRequestException("salesAreaId must be a number");
@@ -213,11 +215,13 @@ export class CatalogService {
         locale: true,
         name: true,
         timezone: true,
-        settings: { select: { showAllergens: true } },
+        settings: { select: { showAllergens: true, requireRegisteredBornes: true } },
       },
     });
     requireOrderable(restaurant);
     await requireSubscribed(this.prisma, restaurant);
+    // The menu too is for the restaurant's own screens only, when it requires registered bornes.
+    await resolveScreen(this.prisma, restaurant, screen);
     const restaurantId = restaurant.id;
     const showAllergens = restaurant.settings?.showAllergens ?? false;
         // The server resolves the language. The browser never receives three of everything.

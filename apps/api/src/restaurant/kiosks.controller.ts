@@ -4,7 +4,7 @@ import { TenantGuard } from "../restaurant-auth/guards/tenant.guard.js";
 import { Tenant } from "../restaurant-auth/tenant.decorator.js";
 import { SavePrinterDto } from "../printing/dto.js";
 import { PrintingService } from "../printing/printing.service.js";
-import { CreateKioskDto, UpdateKioskDto } from "./dto/kiosks.dto.js";
+import { CreateKioskDto, RegistrationDto, UpdateKioskDto } from "./dto/kiosks.dto.js";
 import { KiosksService } from "./kiosks.service.js";
 
 interface TenantCtx { restaurantId: string; slug: string }
@@ -21,6 +21,30 @@ export class KiosksController {
   @Get()
   list(@Tenant() t: TenantCtx) {
     return this.kiosks.list(t.restaurantId, t.slug);
+  }
+
+  /** Only registered screens? (the restaurant's switch) */
+  @Get("registration")
+  registration(@Tenant() t: TenantCtx) {
+    return this.kiosks.registration(t.restaurantId);
+  }
+
+  @Put("registration")
+  setRegistration(@Tenant() t: TenantCtx, @Body() dto: RegistrationDto) {
+    return this.kiosks.setRegistration(t.restaurantId, dto.required);
+  }
+
+  /** A one-time code to type on the kiosk screen that should become this borne. */
+  @Post(":id/screen/code")
+  @HttpCode(200)
+  screenCode(@Tenant() t: TenantCtx, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.kiosks.screenCode(t.restaurantId, id);
+  }
+
+  /** The borne's screen is no longer trusted. */
+  @Delete(":id/screen")
+  unregisterScreen(@Tenant() t: TenantCtx, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.kiosks.unregisterScreen(t.restaurantId, id);
   }
 
   @Post()
