@@ -158,6 +158,18 @@ export default function BornesPage({ slug }: { slug: string }) {
       </p>
       {error ? <p className="text-sm text-(--color-danger)" role="alert">{error}</p> : null}
 
+      {required === false && bornes.some((b) => b.screen.registered) ? (
+        <p role="status" className="rounded-lg border-2 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">
+          <b>Not protected yet.</b> {bornes.filter((b) => b.screen.registered).length} of {bornes.length} borne screen(s) registered, but any other
+          device can still open the kiosk address until you tick the box below.
+          {bornes.some((b) => b.isEnabled && !b.screen.registered) ? " Register the other bornes' screens first, or they will stop too." : ""}
+        </p>
+      ) : null}
+      {required === true ? (
+        <p role="status" className="rounded-lg border-2 border-green-600 bg-green-50 p-3 text-sm text-green-900">
+          <b>Protected.</b> Only registered screens show the menu and take orders; any other device sees &ldquo;Register this screen&rdquo;.
+        </p>
+      ) : null}
       {required !== null ? (
         <section className={`${card} p-4`}>
           <label className="flex items-start gap-3">
