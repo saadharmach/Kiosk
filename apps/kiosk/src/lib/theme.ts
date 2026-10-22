@@ -1,5 +1,5 @@
-/** Default accent, used when a restaurant sets none or sets something unusable. */
-export const DEFAULT_BRAND = "#f5c842";
+/** Default accent (Direction B's orange), used when a restaurant sets none or sets something unusable. */
+export const DEFAULT_BRAND = "#f26a21";
 // Text on a light button: a warm near-black, dark enough that every accent keeps at least 4.2:1.
 const DARK_INK = "#14110d";
 const LIGHT_INK = "#ffffff";
@@ -26,6 +26,10 @@ export function brandColors(input: string | null | undefined): { brand: string; 
 
   let hex = m[1]!;
   if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+
+  // The default orange keeps white text, as the design has it: every action label is big and bold (24px or more),
+  // where white on this orange reads at 3:1. Any other colour gets whichever of dark or white reads better.
+  if (hex.toLowerCase() === DEFAULT_BRAND.slice(1)) return { brand: DEFAULT_BRAND, ink: LIGHT_INK };
 
   const brand = luminanceOf(hex);
   // Whichever of the two text colours reads better on this accent. A fixed cut-off picks the

@@ -61,6 +61,11 @@ type Dict = {
   toPayment: string; paymentTitle: string; payByCard: string; payByCardSub: string; payByCash: string; payByCashSub: string;
   cardWaitTitle: string; cardWaitText: string; cardNotThrough: string; chooseAgain: string; cancel: string; paidByCard: string;
   simApprove: string; simDecline: string;
+  onlyPrice: string; chooseToContinue: string;
+  cartEmpty: string; articlesCount: string; choose: string; addedItem: string;
+  thanksFull: string; cardAccepted: string; cashToPay: string; servedMessage: string; finish: string;
+  howToPay: string; amountDue: string; backToBasket: string; cardPayTitle: string; cardStep1: string; cardStep2: string; cardStep3: string; cardStep4: string;
+  cardWaiting: string; cancelPayment: string; cardNotValidated: string; retryCard: string; payCashInstead: string; simBanner: string;
   registerTitle: string; registerText: string; registerButton: string; registerNotKept: string;
 };
 
@@ -76,7 +81,7 @@ export const STRINGS: Record<Locale, Dict> = {
     back: "Retour", confirm: "Confirmer", clear: "Effacer", close: "Fermer",
     table: "Table", chooseSize: "Choisissez une taille", allergens: "Allergènes",
     required: "Obligatoire", optional: "Facultatif", chooseCount: "Choisissez {n}", add: "Ajouter",
-    viewOrder: "Voir ma commande", empty: "Votre commande est vide", quantity: "Quantité",    yourOrder: "Votre commande", remove: "Retirer", confirmOrder: "Confirmer la commande",
+    viewOrder: "Voir mon panier", empty: "Votre commande est vide", quantity: "Quantité",    yourOrder: "Mon panier", remove: "Retirer", confirmOrder: "Confirmer la commande",
     sending: "Envoi en cours…", orderNumber: "Votre numéro", 
     payAtCashier: "Présentez ce numéro en caisse pour payer",
     priceChanged: "Les prix ont changé. Veuillez vérifier votre commande.",
@@ -102,7 +107,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "Carte bancaire", payByCardSub: "Payez ici, sur le terminal", payByCash: "Espèces", payByCashSub: "Payez au comptoir avec votre numéro",
     cardWaitTitle: "Suivez les instructions sur le terminal", cardWaitText: "Insérez, approchez ou glissez votre carte.",
     cardNotThrough: "Le paiement n’a pas abouti.", chooseAgain: "Choisissez à nouveau comment payer.", cancel: "Annuler", paidByCard: "Payé par carte",
-        registerTitle: "Enregistrer cet écran", registerButton: "Enregistrer",
+        thanksFull: "Merci pour votre commande !", cardAccepted: "Paiement par carte accepté", cashToPay: "Paiement à régler à la caisse", servedMessage: "Installez-vous : votre commande sera servie.", finish: "Terminer", howToPay: "Comment souhaitez-vous payer ?", amountDue: "Montant à régler :", backToBasket: "Retour au panier", cardPayTitle: "Paiement par carte",
+    cardStep1: "Prenez votre carte bancaire.", cardStep2: "Insérez-la dans le terminal ou présentez-la sans contact.", cardStep3: "Suivez les instructions affichées sur le terminal.", cardStep4: "Attendez la confirmation du paiement.",
+    cardWaiting: "En attente du terminal…", cancelPayment: "Annuler et choisir un autre moyen", cardNotValidated: "Votre commande n’est pas validée : aucun paiement n’a été pris.", retryCard: "Réessayer avec la carte", payCashInstead: "Payer plutôt en espèces", simBanner: "MODE TEST — aucun paiement réel", cartEmpty: "Votre panier est vide", articlesCount: "{n} article(s)", choose: "Choisir", addedItem: "{name} ajouté", chooseToContinue: "Touchez votre choix pour continuer", onlyPrice: "seulement", registerTitle: "Enregistrer cet écran", registerButton: "Enregistrer",
     registerText: "Cet écran n’est pas une borne du restaurant. Pour l’équipe : Back-office › Bornes › Register a screen, puis saisissez le code ici.",
     registerNotKept: "Ce navigateur ne peut pas garder l’enregistrement (navigation privée ?). Utilisez une fenêtre normale.",
     simApprove: "Test : accepter", simDecline: "Test : refuser",
@@ -123,7 +130,7 @@ export const STRINGS: Record<Locale, Dict> = {
     back: "Back", confirm: "Confirm", clear: "Clear", close: "Close",
     table: "Table", chooseSize: "Choose a size", allergens: "Allergens",
     required: "Required", optional: "Optional", chooseCount: "Choose {n}", add: "Add",
-    viewOrder: "View my order", empty: "Your order is empty", quantity: "Quantity",    yourOrder: "Your order", remove: "Remove", confirmOrder: "Confirm order",
+    viewOrder: "View my basket", empty: "Your order is empty", quantity: "Quantity",    yourOrder: "My basket", remove: "Remove", confirmOrder: "Confirm order",
     sending: "Sending…", orderNumber: "Your number",
     payAtCashier: "Show this number at the cashier to pay",
     priceChanged: "Prices have changed. Please check your order.",
@@ -148,7 +155,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "Card", payByCardSub: "Pay here, on the terminal", payByCash: "Cash", payByCashSub: "Pay at the counter with your number",
     cardWaitTitle: "Follow the instructions on the terminal", cardWaitText: "Insert, tap or swipe your card.",
     cardNotThrough: "The payment did not go through.", chooseAgain: "Choose again how to pay.", cancel: "Cancel", paidByCard: "Paid by card",
-        registerTitle: "Register this screen", registerButton: "Register",
+        thanksFull: "Thank you for your order!", cardAccepted: "Card payment accepted", cashToPay: "Payment due at the counter", servedMessage: "Take a seat: your order will be served.", finish: "Finish", howToPay: "How would you like to pay?", amountDue: "Amount due:", backToBasket: "Back to basket", cardPayTitle: "Pay by card",
+    cardStep1: "Take your bank card.", cardStep2: "Insert it in the terminal or tap it.", cardStep3: "Follow the instructions on the terminal.", cardStep4: "Wait for the payment to be confirmed.",
+    cardWaiting: "Waiting for the terminal…", cancelPayment: "Cancel and choose another way", cardNotValidated: "Your order is not validated: no payment was taken.", retryCard: "Try the card again", payCashInstead: "Pay cash instead", simBanner: "TEST MODE — no real payment", cartEmpty: "Your basket is empty", articlesCount: "{n} item(s)", choose: "Choose", addedItem: "{name} added", chooseToContinue: "Tap your choice to continue", onlyPrice: "only", registerTitle: "Register this screen", registerButton: "Register",
     registerText: "This screen is not one of the restaurant's bornes. For staff: Back office › Bornes › Register a screen, then type the code here.",
     registerNotKept: "This browser cannot keep the registration (private window?). Use a normal window.",
     simApprove: "Test: approve", simDecline: "Test: decline",
@@ -169,7 +178,7 @@ export const STRINGS: Record<Locale, Dict> = {
     back: "رجوع", confirm: "تأكيد", clear: "مسح", close: "إغلاق",
     table: "طاولة", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية",
     required: "إلزامي", optional: "اختياري", chooseCount: "اختر {n}", add: "إضافة",
-    viewOrder: "عرض طلبي", empty: "طلبك فارغ", quantity: "الكمية",    yourOrder: "طلبك", remove: "إزالة", confirmOrder: "تأكيد الطلب",
+    viewOrder: "عرض سلتي", empty: "طلبك فارغ", quantity: "الكمية",    yourOrder: "سلتي", remove: "إزالة", confirmOrder: "تأكيد الطلب",
     sending: "جارٍ الإرسال…", orderNumber: "رقمك",
     payAtCashier: "أظهر هذا الرقم عند الصندوق للدفع",
     priceChanged: "تغيرت الأسعار. يرجى مراجعة طلبك.",
@@ -194,7 +203,9 @@ export const STRINGS: Record<Locale, Dict> = {
     payByCard: "بطاقة بنكية", payByCardSub: "ادفع هنا على جهاز الدفع", payByCash: "نقدًا", payByCashSub: "ادفع عند الكاونتر برقم طلبك",
     cardWaitTitle: "اتبع التعليمات على جهاز الدفع", cardWaitText: "أدخل بطاقتك أو قرّبها أو مرّرها.",
     cardNotThrough: "لم تتم عملية الدفع.", chooseAgain: "اختر مرة أخرى طريقة الدفع.", cancel: "إلغاء", paidByCard: "تم الدفع بالبطاقة",
-        registerTitle: "تسجيل هذه الشاشة", registerButton: "تسجيل",
+        thanksFull: "شكرًا على طلبك!", cardAccepted: "تم قبول الدفع بالبطاقة", cashToPay: "الدفع عند الكاونتر", servedMessage: "تفضّل بالجلوس: سيتم تقديم طلبك.", finish: "إنهاء", howToPay: "كيف تودّ الدفع؟", amountDue: "المبلغ المطلوب:", backToBasket: "العودة إلى السلة", cardPayTitle: "الدفع بالبطاقة",
+    cardStep1: "أخرج بطاقتك البنكية.", cardStep2: "أدخلها في الجهاز أو قرّبها منه.", cardStep3: "اتبع التعليمات على جهاز الدفع.", cardStep4: "انتظر تأكيد الدفع.",
+    cardWaiting: "في انتظار جهاز الدفع…", cancelPayment: "إلغاء واختيار طريقة أخرى", cardNotValidated: "لم يتم تأكيد طلبك: لم يتم أخذ أي مبلغ.", retryCard: "إعادة المحاولة بالبطاقة", payCashInstead: "الدفع نقدًا بدلًا من ذلك", simBanner: "وضع الاختبار — لا دفع حقيقي", cartEmpty: "سلتك فارغة", articlesCount: "{n} منتج", choose: "اختر", addedItem: "تمت إضافة {name}", chooseToContinue: "المس اختيارك للمتابعة", onlyPrice: "فقط", registerTitle: "تسجيل هذه الشاشة", registerButton: "تسجيل",
     registerText: "هذه الشاشة ليست من شاشات المطعم. للموظفين: لوحة الإدارة › Bornes › Register a screen، ثم أدخل الرمز هنا.",
     registerNotKept: "لا يستطيع هذا المتصفح حفظ التسجيل (نافذة خاصة؟). استخدم نافذة عادية.",
     simApprove: "Test : accepter", simDecline: "Test : refuser",

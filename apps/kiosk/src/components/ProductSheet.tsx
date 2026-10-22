@@ -156,7 +156,7 @@ export default function ProductSheet({
           <img src={photo} alt="" className="size-44 shrink-0 rounded-3xl object-cover" onError={() => setImageFailed(true)} />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <h2 className="font-display text-6xl leading-tight font-bold">{product.name}</h2>
+          <h2 className="font-display text-7xl leading-[0.95] font-extrabold">{product.name}</h2>
           {product.description ? <p className="text-3xl leading-snug text-(--color-ink-muted)">{product.description}</p> : null}
           {allergens}
         </div>
@@ -193,7 +193,7 @@ export default function ProductSheet({
                       {summary(x.key)}
                     </span>
                   </span>
-                  <span className={`flex size-11 shrink-0 items-center justify-center rounded-full ${ok && chose ? "bg-(--color-brand) text-(--color-brand-ink)" : ""}`}>
+                  <span className={`flex size-11 shrink-0 items-center justify-center rounded-full ${ok && chose ? "bg-(--color-success) text-white" : ""}`}>
                     {ok && chose ? <Icon name="check" className="size-6" strokeWidth={3.5} />
                       : <Icon name="chevron" strokeWidth={2.6} className="size-8 text-(--color-ink-muted) rtl:-scale-x-100" />}
                   </span>
@@ -263,13 +263,13 @@ export default function ProductSheet({
         </div>
       )}
 
-      <footer className="flex shrink-0 items-center justify-between gap-6 border-t-2 border-(--color-line) px-10 py-7">
+      <footer className="flex shrink-0 items-center justify-between gap-6 rounded-t-[2.5rem] bg-(--color-surface) px-10 py-7 shadow-[0_-16px_40px_rgba(36,33,31,0.12)]">
         <div className="flex items-center gap-5" role="group" aria-label={t.quantity}>
           <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="−"
             className="flex size-24 items-center justify-center rounded-full border-2 border-(--color-line) bg-(--color-page)">
             <Icon name="minus" className="size-10" strokeWidth={2.4} />
           </button>
-          <span className="min-w-16 text-center font-display text-6xl font-bold tabular-nums">{qty}</span>
+          <span className="min-w-16 text-center font-display text-7xl font-extrabold tabular-nums">{qty}</span>
           <button onClick={() => setQty((q) => Math.min(99, q + 1))} aria-label="+"
             className="flex size-24 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
             <Icon name="plus" className="size-10" strokeWidth={2.4} />
@@ -277,7 +277,7 @@ export default function ProductSheet({
         </div>
         {/* Not disabled: when something is missing, a tap shows it on the left. */}
         <button onClick={addToCart} aria-disabled={!canAdd}
-          className={`min-h-28 max-w-2xl flex-1 rounded-full bg-(--color-brand) px-8 font-display text-4xl font-bold text-(--color-brand-ink) ${canAdd ? "" : "opacity-40"}`}>
+          className={`min-h-28 max-w-2xl flex-1 rounded-full px-8 font-display text-5xl font-extrabold tracking-wide uppercase ${canAdd ? "bg-(--color-brand) text-(--color-brand-ink)" : "bg-(--color-line) text-(--color-ink-muted)"}`}>
           {editing ? t.saveChanges : t.add} · <span className="tabular-nums">{money(unitPrice * qty, currency, locale)}</span>
         </button>
       </footer>

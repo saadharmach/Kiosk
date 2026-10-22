@@ -85,7 +85,8 @@ export default function CartScreen({
     // PENDING: the TPE is working. APPROVED while the order still waits: the server is moving it on this very moment
     // (two steps), so keep waiting on the terminal screen; the next look finds it paid.
     if (attempt?.status === "PENDING" || attempt?.status === "APPROVED") { setProblem(null); setStage("card"); return; }
-    setProblem(attempt?.message ?? null);
+    // Refused or failed: the Règlement screen says so (nothing is validated). Stopped by the customer: just the choice again.
+    setProblem(attempt?.status === "DECLINED" || attempt?.status === "FAILED" ? attempt.message ?? "" : null);
     setStage("choose");
   };
 
@@ -195,9 +196,9 @@ export default function CartScreen({
           <span className="flex size-60 items-center justify-center rounded-full bg-(--color-line) text-(--color-ink-muted)">
             <Icon name="bag" className="size-28" strokeWidth={1.4} />
           </span>
-          <h1 className="font-display text-7xl leading-tight font-bold">{t.empty}</h1>
+          <h1 className="font-display text-8xl leading-[0.95] font-extrabold">{t.empty}</h1>
           <button onClick={onBack}
-            className="mt-6 flex min-h-30 items-center gap-4 rounded-full bg-(--color-brand) px-16 font-display text-4xl font-bold text-(--color-brand-ink)">
+            className="mt-6 flex min-h-30 items-center gap-4 rounded-full bg-(--color-brand) px-16 font-display text-5xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
             {t.seeMenu}
             <Icon name="chevron" className="size-9 rtl:-scale-x-100" strokeWidth={2.4} />
           </button>
@@ -205,13 +206,13 @@ export default function CartScreen({
       ) : (
         <>
           <div className="flex-1 overflow-y-auto px-12 pt-12 pb-72">
-            <h1 className="mb-8 font-display text-6xl leading-tight font-bold">{t.yourOrder}</h1>
+            <h1 className="mb-8 font-display text-8xl leading-none font-extrabold">{t.yourOrder}</h1>
             <ul className="flex flex-col gap-5">
               {cart.lines.map((l) => (
                 <li key={l.key} className="flex items-center gap-6 rounded-4xl bg-(--color-surface) p-6 shadow-md">
                   {l.imageUrl ? <Thumb src={l.imageUrl} /> : null}
                   <div className="min-w-0 flex-1">
-                    <p className="font-display text-4xl leading-tight font-bold">{l.name}</p>
+                    <p className="font-display text-5xl leading-tight font-bold">{l.name}</p>
                     {l.sizeName ? <p className="mt-1 text-2xl text-(--color-ink-muted)">{l.sizeName}</p> : null}
                     {/* Each kind of option on its own line, under unTill's name for it */}
                     {KIND_ORDER.map((kind) => {
@@ -222,7 +223,7 @@ export default function CartScreen({
                         </p>
                       ) : null;
                     })}
-                    <p className="mt-3 font-display text-4xl font-bold tabular-nums text-(--color-price)">
+                    <p className="mt-3 font-display text-5xl font-extrabold tabular-nums">
                       {money(l.unitPrice * l.quantity, currency, locale)}
                     </p>
                   </div>
@@ -252,24 +253,24 @@ export default function CartScreen({
             </ul>
 
             <div className="mt-10 flex items-baseline justify-between border-t-2 border-(--color-line) px-3 pt-8">
-              <span className="font-display text-5xl font-bold">{t.total}</span>
-              <span className="font-display text-6xl font-bold tabular-nums text-(--color-price)">
+              <span className="font-display text-6xl font-extrabold">{t.total}</span>
+              <span className="font-display text-8xl font-extrabold tabular-nums">
                 {serverTotal === null ? "…" : money(serverTotal, currency, locale)}
               </span>
             </div>
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 flex flex-col gap-4 border-t-2 border-(--color-line) bg-(--color-surface) px-12 pt-8 pb-10">
+          <div className="fixed inset-x-0 bottom-0 flex flex-col gap-4 rounded-t-[2.5rem] bg-(--color-surface) px-12 pt-8 pb-10 shadow-[0_-16px_40px_rgba(36,33,31,0.12)]">
             {error ? <p role="alert" className="text-center text-2xl font-semibold text-(--color-danger)">{error}</p> : null}
             <div className="flex gap-5">
               <button onClick={onBack}
-                className="min-h-30 flex-1 rounded-full bg-(--color-brand-soft) font-display text-3xl font-bold text-(--color-brand-deep)">
+                className="min-h-30 flex-1 rounded-full border-2 border-(--color-line) bg-(--color-surface) font-display text-4xl font-extrabold tracking-wide uppercase">
                 {t.addMore}
               </button>
               <button onClick={confirm} disabled={busy || serverTotal === null}
-                className="flex min-h-30 flex-1 items-center justify-center gap-4 rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
-                <Icon name="check" className="size-9" strokeWidth={2.6} />
+                className="flex min-h-30 flex-[1.3] items-center justify-center gap-4 rounded-full bg-(--color-brand) font-display text-5xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase disabled:bg-(--color-line) disabled:text-(--color-ink-muted)">
                 {busy ? t.sending : t.toPayment}
+                <Icon name="chevron" className="size-10 rtl:-scale-x-100" strokeWidth={3} />
               </button>
             </div>
           </div>

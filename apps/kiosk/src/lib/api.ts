@@ -252,6 +252,7 @@ export interface WireCartLine {
 
 export interface PlacedOrder {
   reference: string;
+  orderType?: string;
   /** AWAITING_PAYMENT while the borne's TPE is charging it. */
   status: string;
   tableNumber: number | null;

@@ -25,25 +25,29 @@ export default function OrderTypeScreen({
     <main className="flex min-h-dvh flex-col">
       <KioskHeader name={name} locale={locale} onLocale={onLocale} onBack={onBack} backLabel={t.back} />
 
-      <div className="flex flex-1 flex-col gap-10 px-16 pt-16 pb-14">
-        <h1 className="font-display text-6xl leading-tight font-bold">{t.orderTypeTitle}</h1>
-
-        <div className="flex flex-1 items-center">
-          <div className="grid w-full gap-9" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 3)}, minmax(0, 1fr))` }}>
-            {options.map((o) => (
-              <button key={o.orderType} onClick={() => onPick(o)}
-                className="flex h-[36dvh] min-h-96 flex-col items-center justify-start gap-7 pt-16 rounded-[3rem] border-[3px] border-(--color-line) bg-(--color-surface) p-9 text-center shadow-md">
-                <span className="flex size-56 items-center justify-center rounded-full bg-(--color-brand-soft) text-(--color-brand-deep)">
-                  <Icon name={ICON[o.orderType] ?? "bag"} className="size-28" strokeWidth={1.5} />
-                </span>
-                <span className="font-display text-6xl leading-tight font-bold">{ORDER_TYPE_LABEL(o.orderType, t)}</span>
-                <span className="text-3xl text-(--color-ink-muted)">{sub(o.orderType)}</span>
-              </button>
-            ))}
-          </div>
+      <div className="flex flex-1 flex-col gap-8 px-14 pt-10 pb-14">
+        <div>
+          <h1 className="font-display text-8xl leading-[0.95] font-extrabold">{t.orderTypeTitle}</h1>
+          <p className="mt-4 text-3xl font-medium text-(--color-ink-muted)">{t.chooseToContinue}</p>
         </div>
 
-        <p className="flex items-center gap-5 rounded-3xl bg-(--color-brand-soft) px-8 py-6 text-2xl font-medium text-(--color-brand-deep)">
+        {/* Big cards, one under the other: two taps' worth of space each, readable at arm's length. */}
+        <div className="flex flex-1 flex-col gap-8">
+          {options.map((o) => (
+            <button key={o.orderType} onClick={() => onPick(o)}
+              className="flex min-h-96 flex-1 items-center gap-10 rounded-[3rem] bg-(--color-surface) p-10 text-start shadow-lg">
+              <span className="flex size-72 shrink-0 items-center justify-center rounded-[2.5rem] bg-(--color-surface-2) text-(--color-brand-deep)">
+                <Icon name={ICON[o.orderType] ?? "bag"} className="size-44" strokeWidth={1.2} />
+              </span>
+              <span className="flex flex-col gap-3">
+                <span className="font-display text-8xl leading-none font-extrabold tracking-wide uppercase">{ORDER_TYPE_LABEL(o.orderType, t)}</span>
+                <span className="text-4xl font-medium text-(--color-ink-muted)">{sub(o.orderType)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <p className="flex items-center gap-5 rounded-3xl bg-(--color-surface-2) px-8 py-6 text-2xl font-semibold text-(--color-brand-deep)">
           <Icon name="info" className="size-9 shrink-0" />
           {t.helpNotice}
         </p>

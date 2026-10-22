@@ -76,7 +76,7 @@ export default function RegisterScreen({ slug, locale, onRegistered }: {
         </button>
       </div>
       <button onClick={() => void submit()} disabled={busy || code.length !== LENGTH}
-        className="min-h-28 w-full max-w-2xl rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) disabled:opacity-40">
+        className="min-h-28 w-full max-w-2xl rounded-full bg-(--color-brand) font-display text-5xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase disabled:bg-(--color-line) disabled:text-(--color-ink-muted)">
         {t.registerButton}
       </button>
     </main>

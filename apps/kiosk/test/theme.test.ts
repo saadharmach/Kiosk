@@ -47,3 +47,16 @@ describe("brandColors", () => {
     assert.ok(worst >= 4.2, `the worst accent/text pair has contrast ${worst.toFixed(2)}`);
   });
 });
+
+describe("Direction B's orange", () => {
+  it("is the default accent, with white text (the design's big bold action labels)", () => {
+    assert.equal(DEFAULT_BRAND, "#f26a21");
+    assert.deepEqual(brandColors(null), { brand: "#f26a21", ink: "#ffffff" });
+    assert.deepEqual(brandColors("#F26A21"), { brand: "#f26a21", ink: "#ffffff" }, "typed in capitals, still the default");
+  });
+
+  it("a restaurant's own colour still replaces it, with whichever text reads better on it", () => {
+    assert.deepEqual(brandColors("#f5c842"), { brand: "#f5c842", ink: "#14110d" });
+    assert.equal(brandColors("#1e3a8a").ink, "#ffffff");
+  });
+});

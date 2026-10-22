@@ -1,36 +1,41 @@
 @import "tailwindcss";
 
 @theme static {
-  /* Accent (the big buttons). Overridden per restaurant from Restaurant.primaryColor (see lib/theme.ts). */
-  --color-brand: #f5c842;
-  --color-brand-ink: #14110d;
+  /* Direction B, "food premium et chaleureuse". The action colour is orange; a restaurant that chose its own colour in
+     the back office replaces it (see lib/theme.ts), and everything derived from it follows. */
+  --color-brand: #f26a21;
+  --color-brand-ink: #ffffff;
 
-  /* Warm, light and calm: cream page, white bars and cards, near-black text, red for prices. */
-  --color-page: #f7f3ec;
-  --color-chrome: #ffffff;
+  /* Cream page, white cards, a soft peach for photos and active states, beige lines, deep anthracite for text and the
+     cart bar. Prices are anthracite, never coloured: the colour is kept for what can be tapped. */
+  --color-page: #fff4e5;
+  --color-chrome: #fff4e5;
   --color-surface: #ffffff;
-  --color-surface-2: #f1ebe1;
-  --color-ink: #1f1c18;
-  --color-ink-muted: #6b655d;
-  --color-line: #e6ded1;
-  --color-price: #c8372d;
-  --color-danger: #b91c1c;
-  --color-danger-soft: #fee2e2;
-  --color-success: #059669;
+  --color-surface-2: #fbe9d6;
+  --color-ink: #24211f;
+  --color-ink-muted: #6b5f55;
+  --color-line: #e9ddce;
+  --color-price: #24211f;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbe3e0;
+  /* Green: confirmations only (added, paid, done). */
+  --color-success: #25865a;
+  --color-anthracite: #24211f;
 
   --radius-card: 1.75rem;
 }
 
 @theme inline {
-  --font-sans: var(--font-figtree), var(--font-cairo), system-ui, sans-serif;
-  --font-display: var(--font-outfit), var(--font-cairo), system-ui, sans-serif;
+  --font-sans: var(--font-manrope), var(--font-cairo), system-ui, sans-serif;
+  --font-display: var(--font-barlow), var(--font-cairo), system-ui, sans-serif;
 }
 
 /* Shades derived from the accent, so a tenant colour only has to be set once.
-   Declared on :root so they resolve against an inline --color-brand override. */
+   Declared on :root so they resolve against an inline --color-brand override.
+   brand-deep is the darker orange for small orange text (white or orange-on-cream would not read). */
 :root {
   --color-brand-soft: color-mix(in srgb, var(--color-brand) 16%, white);
-  --color-brand-deep: color-mix(in srgb, var(--color-brand) 62%, black);
+  --color-brand-deep: color-mix(in srgb, var(--color-brand) 70%, black);
 }
 
 /* The interface is drawn for a 1080x1920 portrait screen (16px root at that size).
@@ -52,6 +57,57 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Every button gives the finger an answer: it shrinks 3% and darkens while pressed, and never needs a hover. */
+button:not(:disabled), [role="button"], a { transition: transform 120ms ease-out, filter 120ms ease-out, background-color 160ms, border-color 160ms; }
+button:not(:disabled):active, [role="button"]:active { transform: scale(0.97); filter: brightness(0.93); }
+
+/* A screen comes in with a fade and a 28px slide up, 320 ms, soft curve. */
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: none; }
+}
+.screen-in { animation: screen-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Something was added: the cart bar pulses once, 0.4 s. */
+@keyframes bar-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+.bar-pulse { animation: bar-pulse 400ms ease-out; }
+
+/* The quantity pill "pops" when it changes. */
+@keyframes pill-pop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.pill-pop { animation: pill-pop 280ms ease-out; }
+
+/* The welcome button breathes: it asks to be touched, softly. */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+.breathe { animation: breathe 2.6s ease-in-out infinite; }
+
+/* The product on the welcome screen floats very slowly. */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.float-slow { animation: float-slow 6s ease-in-out infinite; }
+
+/* The confirmation's countdown bar empties over the time the screen stays. */
+@keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* The confirmation tick is drawn in 600 ms. */
+@keyframes draw {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+.draw-tick { stroke-dasharray: 40; animation: draw 600ms ease-out both; }
 
 /* A kiosk has no cursor. Hover styles only ever mislead. */
 @media (hover: none) {

@@ -369,7 +369,8 @@ function KioskFlow({ slug }: { slug: string }) {
 
   return withBrand(
     <>
-      {renderScreen()}
+      {/* Each screen comes in with a fade and a short slide up (keyed: a new screen starts the animation again). */}
+      <div key={screen} className="screen-in">{renderScreen()}</div>
       {idleLeft !== null ? (
         <IdleWarning locale={locale} secondsLeft={idleLeft} totalSeconds={warnSec}
           onContinue={() => keepAlive.current()} onDiscard={reset} />

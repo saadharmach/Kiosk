@@ -76,70 +76,77 @@ export default function WelcomeScreen({
 
   const nextLocale = LOCALES[(LOCALES.indexOf(locale) + 1) % LOCALES.length]!;
   const product = slide?.product ?? null;
+  const productName = product ? localized(product.names, locale) ?? product.name : null;
+  // The big line: the restaurant's own headline, else the advertised product's name, else the restaurant's name.
+  const title = headline ?? productName ?? r.name;
+  const price = product ? money(product.price, r.currency, locale) : null;
+  // "52,00 MAD" → the number big, the currency small, in the bubble.
+  const [bubbleNumber, bubbleCurrency] = price ? [price.replace(/\s*[A-Za-z]{3}\s*$/, "").replace(/[,.]00$/, ""), r.currency] : [null, null];
 
   return (
-    <main className="flex h-dvh flex-col bg-(--color-chrome) text-(--color-ink)">
-      {/* ---- top bar */}
-      <div className="flex h-28 shrink-0 items-center justify-between bg-(--color-page) px-14">
-        <button onClick={() => onLocale(nextLocale)} aria-label={LOCALE_NAMES[nextLocale]}
-          className="flex items-center gap-3 font-display text-3xl font-semibold">
-          <Icon name="globe" className="size-9" />
-          <span>{locale.toUpperCase()}</span>
-        </button>
-        {r.logoUrl && !logoFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={r.logoUrl} alt={r.name} onError={() => setLogoFailed(true)} className="h-18 max-w-60 object-contain" />
+    <main className="flex h-dvh flex-col bg-(--color-anthracite) text-white">
+      {/* ---- the campaign: photo or video over the whole upper part. Tapping it starts too (a kiosk never hides the
+              way in); the button below is the named way. */}
+      <div onClick={onStart} className="relative min-h-0 flex-1 cursor-pointer overflow-hidden text-start">
+        {slides.length === 0 ? (
+          // No advert set: a warm, quiet cover with the restaurant's name.
+          <span aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_70%_62%,color-mix(in_srgb,var(--color-brand)_55%,transparent),transparent_55%)]" />
         ) : null}
-      </div>
-
-      {/* ---- the advert. Tapping it starts too (a kiosk never hides the way in); the button below is the named way. */}
-      <div onClick={onStart} className="relative min-h-0 flex-1 cursor-pointer overflow-hidden bg-(--color-page) text-start">
         {slides.map((s, i) => (
           <Slide key={s.url} slide={s} active={i === current}
             onEnded={slides.length > 1 ? next : () => setShown((n) => n + slides.length)}
             onError={() => setFailed((f) => [...f, s.url])} />
         ))}
-        {/* Keeps the texts readable on any photo. */}
-        {slides.length ? (
-          <span className="absolute inset-x-0 top-0 h-[55%] bg-gradient-to-b from-(--color-page)/90 via-(--color-page)/45 to-transparent" />
-        ) : null}
+        {/* Dark at the top and the bottom: the white texts read on any photo. */}
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/10 to-black/55" />
 
-        <span className="absolute inset-x-0 top-0 flex flex-col gap-5 px-14 pt-14">
-          <span className="font-display text-3xl font-semibold tracking-[0.12em] uppercase">{r.name}</span>
-          {headline ? <span className="max-w-[52rem] font-display text-8xl leading-[1.05] font-bold">{headline}</span> : null}
-          {subtitle ? <span className="max-w-[52rem] text-4xl leading-snug text-(--color-ink-muted)">{subtitle}</span> : null}
+        {/* top bar: the restaurant, the invitation, the language */}
+        <span className="absolute inset-x-0 top-0 flex items-center gap-6 px-14 pt-12">
+          {r.logoUrl && !logoFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={r.logoUrl} alt="" onError={() => setLogoFailed(true)} className="size-20 rounded-full bg-white object-contain p-1" />
+          ) : null}
+          <span className="font-display text-5xl font-extrabold tracking-wide uppercase">{r.name}</span>
+          <span className="flex-1" />
+          <span className="max-w-72 text-end text-2xl font-semibold text-white/85">{t.startHint}</span>
         </span>
 
-        {product ? (
-          <span className="absolute start-14 bottom-14 flex max-w-[40rem] flex-col items-start gap-3 rounded-[2rem] bg-(--color-surface) p-9 shadow-2xl">
-            <span className="rounded-xl bg-(--color-brand-soft) px-4 py-2 text-2xl font-semibold">{t.discover}</span>
-            <span className="font-display text-4xl leading-tight font-bold">{localized(product.names, locale) ?? product.name}</span>
-            <span className="font-display text-6xl font-bold tabular-nums text-(--color-price)">
-              {product.fromPrice ? `${t.fromPrice} ` : ""}{money(product.price, boot.restaurant.currency, locale)}
-            </span>
+        {/* the message */}
+        <span className="absolute inset-x-0 top-40 flex flex-col items-start gap-6 px-14">
+          {product ? (
+            <span className="rounded-full bg-(--color-brand) px-6 py-2 font-display text-3xl font-extrabold tracking-widest text-(--color-brand-ink) uppercase">{t.discover}</span>
+          ) : null}
+          <span className="max-w-[44rem] font-display text-[10rem] leading-[0.88] font-extrabold tracking-tight text-[#ffd27a] uppercase">{title}</span>
+          {subtitle ? <span className="max-w-[40rem] text-4xl leading-snug font-medium text-white">{subtitle}</span> : null}
+        </span>
+
+        {price ? (
+          <span className="float-slow absolute end-14 bottom-24 flex size-60 flex-col items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink) shadow-2xl">
+            <span className="text-2xl font-semibold">{product?.fromPrice ? t.fromPrice : t.onlyPrice}</span>
+            <span className="font-display text-8xl leading-none font-extrabold tabular-nums">{bubbleNumber}</span>
+            <span className="font-display text-3xl font-bold">{bubbleCurrency}</span>
           </span>
         ) : null}
-      </div>
 
-      {/* ---- which slide */}
-      <div className="flex h-16 shrink-0 items-center justify-center gap-3 bg-(--color-page)" aria-hidden="true">
-        {slides.length > 1 ? slides.map((s, i) => (
-          <span key={s.url} className={`h-3 rounded-full transition-all ${i === current ? "w-14 bg-(--color-price)" : "w-3 bg-(--color-line)"}`} />
-        )) : null}
+        {/* which slide */}
+        <span className="absolute inset-x-0 bottom-9 flex items-center justify-center gap-3" aria-hidden="true">
+          {slides.length > 1 ? slides.map((s, i) => (
+            <span key={s.url} className={`h-3 rounded-full transition-all ${i === current ? "w-14 bg-white" : "w-3 bg-white/50"}`} />
+          )) : null}
+        </span>
       </div>
 
       {/* ---- the way in */}
-      <div className="flex shrink-0 flex-col gap-6 px-14 pt-10 pb-8">
+      <div className="flex shrink-0 flex-col items-center gap-6 bg-(--color-surface) px-14 pt-10 pb-8 text-(--color-ink)">
         <button onClick={onStart}
-          className="flex h-28 items-center justify-center gap-5 rounded-[1.75rem] bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink) shadow-lg">
+          className="breathe flex h-32 w-full items-center justify-center gap-6 rounded-full bg-(--color-brand) font-display text-6xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase shadow-xl">
           <span>{t.startOrder}</span>
-          <Icon name="hand" className="size-11" strokeWidth={1.9} />
+          <Icon name="chevron" className="size-12 rtl:-scale-x-100" strokeWidth={3} />
         </button>
-        <p className="text-center text-3xl text-(--color-ink-muted)">{t.startHint}</p>
 
-        <div className="relative mt-4 flex items-center justify-between">
+        <div className="relative flex w-full items-center justify-between">
           <button onClick={() => setLanguages((v) => !v)} aria-expanded={languages}
-            className="flex items-center gap-3 py-3 text-3xl">
+            className="flex items-center gap-3 py-3 text-3xl font-semibold">
             <Icon name="globe" className="size-8" />
             <span>{LOCALE_NAMES[locale]}</span>
           </button>
@@ -147,22 +154,22 @@ export default function WelcomeScreen({
             <span role="menu" className="absolute start-0 bottom-full mb-3 flex flex-col overflow-hidden rounded-2xl border border-(--color-line) bg-(--color-surface) shadow-xl">
               {LOCALES.map((l) => (
                 <button key={l} role="menuitemradio" aria-checked={l === locale} onClick={() => { onLocale(l); setLanguages(false); }}
-                  className={`px-10 py-6 text-start text-3xl ${l === locale ? "bg-(--color-brand-soft) font-semibold" : ""}`}>
+                  className={`px-10 py-6 text-start text-3xl ${l === locale ? "bg-(--color-brand-soft) font-bold" : ""}`}>
                   {LOCALE_NAMES[l]}
                 </button>
               ))}
             </span>
           ) : null}
-          <button onClick={() => setHelp(true)} className="py-3 text-3xl text-(--color-ink-muted)">{t.needHelp}</button>
+          <button onClick={() => setHelp(true)} className="py-3 text-3xl font-semibold text-(--color-ink-muted)">{t.needHelp}</button>
         </div>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/nexborn.png" alt="NEXBORN, by POS & SOFT Distribution" className="mx-auto mt-2 h-14 w-auto" />
+        <img src="/nexborn.png" alt="NEXBORN, by POS & SOFT Distribution" className="h-12 w-auto" />
       </div>
 
       {help ? (
-        <button onClick={() => setHelp(false)} className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-14">
-          <span role="status" className="flex items-center gap-5 rounded-[2rem] bg-(--color-surface) px-10 py-8 text-3xl font-medium shadow-2xl">
+        <button onClick={() => setHelp(false)} className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-14 text-(--color-ink)">
+          <span role="status" className="flex items-center gap-5 rounded-[2rem] bg-(--color-surface) px-10 py-8 text-3xl font-semibold shadow-2xl">
             <Icon name="info" className="size-10 shrink-0" />
             {t.helpNotice}
           </span>

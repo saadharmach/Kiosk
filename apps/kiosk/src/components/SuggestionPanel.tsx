@@ -42,14 +42,12 @@ export default function SuggestionPanel({
 
   return (
     <section aria-label={t.suggestTitle}
-      className={`fixed inset-x-0 z-30 flex flex-col gap-4 border-t-4 border-(--color-brand) bg-(--color-surface) px-8 pt-5 pb-6 shadow-[0_-16px_40px_rgba(0,0,0,0.18)] ${
-        cart.count > 0 ? "bottom-40" : "bottom-0"
-      }`}>
+      className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-4 rounded-t-[2.5rem] bg-(--color-surface) px-8 pt-6 pb-8 shadow-[0_-16px_40px_rgba(36,33,31,0.18)]">
       <div className="flex items-center justify-between gap-6">
-        <h2 className="font-display text-3xl leading-tight font-bold">{t.suggestTitle}</h2>
+        <h2 className="font-display text-4xl leading-tight font-extrabold">{t.suggestTitle}</h2>
         <button onClick={onClose}
-          className={`h-16 shrink-0 rounded-full px-9 font-display text-2xl font-bold ${
-            anyAdded ? "bg-(--color-brand) text-(--color-brand-ink)" : "bg-(--color-brand-soft) text-(--color-brand-deep)"
+          className={`h-16 shrink-0 rounded-full px-9 font-display text-3xl font-extrabold tracking-wide uppercase ${
+            anyAdded ? "bg-(--color-brand) text-(--color-brand-ink)" : "border-2 border-(--color-line) bg-(--color-surface)"
           }`}>
           {anyAdded ? t.done : t.noThanks}
         </button>
@@ -61,16 +59,16 @@ export default function SuggestionPanel({
           return (
             <li key={p.id} className="shrink-0">
               <button onClick={() => onPick(p)} disabled={added}
-                className="flex h-32 w-96 overflow-hidden rounded-(--radius-card) border-[3px] border-(--color-line) bg-(--color-page) text-start disabled:opacity-80">
+                className="flex h-32 w-96 overflow-hidden rounded-[1.75rem] bg-(--color-page) text-start shadow-sm disabled:opacity-90">
                 {photoSlot ? <Photo src={p.imageUrl} /> : null}
                 <span className="flex min-w-0 flex-1 flex-col justify-between gap-1 p-3">
-                  <span className="line-clamp-2 font-display text-xl leading-tight font-bold break-words">{p.name}</span>
+                  <span className="line-clamp-2 font-display text-2xl leading-tight font-bold break-words">{p.name}</span>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="font-display text-xl font-bold tabular-nums text-(--color-price)">
+                    <span className="font-display text-2xl font-extrabold tabular-nums">
                       {p.pricing === "SIZE" ? t.chooseSize : money(p.price ?? 0, currency, locale)}
                     </span>
                     {added ? (
-                      <span className="flex items-center gap-1.5 rounded-full bg-(--color-brand-soft) px-3 py-1 text-lg font-bold text-(--color-brand-deep)">
+                      <span className="flex items-center gap-1.5 rounded-full bg-(--color-success) px-3 py-1 text-lg font-bold text-white">
                         <Icon name="check" className="size-5" strokeWidth={3} />
                         {t.added}
                       </span>

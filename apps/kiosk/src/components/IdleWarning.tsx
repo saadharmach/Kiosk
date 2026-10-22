@@ -30,15 +30,15 @@ export default function IdleWarning({
           <span className="font-display text-9xl font-bold tabular-nums">{secondsLeft}</span>
         </div>
 
-        <h1 className="mt-11 font-display text-6xl leading-tight font-bold">{t.idleTitle}</h1>
+        <h1 className="mt-11 font-display text-7xl leading-tight font-extrabold">{t.idleTitle}</h1>
         <p className="mt-5 text-3xl leading-snug text-(--color-ink-muted)">{t.idleText}</p>
 
         <button onClick={onContinue}
-          className="mt-12 min-h-30 w-full rounded-full bg-(--color-brand) font-display text-4xl font-bold text-(--color-brand-ink)">
+          className="mt-12 min-h-30 w-full rounded-full bg-(--color-brand) font-display text-5xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
           {t.keepOrdering}
         </button>
         <button onClick={onDiscard}
-          className="mt-5 px-8 py-6 font-display text-3xl font-bold text-(--color-danger)">
+          className="mt-5 px-8 py-6 font-display text-4xl font-bold tracking-wide text-(--color-danger) uppercase">
           {t.discard}
         </button>
       </div>
