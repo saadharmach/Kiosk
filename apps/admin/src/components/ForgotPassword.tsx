@@ -11,13 +11,13 @@ export default function ForgotPassword({ onBack }: { onBack: () => void }) {
   const [sent, setSent] = useState(false);
 
   return (
-    <div className="w-full max-w-sm rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-8">
-      <h1 className="text-2xl font-semibold">Forgot your password?</h1>
+    <div className="card w-full max-w-sm p-8">
+      <h1 className="text-[19px] font-bold">Forgot your password?</h1>
       {sent ? (
         <>
           <p role="status" className="mt-4 text-sm">If there is a platform account for <strong>{email.trim()}</strong>, we have emailed it a link to choose a new password. The link works once and expires in 24 hours.</p>
           <p className="mt-2 text-sm text-(--color-ink-muted)">Nothing arrived after a few minutes? Check the spam folder, or ask another super admin to send you a reset link.</p>
-          <button onClick={onBack} className="mt-6 text-sm underline">Back to sign in</button>
+          <button onClick={onBack} className="btn btn-ghost mt-4">Back to sign in</button>
         </>
       ) : (
         <form
@@ -37,7 +37,7 @@ export default function ForgotPassword({ onBack }: { onBack: () => void }) {
           <input id="forgot-email" type="email" required autoComplete="username" value={email} className={input + " mb-4"} onChange={(e) => setEmail(e.target.value)} />
           <div className="mb-4"><ErrorText message={error} /></div>
           <button type="submit" disabled={busy} className={primary + " w-full"}>{busy ? "Sending…" : "Send me a link"}</button>
-          <button type="button" onClick={onBack} className="mt-4 text-sm underline">Back to sign in</button>
+          <button type="button" onClick={onBack} className="btn btn-ghost mt-4">Back to sign in</button>
         </form>
       )}
     </div>

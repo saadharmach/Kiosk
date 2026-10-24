@@ -24,7 +24,7 @@ function NewRestaurantForm({ onCreated, onCancel }: { onCreated: (r: RestaurantR
           onCreated(await createRestaurant(body));
         } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
       }}
-      className="mb-6 rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5"
+      className="mb-6 card"
     >
       <h2 className="mb-4 text-lg font-medium">New restaurant</h2>
       <div className="grid gap-4 md:grid-cols-3">
@@ -75,10 +75,9 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="me-auto text-2xl font-semibold">Restaurants</h1>
-        <input type="search" aria-label="Search restaurants" placeholder="Search by name or address" value={q}
-          onChange={(e) => { setQ(e.target.value); setPage(1); }} className={input + " max-w-xs"} />
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <input type="search" aria-label="Search restaurants" placeholder="Search by name or address…" value={q}
+          onChange={(e) => { setQ(e.target.value); setPage(1); }} className={input + " min-w-52 flex-1"} />
         <select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={input + " max-w-40"}>
           <option value="">All statuses</option><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="ARCHIVED">Archived</option>
         </select>
@@ -93,9 +92,9 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
           {q || status ? "No restaurant matches." : "No restaurant yet."}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-          <table className="w-full text-start">
-            <thead className="bg-(--color-surface-2) text-sm text-(--color-ink-muted)">
+        <div className="table-wrap">
+          <table className="w-full text-start [&_tbody_tr:hover]:bg-(--color-info-soft)">
+            <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)">
               <tr className="text-start">
                 {["Restaurant", "Status", "City", "Orders", "Users", "Till link", "Last sync"].map((h) => (
                   <th key={h} className={`px-4 py-3 text-start font-medium ${PHONE_COLUMNS.includes(h) ? "" : "hidden md:table-cell"}`}>{h}</th>
@@ -104,7 +103,7 @@ export default function RestaurantsPage({ canWrite, onOpen }: { canWrite: boolea
             </thead>
             <tbody className="divide-y divide-(--color-line)">
               {data.items.map((r) => (
-                <tr key={r.id} className="hover:bg-(--color-surface-2)">
+                <tr key={r.id} className="hover:bg-(--color-page)">
                   <td className="px-4 py-3">
                     <button onClick={() => onOpen(r.id)} className="text-start font-medium underline-offset-2 hover:underline">{r.name}</button>
                     <div className="text-sm text-(--color-ink-muted)">/r/{r.slug}</div>

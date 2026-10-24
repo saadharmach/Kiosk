@@ -7,24 +7,29 @@ export default function AllergensPage({ slug }: { slug: string }) {
   const [rows, setRows] = useState<Allergen[] | null>(null);
   useEffect(() => { listAllergens(slug).then(setRows).catch(() => setRows([])); }, [slug]);
 
-  if (!rows) return <p className="text-(--color-ink-muted)">Loading…</p>;
+  if (!rows) return <p className="text-(--color-ink-muted)">Chargement…</p>;
   if (rows.length === 0) {
-    return <p className="text-(--color-ink-muted)">No allergens are configured in unTill for this restaurant.</p>;
+    return <p className="card text-(--color-ink-muted)">Aucun allergène n’est configuré dans unTill pour ce restaurant.</p>;
   }
 
   return (
-    <>
-      <p className="mb-4 text-sm text-(--color-ink-muted)">
-        Allergens come from unTill and are read-only here. Assign them to products from the product editor.
+    <div className="flex flex-col gap-3.5">
+      <p className="note note-info">
+        Les allergènes viennent d’unTill et ne se modifient pas ici. Attribuez-les aux articles depuis la fiche article.
       </p>
-      <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
-        {rows.map((a) => (
-          <li key={a.untillId} className="p-3">
-            <p className="font-medium">{a.name}</p>
-            {a.description ? <p className="text-sm text-(--color-ink-muted)">{a.description}</p> : null}
-          </li>
-        ))}
-      </ul>
-    </>
+      <div className="table-wrap">
+        <table className="table">
+          <thead><tr><th>Allergène</th><th>Description</th></tr></thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.untillId}>
+                <td className="font-bold">{a.name}</td>
+                <td className="text-(--color-ink-muted)">{a.description || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

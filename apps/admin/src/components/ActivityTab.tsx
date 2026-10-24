@@ -23,9 +23,9 @@ export default function ActivityTab({ id }: { id: string }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-(--color-ink-muted)">Who changed what. The data itself is not shown here.</p>
-      <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-        <table className="w-full text-sm">
-          <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["When", "Who", "What"].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
+      <div className="table-wrap">
+        <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+          <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["When", "Who", "What"].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-(--color-line)">
             {data.items.map((i) => (
               <tr key={i.id}>

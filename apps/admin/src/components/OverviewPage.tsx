@@ -5,11 +5,7 @@ import { getOverview, tabFor, type AttentionItem, type Overview, type Restaurant
 import { ErrorText, secondary } from "./ui";
 
 const LABEL: Record<Severity, string> = { problem: "Problem", warning: "Heads-up", setup: "Not finished" };
-const STYLE: Record<Severity, string> = {
-  problem: "bg-red-100 text-red-900",
-  warning: "bg-amber-100 text-amber-900",
-  setup: "bg-(--color-surface-2) text-(--color-ink-muted)",
-};
+const STYLE: Record<Severity, string> = { problem: "badge-err", warning: "badge-warn", setup: "badge-muted" };
 
 const readable = (action: string) => {
   const [what, ...rest] = action.split(".");
@@ -18,9 +14,9 @@ const readable = (action: string) => {
 
 function Tile({ label, value, note, tone }: { label: string; value: string | number; note?: string; tone?: "bad" | "good" }) {
   return (
-    <div className="rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5">
-      <p className="text-sm text-(--color-ink-muted)">{label}</p>
-      <p className={`mt-1 text-3xl font-semibold ${tone === "bad" ? "text-(--color-danger)" : tone === "good" ? "text-(--color-brand)" : ""}`}>{value}</p>
+    <div className="card">
+      <p className="text-[12.5px] text-(--color-ink-muted)">{label}</p>
+      <p className={`mt-1.5 text-[28px] leading-tight font-bold ${tone === "bad" ? "text-(--color-danger)" : tone === "good" ? "text-(--color-brand)" : ""}`}>{value}</p>
       {note ? <p className="mt-1 text-sm text-(--color-ink-muted)">{note}</p> : null}
     </div>
   );
@@ -45,10 +41,9 @@ export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: Re
   const problems = data?.attention.filter((a) => a.severity === "problem").length ?? 0;
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-center gap-4">
-        <h1 className="me-auto text-2xl font-semibold">Overview</h1>
-        {data ? <span className="text-sm text-(--color-ink-muted)">Updated {new Date(data.generatedAt).toLocaleTimeString()}</span> : null}
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-end gap-4">
+        {data ? <span className="flex items-center gap-1.5 text-[12.5px] text-(--color-ink-muted)"><span className="dot" />Updated {new Date(data.generatedAt).toLocaleTimeString()}</span> : null}
         <button onClick={load} disabled={busy} className={secondary}>{busy ? "Refreshing…" : "Refresh"}</button>
       </div>
       <ErrorText message={error} />
@@ -63,15 +58,15 @@ export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: Re
           </section>
 
           <section aria-label="Needs attention">
-            <h2 className="mb-3 text-lg font-medium">Needs attention</h2>
+            <h2 className="mb-2.5 text-[14.5px] font-bold">Needs attention</h2>
             {data.attention.length === 0 ? (
               <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-8 text-center text-(--color-ink-muted)">Everything looks fine.</p>
             ) : (
-              <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
+              <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)">
                 {data.attention.map((a: AttentionItem) => (
                   <li key={`${a.restaurantId}:${a.kind}`}>
-                    <button onClick={() => onOpen(a.restaurantId, tabFor(a.kind), a.kind === "ORDERS_FAILED" ? "FAILED" : a.kind === "ORDERS_STUCK" ? "PENDING,SENT" : undefined)} className="flex w-full items-start gap-4 p-4 text-start hover:bg-(--color-surface-2)">
-                      <span className={`mt-0.5 w-24 shrink-0 rounded-full px-2.5 py-0.5 text-center text-xs font-medium ${STYLE[a.severity]}`}>{LABEL[a.severity]}</span>
+                    <button onClick={() => onOpen(a.restaurantId, tabFor(a.kind), a.kind === "ORDERS_FAILED" ? "FAILED" : a.kind === "ORDERS_STUCK" ? "PENDING,SENT" : undefined)} className="flex w-full items-start gap-4 p-4 text-start hover:bg-(--color-page)">
+                      <span className={`badge mt-0.5 w-24 shrink-0 justify-center ${STYLE[a.severity]}`}>{LABEL[a.severity]}</span>
                       <span className="min-w-0 flex-1"><span className="font-medium">{a.name}</span><span className="block text-sm text-(--color-ink-muted)">{a.message}</span></span>
                       <span aria-hidden className="text-(--color-ink-muted)">→</span>
                     </button>
@@ -82,9 +77,9 @@ export default function OverviewPage({ onOpen }: { onOpen: (id: string, tab?: Re
           </section>
 
           <section aria-label="Recent activity">
-            <h2 className="mb-3 text-lg font-medium">Recent activity</h2>
+            <h2 className="mb-2.5 text-[14.5px] font-bold">Recent activity</h2>
             {data.recentActivity.length === 0 ? <p className="text-(--color-ink-muted)">Nothing yet.</p> : (
-              <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) text-sm">
+              <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface) text-sm">
                 {data.recentActivity.map((a) => (
                   <li key={a.id} className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
                     <span className="w-full shrink-0 text-(--color-ink-muted) sm:w-44">{new Date(a.at).toLocaleString()}</span>

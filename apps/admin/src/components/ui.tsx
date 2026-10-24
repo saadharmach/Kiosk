@@ -3,42 +3,43 @@
 import type { ReactNode } from "react";
 import { posState, type PosHealth, type PosState, type Status } from "@/lib/platform";
 
-export const input = "h-10 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3 disabled:opacity-60";
-export const primary = "h-10 rounded-lg bg-(--color-brand) px-5 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50";
-export const secondary = "h-10 rounded-lg border border-(--color-line) px-4 text-sm disabled:opacity-50";
+// The shared look (globals.css): one place to change a field or a button for every page.
+export const input = "field";
+export const primary = "btn btn-primary";
+export const secondary = "btn btn-secondary";
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm text-(--color-ink-muted)">{label}</span>
+      <span className="field-label">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-xs text-(--color-ink-muted)">{hint}</span> : null}
+      {hint ? <span className="field-hint">{hint}</span> : null}
     </label>
   );
 }
 
 const STATUS_STYLE: Record<Status, string> = {
-  ACTIVE: "bg-(--color-brand) text-(--color-brand-ink)",
-  SUSPENDED: "bg-amber-200 text-amber-950",
-  ARCHIVED: "bg-(--color-surface-2) text-(--color-ink-muted)",
+  ACTIVE: "badge-ok",
+  SUSPENDED: "badge-warn",
+  ARCHIVED: "badge-muted",
 };
 export const StatusBadge = ({ status }: { status: Status }) => (
-  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{status.toLowerCase()}</span>
+  <span className={`badge ${STATUS_STYLE[status]}`}>{status.charAt(0) + status.slice(1).toLowerCase()}</span>
 );
 
 const POS_LABEL: Record<PosState, [string, string]> = {
-  CONNECTED: ["Connected", "text-(--color-brand)"],
-  FAILING: ["Failing", "text-(--color-danger)"],
-  UNTESTED: ["Not tested", "text-(--color-ink-muted)"],
-  DISABLED: ["Disabled", "text-(--color-ink-muted)"],
-  NOT_SET_UP: ["Not set up", "text-(--color-ink-muted)"],
+  CONNECTED: ["Connected", "badge-ok"],
+  FAILING: ["Failing", "badge-err"],
+  UNTESTED: ["Not tested", "badge-muted"],
+  DISABLED: ["Disabled", "badge-muted"],
+  NOT_SET_UP: ["Not set up", "badge-muted"],
 };
 export function PosBadge({ health }: { health: PosHealth | null }) {
   const [label, tone] = POS_LABEL[posState(health)];
-  return <span className={`text-sm font-medium ${tone}`}>● {label}</span>;
+  return <span className={`badge ${tone}`}>unTill: {label}</span>;
 }
 
 export const ErrorText = ({ message }: { message: string | null }) =>
-  message ? <p role="alert" className="text-sm text-(--color-danger)">{message}</p> : null;
+  message ? <p role="alert" className="note note-err">{message}</p> : null;
 
 export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "never");

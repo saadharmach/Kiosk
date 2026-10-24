@@ -30,7 +30,7 @@ export async function request<T>(path: string, init?: RequestInit, retry = true)
   if (!res.ok) {
     const message =
       (Array.isArray(body?.message) ? body.message.join(", ") : body?.message) ??
-      `Request failed with ${res.status}`;
+      `La demande a échoué (${res.status}).`;
     throw new ApiError(message, res.status);
   }
   return body as T;
@@ -43,7 +43,7 @@ export async function login(slug: string, email: string, password: string) {
     body: JSON.stringify({ slug, email, password }),
   });
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(body?.message ?? "Sign in failed", res.status);
+  if (!res.ok) throw new ApiError(body?.message ?? "La connexion a échoué", res.status);
   setToken(body.accessToken);
   return body as { accessToken: string };
 }

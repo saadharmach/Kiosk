@@ -8,14 +8,14 @@ import {
 import { ErrorText, input, secondary, when } from "./ui";
 
 const TONE: Record<OrderStatus, string> = {
-  AWAITING_PAYMENT: "bg-violet-100 text-violet-900",
-  DRAFT: "bg-(--color-surface-2) text-(--color-ink-muted)",
-  PENDING: "bg-amber-100 text-amber-900",
-  SENT: "bg-sky-100 text-sky-900",
-  CONFIRMED: "bg-(--color-brand) text-(--color-brand-ink)",
-  PAID: "bg-(--color-surface-2) text-(--color-ink)",
-  FAILED: "bg-red-100 text-red-900",
-  CANCELLED: "bg-(--color-surface-2) text-(--color-ink-muted)",
+  AWAITING_PAYMENT: "badge-warn",
+  DRAFT: "badge-muted",
+  PENDING: "badge-warn",
+  SENT: "badge-info",
+  CONFIRMED: "badge-ok",
+  PAID: "badge-ok",
+  FAILED: "badge-err",
+  CANCELLED: "badge-muted",
 };
 const STATUS_HELP: Partial<Record<OrderStatus, string>> = {
   AWAITING_PAYMENT: "Paying by card at the borne: not sent to the till until the card terminal approves it.",
@@ -33,7 +33,7 @@ const FILTERS: [label: string, value: string][] = [
 ];
 
 const money = (n: number, c: string) => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n); } catch { return `${n.toFixed(2)} ${c}`; } };
-export const StatusPill = ({ s }: { s: OrderStatus }) => <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE[s]}`}>{s.toLowerCase()}</span>;
+export const StatusPill = ({ s }: { s: OrderStatus }) => <span className={`badge ${TONE[s]}`}>{(s.charAt(0) + s.slice(1).toLowerCase()).replace("_", " ")}</span>;
 
 function Detail({ id, orderId, canWrite, onChanged }: { id: string; orderId: string; canWrite: boolean; onChanged: () => void }) {
   const [d, setD] = useState<OrderDetail | null>(null);
@@ -52,7 +52,7 @@ function Detail({ id, orderId, canWrite, onChanged }: { id: string; orderId: str
   if (!d) return <div className="p-4"><ErrorText message={error} />{!error ? <p className="text-sm text-(--color-ink-muted)">Loading…</p> : null}</div>;
 
   return (
-    <div className="grid gap-6 bg-(--color-surface-2) p-5 lg:grid-cols-2">
+    <div className="grid gap-6 bg-(--color-page) p-5 lg:grid-cols-2">
       <div>
         <h3 className="mb-2 font-medium">What was ordered</h3>
         <ul className="space-y-1 text-sm">
@@ -76,7 +76,7 @@ function Detail({ id, orderId, canWrite, onChanged }: { id: string; orderId: str
             <dt className="text-(--color-ink-muted)">Confirmed</dt><dd>{when(d.confirmedAt)}</dd>
             {d.tpapi.correlationId ? <><dt className="text-(--color-ink-muted)">Trace id</dt><dd className="font-mono text-xs break-all">{d.tpapi.correlationId}</dd></> : null}
           </dl>
-          {d.tpapi.lastError ? <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">Last error: {d.tpapi.lastError}</p> : null}
+          {d.tpapi.lastError ? <p className="note note-err mt-2">Last error: {d.tpapi.lastError}</p> : null}
         </div>
 
         <div>
@@ -133,7 +133,7 @@ export default function OrdersTab({ id, canWrite, initialFilter }: { id: string;
         <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-1">
           {FILTERS.map(([label, value]) => (
             <button key={label} aria-pressed={filter === value} onClick={() => { setFilter(value); setPage(1); setOpenId(null); }}
-              className={`rounded-full px-3 py-1 text-sm ${filter === value ? "bg-(--color-brand) text-(--color-brand-ink)" : "border border-(--color-line) hover:bg-(--color-surface-2)"}`}>{label}</button>
+              className={`rounded-full px-3 py-1 text-sm ${filter === value ? "bg-(--color-brand) text-(--color-brand-ink)" : "border border-(--color-line) hover:bg-(--color-page)"}`}>{label}</button>
           ))}
         </div>
         <input type="search" aria-label="Search by reference" placeholder="Reference, e.g. K0-1001" value={search} className={input + " ms-auto max-w-56"}
@@ -144,13 +144,13 @@ export default function OrdersTab({ id, canWrite, initialFilter }: { id: string;
       {!data ? (error ? null : <p className="text-(--color-ink-muted)">Loading…</p>) : data.orders.length === 0 ? (
         <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-8 text-center text-(--color-ink-muted)">{filter || search ? "No order matches." : "No orders yet."}</p>
       ) : (
-        <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-          <table className="w-full text-sm">
-            <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["Order", "Status", "When", "Type", "Items", "Total", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
+        <div className="table-wrap">
+          <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+            <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["Order", "Status", "When", "Type", "Items", "Total", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-(--color-line)">
               {data.orders.map((o) => (
                 <Fragment key={o.id}>
-                  <tr className="hover:bg-(--color-surface-2)">
+                  <tr className="hover:bg-(--color-page)">
                     <td className="px-4 py-3 font-medium">{o.reference}{o.tpapiLastError ? <div className="max-w-xs truncate text-xs font-normal text-(--color-danger)" title={o.tpapiLastError}>{o.tpapiLastError}</div> : null}</td>
                     <td className="px-4 py-3"><StatusPill s={o.status} /></td>
                     <td className="px-4 py-3 whitespace-nowrap text-(--color-ink-muted)">{when(o.createdAt)}</td>

@@ -42,23 +42,23 @@ export default function AcceptInvite() {
 
   return (
     <main className="grid min-h-dvh place-items-center p-6">
-      <div className="w-full max-w-sm rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-8">
+      <div className="card w-full max-w-sm p-8">
         {done ? (
           <>
-            <h1 className="text-2xl font-semibold">Password saved</h1>
+            <h1 className="text-[19px] font-bold">Password saved</h1>
             <p className="mt-2 text-sm text-(--color-ink-muted)">You can now sign in with <strong>{info?.email}</strong>.</p>
             <a href="/" className={primary + " mt-6 inline-flex items-center"}>Go to sign in</a>
           </>
         ) : problem ? (
           <>
-            <h1 className="text-2xl font-semibold">Link not valid</h1>
+            <h1 className="text-[19px] font-bold">Link not valid</h1>
             <p role="alert" className="mt-2 text-sm text-(--color-danger)">{problem}</p>
             <p className="mt-4 text-sm text-(--color-ink-muted)">Links work once and expire. Ask whoever invited you to send a new one.</p>
           </>
         ) : !info ? <p className="text-(--color-ink-muted)">Loading…</p> : (
           <form onSubmit={submit} className="flex flex-col gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">{info.kind === "RESET" ? "Choose a new password" : "Welcome"}</h1>
+              <h1 className="text-[19px] font-bold">{info.kind === "RESET" ? "Choose a new password" : "Welcome"}</h1>
               <p className="mt-1 text-sm text-(--color-ink-muted)">{info.name ? `${info.name}, ` : ""}choose a password for <strong>{info.email}</strong> ({info.service}).</p>
             </div>
             <Field label="New password" hint="At least 12 characters."><input className={input} type="password" autoComplete="new-password" required minLength={12} value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} /></Field>

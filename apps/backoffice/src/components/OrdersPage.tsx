@@ -7,18 +7,18 @@ import {
   submitOrder, verifyOrder, when,
   type OrderDetail, type OrderPage, type OrderRow,
 } from "@/lib/orders";
+import { ORDER_STATUS, type OrderStatus } from "@/lib/dashboard";
 
-const field = "h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3";
-const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5";
-const lbl = "mb-1 block text-sm text-(--color-ink-muted)";
+const field = "field w-auto";
+const card = "card";
+const lbl = "field-label";
 
-/** Only FAILED and CANCELLED get colour. Everything else is normal progress. */
-function statusClass(s: string): string {
-  if (s === "FAILED") return "text-(--color-danger)";
-  if (s === "CANCELLED") return "text-(--color-ink-muted) line-through";
-  if (s === "CONFIRMED" || s === "PAID") return "font-medium";
-  return "text-(--color-ink-muted)";
+/** The order's state as a badge, in French. */
+function StatusBadge({ s }: { s: string }) {
+  const [label, badge] = ORDER_STATUS[s as OrderStatus] ?? [s, "badge-muted"];
+  return <span className={`badge ${badge}`}>{label}</span>;
 }
+const TYPE: Record<string, string> = { EAT_IN: "Sur place", TAKE_AWAY: "À emporter", DELIVERY: "Livraison" };
 
 export default function OrdersPage({ slug }: { slug: string }) {
   const [data, setData] = useState<OrderPage | null>(null);
@@ -65,110 +65,89 @@ export default function OrdersPage({ slug }: { slug: string }) {
   }
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-end gap-3">
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-end gap-2.5">
         <div>
-          <label className={lbl} htmlFor="o-status">Status</label>
+          <label className={lbl} htmlFor="o-status">Statut</label>
           <select id="o-status" className={field} value={status}
             onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
-            <option value="">All statuses</option>
-            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="">Tous les statuts</option>
+            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{ORDER_STATUS[s][0]}</option>)}
           </select>
         </div>
 
         <div className="min-w-48 flex-1">
-          <label className={lbl} htmlFor="o-ref">Reference</label>
-          <input id="o-ref" className={`${field} w-full`} value={reference}
+          <label className={lbl} htmlFor="o-ref">Référence</label>
+          <input id="o-ref" type="search" className="field" value={reference}
             placeholder="K0-0929"
             onChange={(e) => { setPage(1); setReference(e.target.value); }} />
         </div>
 
         <div>
-          <label className={lbl} htmlFor="o-from">From</label>
+          <label className={lbl} htmlFor="o-from">Du</label>
           <input id="o-from" type="date" className={field} value={from}
             onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
         </div>
 
         <div>
-          <label className={lbl} htmlFor="o-to">To</label>
+          <label className={lbl} htmlFor="o-to">Au</label>
           <input id="o-to" type="date" className={field} value={to}
             onChange={(e) => { setPage(1); setTo(e.target.value); }} />
         </div>
 
-        <button type="button" onClick={load}
-          className="h-10 rounded-lg border border-(--color-line) px-4">
-          Refresh
-        </button>
+        <button type="button" onClick={load} className="btn btn-secondary">Actualiser</button>
       </div>
 
-      {error ? <p className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
+      {error ? <p role="alert" className="note note-err">{error}</p> : null}
 
       {!data ? (
-        <p className="text-(--color-ink-muted)">Loading…</p>
+        <p className="text-(--color-ink-muted)">Chargement…</p>
       ) : data.orders.length === 0 ? (
-        <div className={card}>
-          <p className="text-(--color-ink-muted)">
-            No orders match these filters. Clear the dates or the reference to see everything.
-          </p>
-        </div>
+        <p className="card text-(--color-ink-muted)">
+          Aucune commande ne correspond à ces filtres. Effacez les dates ou la référence pour tout voir.
+        </p>
       ) : (
-        <>
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-start text-(--color-ink-muted)">
-              <tr className="border-b border-(--color-line)">
-                <th className="py-2 text-start font-normal">Reference</th>
-                <th className="py-2 text-start font-normal">Status</th>
-                <th className="hidden py-2 text-start font-normal md:table-cell">Type</th>
-                <th className="hidden py-2 text-end font-normal md:table-cell">Table</th>
-                <th className="hidden py-2 text-end font-normal md:table-cell">Items</th>
-                <th className="py-2 ps-3 text-end font-normal">Total</th>
-                <th className="hidden py-2 ps-3 text-start font-normal md:table-cell">Created</th>
+        <div className="table-wrap">
+          <table className="table min-w-[640px]">
+            <thead>
+              <tr>
+                <th>Référence</th>
+                <th>Statut</th>
+                <th>Type</th>
+                <th className="text-end">Table</th>
+                <th className="text-end">Articles</th>
+                <th className="text-end">Total</th>
+                <th>Créée</th>
               </tr>
             </thead>
             <tbody>
               {data.orders.map((o: OrderRow) => (
-                <tr key={o.id}
-                  onClick={() => setOpenId(o.id)}
-                  className="cursor-pointer border-b border-(--color-line) hover:bg-(--color-surface-2)">
-                  <td className="py-2 pe-3">
-                    <span className="font-mono whitespace-nowrap">{o.reference}</span>
-                    {/* Phone: the time under the reference (its own column is hidden). */}
-                    <span className="block text-xs text-(--color-ink-muted) md:hidden">{when(o.createdAt)}</span>
-                  </td>
-                  <td className={`py-2 ${statusClass(o.status)}`}>
-                    {o.status}
+                <tr key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer">
+                  <td className="font-bold whitespace-nowrap">{o.reference}</td>
+                  <td>
+                    <StatusBadge s={o.status} />
                     {o.tpapiLastError ? (
-                      <span className="ms-2 text-xs text-(--color-ink-muted)">
-                        {o.tpapiLastError.slice(0, 40)}
-                      </span>
+                      <span className="ms-2 text-[12px] text-(--color-ink-muted)">{o.tpapiLastError.slice(0, 40)}</span>
                     ) : null}
                   </td>
-                  <td className="hidden py-2 md:table-cell">{o.orderType}</td>
-                  <td className="hidden py-2 text-end md:table-cell">{o.tableNumber ?? "—"}</td>
-                  <td className="hidden py-2 text-end md:table-cell">{o.itemCount}</td>
-                  <td className="py-2 ps-3 text-end whitespace-nowrap">{money(o.total, o.currency)}</td>
-                  <td className="hidden py-2 ps-3 md:table-cell">{when(o.createdAt)}</td>
+                  <td>{TYPE[o.orderType] ?? o.orderType}</td>
+                  <td className="text-end tabular-nums">{o.tableNumber ?? "—"}</td>
+                  <td className="text-end tabular-nums">{o.itemCount}</td>
+                  <td className="text-end whitespace-nowrap tabular-nums">{money(o.total, o.currency)}</td>
+                  <td className="whitespace-nowrap text-(--color-ink-muted)">{when(o.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="flex items-center justify-between gap-3 border-t border-(--color-line) px-3.5 py-2.5 text-[12.5px] text-(--color-ink-muted)">
+            <span>{data.total} commande{data.total === 1 ? "" : "s"}</span>
+            <span className="flex items-center gap-2">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn btn-ghost btn-sm">Précédente</button>
+              Page {data.page} / {data.pages}
+              <button type="button" disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)} className="btn btn-ghost btn-sm">Suivante</button>
+            </span>
           </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-(--color-ink-muted)">
-            <button type="button" disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="h-9 rounded-lg border border-(--color-line) px-3 disabled:opacity-40">
-              Previous
-            </button>
-            <span>Page {data.page} of {data.pages} · {data.total} orders</span>
-            <button type="button" disabled={page >= data.pages}
-              onClick={() => setPage((p) => p + 1)}
-              className="h-9 rounded-lg border border-(--color-line) px-3 disabled:opacity-40">
-              Next
-            </button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -210,21 +189,21 @@ function OrderDetailView({
     setPrintNote(null);
     return act(async () => {
       await reprintOrder(slug, id);
-      setPrintNote("Ticket queued. It prints as soon as the print helper picks it up.");
+      setPrintNote("Ticket en file d’attente. Il s’imprime dès que l’application NEXBORN Helper le récupère.");
     });
   };
 
   const cancel = () => {
-    const reason = window.prompt("Reason for cancelling (optional)") ?? undefined;
+    const reason = window.prompt("Motif de l’annulation (facultatif)") ?? undefined;
     return act(() => cancelOrder(slug, id, reason || undefined));
   };
 
   if (!o) {
     return (
       <div>
-        <button type="button" onClick={onBack} className="mb-4 underline">Back to orders</button>
-        {error ? <p className="text-(--color-danger)">{error}</p>
-               : <p className="text-(--color-ink-muted)">Loading…</p>}
+        <button type="button" onClick={onBack} className="btn btn-ghost mb-4">← Retour aux commandes</button>
+        {error ? <p className="note note-err">{error}</p>
+               : <p className="text-(--color-ink-muted)">Chargement…</p>}
       </div>
     );
   }
@@ -236,79 +215,64 @@ function OrderDetailView({
   const canSend = o.status === "PENDING";
   const canVerify = o.status === "SENT";
   return (
-    <div className="max-w-3xl">
-      <button type="button" onClick={onBack} className="mb-4 underline">Back to orders</button>
+    <div className="flex max-w-3xl flex-col gap-4">
+      <button type="button" onClick={onBack} className="btn btn-ghost self-start">← Retour aux commandes</button>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-mono text-xl">{o.reference}</h2>
-          <p className={`text-sm ${statusClass(o.status)}`}>{o.status}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-[19px] font-bold">{o.reference}</h2>
+          <StatusBadge s={o.status} />
         </div>
-        <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={printTicket}
-            className="h-10 rounded-lg border border-(--color-line) px-4 disabled:opacity-50">
-            Print ticket
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={printTicket} className="btn btn-secondary">Imprimer le ticket</button>
           {canSend ? (
-            <button type="button" disabled={busy} onClick={() => act(() => submitOrder(slug, id))}
-              className="h-10 rounded-lg bg-(--color-brand) px-4 font-medium text-(--color-brand-ink) disabled:opacity-50">
-              Send now
-            </button>
+            <button type="button" disabled={busy} onClick={() => act(() => submitOrder(slug, id))} className="btn btn-primary">Envoyer maintenant</button>
           ) : null}
           {canVerify ? (
-            <button type="button" disabled={busy} onClick={() => act(() => verifyOrder(slug, id))}
-              className="h-10 rounded-lg border border-(--color-line) px-4 disabled:opacity-50">
-              Check with unTill
-            </button>
+            <button type="button" disabled={busy} onClick={() => act(() => verifyOrder(slug, id))} className="btn btn-secondary">Vérifier avec unTill</button>
           ) : null}
           {canRetry ? (
-            <button type="button" disabled={busy} onClick={() => act(() => retryOrder(slug, id))}
-              className="h-10 rounded-lg bg-(--color-brand) px-4 font-medium text-(--color-brand-ink) disabled:opacity-50">
-              Send again
-            </button>
+            <button type="button" disabled={busy} onClick={() => act(() => retryOrder(slug, id))} className="btn btn-primary">Renvoyer</button>
           ) : null}
           {canCancel ? (
-            <button type="button" disabled={busy} onClick={cancel}
-              className="h-10 rounded-lg border border-(--color-danger) px-4 text-(--color-danger) disabled:opacity-50">
-              Cancel order
-            </button>
+            <button type="button" disabled={busy} onClick={cancel} className="btn btn-danger">Annuler la commande</button>
           ) : null}
         </div>
       </div>
 
-      {error ? <p className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
-      {printNote ? <p className="mb-4 text-sm text-green-700" role="status">{printNote}</p> : null}
+      {error ? <p role="alert" className="note note-err">{error}</p> : null}
+      {printNote ? <p className="note note-ok" role="status">{printNote}</p> : null}
 
-      <div className={`mb-6 ${card}`}>
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Pair k="Type" v={o.orderType} />
+      <div className={card}>
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Pair k="Type" v={TYPE[o.orderType] ?? o.orderType} />
           <Pair k="Table" v={`${o.tableNumber ?? "—"}${o.tablePart ? ` ${o.tablePart}` : ""}`} />
-          <Pair k="Covers" v={o.covers ?? "—"} />
-          <Pair k="Business date" v={String(o.businessDate).slice(0, 10)} />
-          <Pair k="Created" v={when(o.createdAt)} />
-          <Pair k="Sent" v={when(o.sentAt)} />
-          <Pair k="Confirmed" v={when(o.confirmedAt)} />
-          <Pair k="Cancelled" v={when(o.cancelledAt)} />
+          <Pair k="Couverts" v={o.covers ?? "—"} />
+          <Pair k="Journée" v={String(o.businessDate).slice(0, 10)} />
+          <Pair k="Créée" v={when(o.createdAt)} />
+          <Pair k="Envoyée" v={when(o.sentAt)} />
+          <Pair k="Confirmée" v={when(o.confirmedAt)} />
+          <Pair k="Annulée" v={when(o.cancelledAt)} />
         </dl>
       </div>
 
       {o.tpapi.lastError || o.tpapi.returnCode !== null || o.tpapi.attempts > 1 ? (
-        <div className={`mb-6 ${card}`}>
-          <p className="mb-2 font-medium">unTill</p>
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <Pair k="Attempts" v={o.tpapi.attempts} />
-            <Pair k="Return code" v={o.tpapi.returnCode ?? "—"} />
-            <Pair k="Correlation" v={o.tpapi.correlationId ?? "—"} />
+        <div className={card}>
+          <h3 className="card-title">unTill</h3>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Pair k="Tentatives" v={o.tpapi.attempts} />
+            <Pair k="Code retour" v={o.tpapi.returnCode ?? "—"} />
+            <Pair k="Corrélation" v={o.tpapi.correlationId ?? "—"} />
           </dl>
           {o.tpapi.lastError ? (
-            <p className="mt-3 text-sm text-(--color-danger)">{o.tpapi.lastError}</p>
+            <p className="note note-err mt-3">{o.tpapi.lastError}</p>
           ) : null}
         </div>
       ) : null}
 
-      <div className={`mb-6 ${card}`}>
-        <p className="mb-3 font-medium">Items</p>
-        <table className="w-full text-sm">
+      <div className={card}>
+        <h3 className="card-title">Articles</h3>
+        <table className="w-full">
           <tbody>
             {o.items.map((i) => (
               <tr key={`${i.lineNumber}-${i.parentLineNumber ?? "p"}`}
@@ -325,28 +289,28 @@ function OrderDetailView({
             ))}
           </tbody>
           <tfoot>
-            <tr><td colSpan={3} className="pt-3 text-end text-(--color-ink-muted)">Subtotal</td>
+            <tr><td colSpan={3} className="pt-3 text-end text-(--color-ink-muted)">Sous-total</td>
               <td className="pt-3 text-end tabular-nums">{o.subtotal.toFixed(2)}</td></tr>
-            <tr><td colSpan={3} className="text-end text-(--color-ink-muted)">Tax</td>
+            <tr><td colSpan={3} className="text-end text-(--color-ink-muted)">TVA</td>
               <td className="text-end tabular-nums">{o.taxTotal.toFixed(2)}</td></tr>
-            <tr><td colSpan={3} className="text-end font-medium">Total</td>
-              <td className="text-end font-medium tabular-nums">{money(o.total, o.currency)}</td></tr>
+            <tr><td colSpan={3} className="text-end font-bold">Total</td>
+              <td className="text-end font-bold tabular-nums">{money(o.total, o.currency)}</td></tr>
           </tfoot>
         </table>
       </div>
 
       <div className={card}>
-        <p className="mb-3 font-medium">History</p>
+        <h3 className="card-title">Historique</h3>
         {o.history.length === 0 ? (
-          <p className="text-sm text-(--color-ink-muted)">Nothing recorded.</p>
+          <p className="text-(--color-ink-muted)">Rien d’enregistré.</p>
         ) : (
-          <ol className="space-y-2 text-sm">
+          <ol className="space-y-2">
             {o.history.map((h, idx) => (
               <li key={h.id ?? idx} className="flex flex-wrap gap-x-3">
                 <span className="text-(--color-ink-muted)">{when(h.createdAt ?? h.at)}</span>
-                <span>
-                  {h.fromStatus ? `${h.fromStatus} → ` : ""}
-                  {h.toStatus ?? h.status ?? "—"}
+                <span className="flex items-center gap-1.5">
+                  {h.fromStatus ? <><StatusBadge s={h.fromStatus} />→</> : null}
+                  {h.toStatus ?? h.status ? <StatusBadge s={(h.toStatus ?? h.status)!} /> : "—"}
                 </span>
                 {h.actor || h.actorType ? (
                   <span className="text-(--color-ink-muted)">{h.actor ?? h.actorType}</span>
@@ -364,8 +328,8 @@ function OrderDetailView({
 function Pair({ k, v }: { k: string; v: string | number }) {
   return (
     <div>
-      <dt className="text-(--color-ink-muted)">{k}</dt>
-      <dd>{v}</dd>
+      <dt className="text-[12.5px] text-(--color-ink-muted)">{k}</dt>
+      <dd className="font-semibold">{v}</dd>
     </div>
   );
 }

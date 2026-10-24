@@ -4,9 +4,9 @@ export const ORDER_TYPES = ["EAT_IN", "TAKE_AWAY", "DELIVERY"] as const;
 export type OrderTypeName = (typeof ORDER_TYPES)[number];
 
 export const ORDER_TYPE_LABEL: Record<OrderTypeName, string> = {
-  EAT_IN: "Eat in",
-  TAKE_AWAY: "Take away",
-  DELIVERY: "Delivery",
+  EAT_IN: "Sur place",
+  TAKE_AWAY: "À emporter",
+  DELIVERY: "Livraison",
 };
 
 export interface TableRange { fromTable: number; toTable: number }

@@ -4,7 +4,7 @@ import { requireOrderable, requireSubscribed } from "./availability.js";
 import { isSubscribed, todayIn, ymd } from "../common/subscription.js";
 import { tillReachable } from "../common/till-health.js";
 import { findCardTerminal } from "../payments/payments.service.js";
-import { resolveScreen } from "./screen.js";
+import { noteHeartbeat, resolveScreen } from "./screen.js";
 import { StorageService, isVideoPath } from "../common/storage.service.js";
 import { readSlides } from "../common/welcome-slides.js";
 import { pickLocalized, readLocalizedMap, resolveLocale } from "../common/locale.js";
@@ -30,12 +30,14 @@ export class CatalogService {
    * When anything the kiosk shows last changed. Kiosks ask every few seconds and reload when it moves. It answers
    * for a switched-off restaurant too, so a kiosk notices when it is switched back on.
    */
-  async version(slug: string) {
+  async version(slug: string, screen?: string) {
     const r = await this.prisma.restaurant.findUnique({
       where: { slug },
       select: { id: true, contentChangedAt: true, timezone: true, tpapi: { select: { isEnabled: true, pingFailures: true } } },
     });
     if (!r) throw new NotFoundException("Restaurant not found");
+    // The borne's last contact, for the back office's on line / off line. Never in the way of the answer.
+    void noteHeartbeat(this.prisma, r.id, screen).catch(() => undefined);
     // Whether a subscription period runs, and whether the till answers, are part of it: nobody saves anything when
     // they change, yet the kiosk must notice.
     const tillOk = tillReachable(r.tpapi);

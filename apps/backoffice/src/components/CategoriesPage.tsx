@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LOCALES, clearCategoryImage, listCategories, setCategoryOrder, updateCategory, uploadCategoryImage,
   type AdminCategory, type I18n, type Locale } from "@/lib/catalog";
 
-const LABEL: Record<Locale, string> = { fr: "Français", en: "English", ar: "العربية" };
+const LABEL: Record<Locale, string> = { fr: "Français", en: "Anglais", ar: "Arabe" };
 
 function Row({ slug, row, onSaved }: { slug: string; row: AdminCategory; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
@@ -39,81 +39,76 @@ function Row({ slug, row, onSaved }: { slug: string; row: AdminCategory; onSaved
   };
 
   return (
-    <li className="p-3">
+    <li className="px-3.5 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--color-surface-2)">
+        <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-(--color-line) bg-(--color-page)">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {row.imageUrl ? <img src={row.imageUrl} alt="" className="size-full object-cover" /> : null}
         </span>
         {/* Phone: the name has the first line; the languages and the button go to a second one. */}
         <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
-          <p className="truncate font-medium">{row.displayName?.fr ?? row.posName}</p>
-          <p className="truncate text-sm text-(--color-ink-muted)">{row.posName}</p>
+          <p className="flex items-center gap-2 font-bold">
+            <span className="truncate">{row.displayName?.fr ?? row.posName}</span>
+            {!row.isVisible ? <span className="badge badge-err">Masquée</span> : null}
+          </p>
+          <p className="truncate text-[12.5px] text-(--color-ink-muted)">unTill : {row.posName}</p>
         </div>
         <div className="flex w-full items-center gap-4 sm:w-auto">
         <div className="flex flex-1 gap-1 sm:flex-none">
           {LOCALES.map((l) => (
-            <span key={l} className={`rounded px-1.5 py-0.5 text-xs uppercase ${
-              (row.displayName?.[l] ?? "").trim()
-                ? "bg-(--color-brand) text-(--color-brand-ink)"
-                : "bg-(--color-surface-2) text-(--color-ink-muted)"
-            }`}>{l}</span>
+            <span key={l} className={`badge px-2 uppercase ${(row.displayName?.[l] ?? "").trim() ? "badge-info" : "badge-muted"}`}>{l}</span>
           ))}
         </div>
-        <button onClick={() => setOpen(!open)} aria-expanded={open}
-          className="rounded-lg border border-(--color-line) px-4 py-2 text-sm">
-          {open ? "Close" : "Edit"}
+        <button onClick={() => setOpen(!open)} aria-expanded={open} className="btn btn-secondary btn-sm">
+          {open ? "Fermer" : "Modifier"}
         </button>
         </div>
       </div>
 
       {open ? (
-        <div className="mt-4 rounded-lg bg-(--color-surface-2) p-4">
+        <div className="mt-3 rounded-(--radius-card) border border-(--color-line) bg-(--color-page) p-4">
           <div className="grid gap-3 md:grid-cols-3">
             {LOCALES.map((l) => (
               <div key={l}>
-                <label className="mb-1 block text-xs text-(--color-ink-muted)" htmlFor={`${row.untillId}-${l}`}>
-                  {LABEL[l]}
-                </label>
+                <label className="field-label" htmlFor={`${row.untillId}-${l}`}>Nom · {LABEL[l]}</label>
                 <input id={`${row.untillId}-${l}`} value={name[l] ?? ""} dir={l === "ar" ? "rtl" : "ltr"}
                   placeholder={row.posName}
-                  onChange={(e) => setName({ ...name, [l]: e.target.value })}
-                  className="h-10 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
+                  onChange={(e) => setName({ ...name, [l]: e.target.value })} className="field" />
               </div>
             ))}
           </div>
           <div className="mt-4">
-            <p className="mb-2 text-xs text-(--color-ink-muted)">
-              Photo, shown beside the name in the kiosk&apos;s category list. A square photo works best. Saved as soon as it is uploaded.
+            <p className="field-label">Photo</p>
+            <p className="mb-2 text-[12.5px] text-(--color-ink-muted)">
+              Affichée à côté du nom dans la liste des catégories de la borne. Une photo carrée rend le mieux. Enregistrée dès l’envoi.
             </p>
             <div className="flex flex-wrap items-center gap-4">
               {row.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={row.imageUrl} alt="" className="size-20 rounded-lg object-cover" />
-              ) : <span className="text-sm text-(--color-ink-muted)">No photo yet</span>}
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} className="text-sm"
-                aria-label={`Photo for ${row.posName}`}
+                <img src={row.imageUrl} alt="" className="size-20 rounded-(--radius-card) border border-(--color-line) object-cover" />
+              ) : <span className="text-(--color-ink-muted)">Pas encore de photo</span>}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} className="text-[13px]"
+                aria-label={`Photo de ${row.posName}`}
                 onChange={(e) => {
                   const file = e.target.files?.[0]; e.target.value = "";
                   if (file) void photo(() => uploadCategoryImage(slug, row.scope, row.untillId, file));
                 }} />
               {row.imageUrl ? (
-                <button type="button" disabled={busy} className="text-sm text-(--color-danger) underline"
+                <button type="button" disabled={busy} className="btn btn-ghost btn-sm text-(--color-danger)"
                   onClick={() => void photo(() => clearCategoryImage(slug, row.scope, row.untillId))}>
-                  Remove photo
+                  Retirer la photo
                 </button>
               ) : null}
             </div>
-            {error ? <p role="alert" className="mt-2 text-sm text-(--color-danger)">{error}</p> : null}
+            {error ? <p role="alert" className="note note-err mt-2">{error}</p> : null}
           </div>
           <div className="mt-4 flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
-              <span>Show on the kiosk</span>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} className="size-4 accent-(--color-brand)" />
+              <span>Afficher sur la borne</span>
             </label>
-            <button onClick={save} disabled={busy}
-              className="ms-auto h-10 rounded-lg bg-(--color-brand) px-5 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50">
-              {busy ? "Saving…" : "Save"}
+            <button onClick={save} disabled={busy} className="btn btn-primary ms-auto">
+              {busy ? "Enregistrement…" : "Enregistrer"}
             </button>
           </div>
         </div>
@@ -174,41 +169,40 @@ function OrderEditor({ slug, rows, onDone }: {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <button onClick={save} disabled={busy || !changed}
-          className="h-10 rounded-lg bg-(--color-brand) px-5 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50">
-          {busy ? "Saving…" : "Save order"}
+        <button onClick={save} disabled={busy || !changed} className="btn btn-primary">
+          {busy ? "Enregistrement…" : "Enregistrer l’ordre"}
         </button>
-        <button onClick={() => onDone(null)} disabled={busy} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">Cancel</button>
+        <button onClick={() => onDone(null)} disabled={busy} className="btn btn-secondary">Annuler</button>
         <button onClick={() => setList([...list].sort((a, b) => a.untillNumber - b.untillNumber || a.posName.localeCompare(b.posName)))}
-          disabled={busy} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">
-          unTill&apos;s order
+          disabled={busy} className="btn btn-ghost">
+          Ordre d’unTill
         </button>
-        <span className="text-sm text-(--color-ink-muted)">Drag a row by ⠿, or use the arrows. The kiosk changes when you save.</span>
+        <span className="text-[12.5px] text-(--color-ink-muted)">Glissez une ligne par ⠿, ou utilisez les flèches. La borne change à l’enregistrement.</span>
       </div>
-      {error ? <p role="alert" className="mb-3 text-sm text-(--color-danger)">{error}</p> : null}
-      <ol className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)"
+      {error ? <p role="alert" className="note note-err mb-3">{error}</p> : null}
+      <ol className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)"
         onPointerMove={onPointerMove} onPointerUp={() => setDragging(null)} onPointerCancel={() => setDragging(null)}>
         {list.map((r, i) => (
           <li key={r.untillId} ref={(el) => { if (el) items.current.set(r.untillId, el); else items.current.delete(r.untillId); }}
-            className={`flex items-center gap-3 p-2 ${dragging === r.untillId ? "bg-(--color-surface-2) shadow-md" : ""} ${r.isVisible ? "" : "opacity-60"}`}>
-            <button type="button" aria-label={`Drag ${r.posName}`} title="Drag to move"
+            className={`flex items-center gap-3 p-2 ${dragging === r.untillId ? "bg-(--color-info-soft) shadow-md" : ""} ${r.isVisible ? "" : "opacity-60"}`}>
+            <button type="button" aria-label={`Déplacer ${r.posName}`} title="Glisser pour déplacer"
               className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded text-xl text-(--color-ink-muted) select-none active:cursor-grabbing"
               onPointerDown={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); setDragging(r.untillId); }}>
               ⠿
             </button>
             <span className="w-7 shrink-0 text-end text-sm text-(--color-ink-muted) tabular-nums">{i + 1}</span>
-            <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--color-surface-2)">
+            <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-(--color-line) bg-(--color-page)">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {r.imageUrl ? <img src={r.imageUrl} alt="" className="size-full object-cover" /> : null}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{r.displayName?.fr ?? r.posName}</span>
-              {!r.isVisible ? <span className="text-xs text-(--color-ink-muted)">hidden on the kiosk</span> : null}
+              <span className="block truncate font-semibold">{r.displayName?.fr ?? r.posName}</span>
+              {!r.isVisible ? <span className="text-[12px] text-(--color-ink-muted)">masquée sur la borne</span> : null}
             </span>
-            <button type="button" aria-label={`Move ${r.posName} up`} disabled={i === 0 || busy} onClick={() => move(i, i - 1)}
-              className="h-10 w-10 shrink-0 rounded-lg border border-(--color-line) disabled:opacity-30">↑</button>
-            <button type="button" aria-label={`Move ${r.posName} down`} disabled={i === list.length - 1 || busy} onClick={() => move(i, i + 1)}
-              className="h-10 w-10 shrink-0 rounded-lg border border-(--color-line) disabled:opacity-30">↓</button>
+            <button type="button" aria-label={`Monter ${r.posName}`} disabled={i === 0 || busy} onClick={() => move(i, i - 1)}
+              className="btn btn-secondary btn-sm w-9">↑</button>
+            <button type="button" aria-label={`Descendre ${r.posName}`} disabled={i === list.length - 1 || busy} onClick={() => move(i, i + 1)}
+              className="btn btn-secondary btn-sm w-9">↓</button>
           </li>
         ))}
       </ol>
@@ -223,31 +217,28 @@ export default function CategoriesPage({ slug }: { slug: string }) {
   const [ordering, setOrdering] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  if (!data) return <p className="text-(--color-ink-muted)">Loading…</p>;
+  if (!data) return <p className="text-(--color-ink-muted)">Chargement…</p>;
 
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-medium">Departments</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-(--color-ink-muted)">
+            Les catégories listées à gauche du menu de la borne, dans cet ordre. Masquez-en une pour la cacher avec tous ses articles.
+          </p>
           {!ordering ? (
-            <button onClick={() => { setOrdering(true); setNotice(null); }} className="h-10 rounded-lg border border-(--color-line) px-4 text-sm">
-              Change order
-            </button>
+            <button onClick={() => { setOrdering(true); setNotice(null); }} className="btn btn-secondary">Changer l’ordre</button>
           ) : null}
         </div>
-        <p className="mb-3 text-sm text-(--color-ink-muted)">
-          The categories listed on the left of the kiosk menu, in this order. Switch one off to hide it and all its products.
-        </p>
-        {notice ? <p role="status" className="mb-3 text-sm text-green-700">{notice}</p> : null}
+        {notice ? <p role="status" className="note note-ok mb-3">{notice}</p> : null}
         {ordering ? (
           <OrderEditor slug={slug} rows={data.departments} onDone={(saved) => {
             // The answer to the save is the new list: shown at once, no second request to wait for.
-            if (saved) { setData(saved); setNotice("Order saved. The kiosks show it within a few seconds."); }
+            if (saved) { setData(saved); setNotice("Ordre enregistré. Les bornes l’affichent dans quelques secondes."); }
             setOrdering(false);
           }} />
         ) : (
-          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
+          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)">
             {data.departments.map((d) => <Row key={d.untillId} slug={slug} row={d} onSaved={load} />)}
           </ul>
         )}

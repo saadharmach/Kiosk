@@ -14,10 +14,11 @@ const SETTING_KEYS = [
   "showAllergens", "showProductImages", "ticketFooterText",
 ] as const;
 
-const field = "h-10 w-full rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3";
-const lbl = "mb-1 block text-sm text-(--color-ink-muted)";
-const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5";
-const hint = "mt-1 text-xs text-(--color-ink-muted)";
+const field = "field";
+const lbl = "field-label";
+const card = "card";
+const hint = "mt-1 text-[12.5px] text-(--color-ink-muted)";
+const check = "size-4 accent-(--color-brand)";
 
 /** An empty box means "not set", which is null, not 0. */
 function numOrNull(v: string): number | null {
@@ -87,7 +88,7 @@ export default function SettingsPage({ slug }: { slug: string }) {
       orderTypes.forEach((d, i) => {
         if (JSON.stringify(d) === JSON.stringify(saved.orderTypes[i])) return;
         if (!d.salesAreaId) {
-          throw new Error(`${ORDER_TYPE_LABEL[d.orderType]}: first choose its Sales area (the first box of its card), then save. If you do not want to offer it, untick \"Offered on the kiosk\" and leave it as it was.`);
+          throw new Error(`${ORDER_TYPE_LABEL[d.orderType]} : choisissez d’abord sa zone de vente (la première case de sa carte), puis enregistrez. Si vous ne voulez pas le proposer, décochez « Proposé sur la borne » et laissez-le tel quel.`);
         }
         changed.push({
           orderType: d.orderType,
@@ -114,8 +115,8 @@ export default function SettingsPage({ slug }: { slug: string }) {
 
   if (!settings || !saved) {
     return error
-      ? <p className="text-(--color-danger)">{error}</p>
-      : <p className="text-(--color-ink-muted)">Loading…</p>;
+      ? <p className="note note-err">{error}</p>
+      : <p className="text-(--color-ink-muted)">Chargement…</p>;
   }
 
   const errors = saved.warnings.filter((w) => w.severity === "error");
@@ -124,26 +125,26 @@ export default function SettingsPage({ slug }: { slug: string }) {
     rs.map((x) => (x.fromTable === x.toTable ? `${x.fromTable}` : `${x.fromTable}–${x.toTable}`)).join(", ");
 
   return (
-    <div className="max-w-3xl pb-24">
+    <div className="flex max-w-3xl flex-col gap-4 pb-24">
       {errors.length > 0 ? (
-        <div role="alert" className="mb-6 rounded-(--radius-card) border-2 border-(--color-danger) bg-(--color-surface-2) p-5">
-          <p className="mb-2 font-semibold text-(--color-danger)">Must be fixed: customers cannot order this way</p>
-          <ul className="list-disc space-y-1 ps-5 text-sm">
+        <div role="alert" className="note note-err">
+          <p className="mb-1 font-bold">À corriger : les clients ne peuvent pas commander ainsi</p>
+          <ul className="list-disc space-y-1 ps-5">
             {errors.map((w, i) => <li key={`${w.code}-${i}`}>{w.message}</li>)}
           </ul>
         </div>
       ) : null}
       {others.length > 0 ? (
-        <div className={`mb-6 ${card}`}>
-          <p className="mb-2 font-medium">Worth checking</p>
-          <ul className="list-disc space-y-1 ps-5 text-sm text-(--color-ink-muted)">
+        <div className="note note-warn">
+          <p className="mb-1 font-bold">À vérifier</p>
+          <ul className="list-disc space-y-1 ps-5">
             {others.map((w, i) => <li key={`${w.code}-${i}`}>{w.message}</li>)}
           </ul>
         </div>
       ) : null}
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-medium">Order types</h2>
+      <section>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Modes de commande</h2>
         <div className="space-y-4">
           {orderTypes.map((ot, i) => {
             const asksCustomer = ot.orderType === "EAT_IN" && settings.askTableForEatIn;
@@ -152,71 +153,73 @@ export default function SettingsPage({ slug }: { slug: string }) {
             const area = saved.salesAreas.find((a) => a.untillId === ot.salesAreaId);
             const areaGone = Boolean(ot.salesAreaId) && !area;
             return (
-              <div key={ot.orderType} className={`${card} ${mine.length ? "border-2 border-(--color-danger)" : ""}`}>
+              <div key={ot.orderType} className={`${card} ${mine.length ? "border-(--color-danger)" : ""}`}>
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <h3 className="font-medium">{ORDER_TYPE_LABEL[ot.orderType]}</h3>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={ot.isEnabled}
+                  <h3 className="flex items-center gap-2 font-bold">
+                    {ORDER_TYPE_LABEL[ot.orderType]}
+                    <span className={`badge ${ot.isEnabled ? "badge-ok" : "badge-muted"}`}>{ot.isEnabled ? "Proposé" : "Non proposé"}</span>
+                  </h3>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" className={check} checked={ot.isEnabled}
                       onChange={(e) => setOt(i, { isEnabled: e.target.checked })} />
-                    Offered on the kiosk
+                    Proposé sur la borne
                   </label>
                 </div>
 
                 {mine.length ? (
-                  <ul className="mb-4 space-y-1 rounded-lg bg-(--color-danger)/10 p-3 text-sm text-(--color-danger)">
+                  <ul className="note note-err mb-4 space-y-1">
                     {mine.map((w, k) => <li key={k}>{w.message}</li>)}
                   </ul>
                 ) : null}
 
                 {ot.orderType === "EAT_IN" ? (
                   <div className="mb-4">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={settings.askTableForEatIn}
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" className={check} checked={settings.askTableForEatIn}
                         onChange={(e) => setSet({ askTableForEatIn: e.target.checked })} />
-                      Ask the customer for their table number
+                      Demander au client son numéro de table
                     </label>
                     <p className={hint}>
-                      Turn this off when customers take a numbered stand to their table.
-                      The kiosk then allocates the next free number from the range below
-                      and prints it on the ticket.
+                      Désactivez-le quand les clients emportent un chevalet numéroté à leur table. La borne attribue alors le prochain
+                      numéro libre de la plage ci-dessous et l’imprime sur le ticket.
                     </p>
                   </div>
                 ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={lbl} htmlFor={`area-${ot.orderType}`}>Sales area</label>
-                    <select id={`area-${ot.orderType}`} className={`${field} ${areaGone ? "border-2 border-(--color-danger)" : ""}`}
+                    <label className={lbl} htmlFor={`area-${ot.orderType}`}>Zone de vente</label>
+                    <select id={`area-${ot.orderType}`} className={`${field} ${areaGone ? "border-(--color-danger)" : ""}`}
                       value={ot.salesAreaId ?? ""}
                       onChange={(e) => setOt(i, { salesAreaId: e.target.value || null })}>
-                      <option value="">Choose a sales area</option>
+                      <option value="">Choisir une zone de vente</option>
                       {/* The saved one, when unTill no longer has it: shown for what it is, not as "nothing chosen". */}
-                      {areaGone ? <option value={ot.salesAreaId!} disabled>No longer in unTill — choose again</option> : null}
+                      {areaGone ? <option value={ot.salesAreaId!} disabled>N’existe plus dans unTill — à choisir de nouveau</option> : null}
                       {saved.salesAreas.map((a) => (
                         <option key={a.untillId} value={a.untillId}>{a.number} — {a.name}</option>
                       ))}
                     </select>
                     <p className={hint}>
                       {area && area.tableRanges.length
-                        ? <>Tables in unTill for this area: <b>{ranges(area.tableRanges)}</b>. </>
+                        ? <>Tables de cette zone dans unTill : <b>{ranges(area.tableRanges)}</b>. </>
                         : null}
-                      Sets the price level unTill uses for this order type.
+                      Fixe le niveau de prix qu’unTill utilise pour ce mode.
                     </p>
                   </div>
 
                   <div>
-                    <label className={lbl} htmlFor={`part-${ot.orderType}`}>Table part</label>
+                    <label className={lbl} htmlFor={`part-${ot.orderType}`}>Partie de table</label>
                     <select id={`part-${ot.orderType}`} className={field}
                       value={ot.tablePart ?? "a"}
                       onChange={(e) => setOt(i, { tablePart: e.target.value })}>
                       {TABLE_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    <p className={hint}>“a” is the main bill. Only change this for split bills.</p>
+                    <p className={hint}>« a » est l’addition principale. Ne changez que pour des additions séparées.</p>
                   </div>
 
                   <div>
                     <label className={lbl} htmlFor={`from-${ot.orderType}`}>
-                      {asksCustomer ? "Lowest table number" : "Range start"}
+                      {asksCustomer ? "Plus petit numéro de table" : "Début de la plage"}
                     </label>
                     <input id={`from-${ot.orderType}`} className={field} type="number" min={1}
                       value={ot.tableRangeFrom ?? ""}
@@ -225,26 +228,26 @@ export default function SettingsPage({ slug }: { slug: string }) {
 
                   <div>
                     <label className={lbl} htmlFor={`to-${ot.orderType}`}>
-                      {asksCustomer ? "Highest table number" : "Range end"}
+                      {asksCustomer ? "Plus grand numéro de table" : "Fin de la plage"}
                     </label>
                     <input id={`to-${ot.orderType}`} className={field} type="number" min={1}
                       value={ot.tableRangeTo ?? ""}
                       onChange={(e) => setOt(i, { tableRangeTo: numOrNull(e.target.value) })} />
                     <p className={hint}>
                       {asksCustomer
-                        ? "A customer typing a number outside this range is refused."
-                        : "Numbers are allocated from this range, one per order."}
+                        ? "Un numéro tapé hors de cette plage est refusé."
+                        : "Les numéros sont attribués dans cette plage, un par commande."}
                     </p>
                   </div>
 
                   {asksCustomer ? null : (
                     <div>
-                      <label className={lbl} htmlFor={`fixed-${ot.orderType}`}>Fixed table</label>
+                      <label className={lbl} htmlFor={`fixed-${ot.orderType}`}>Table fixe</label>
                       <input id={`fixed-${ot.orderType}`} className={field} type="number" min={1}
                         value={ot.fixedTableNumber ?? ""}
                         onChange={(e) => setOt(i, { fixedTableNumber: numOrNull(e.target.value) })} />
                       <p className={hint}>
-                        Every order goes to this one table. Leave empty to use the range instead.
+                        Toutes les commandes vont à cette table. Laissez vide pour utiliser la plage.
                       </p>
                     </div>
                   )}
@@ -255,63 +258,62 @@ export default function SettingsPage({ slug }: { slug: string }) {
         </div>
       </section>
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-medium">Kiosk</h2>
+      <section>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Borne</h2>
         <div className={card}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className={lbl} htmlFor="idle">Idle timeout (seconds)</label>
+              <label className={lbl} htmlFor="idle">Délai d’inactivité (secondes)</label>
               <input id="idle" className={field} type="number" min={15} max={600}
                 value={settings.kioskIdleTimeoutSec}
                 onChange={(e) => setSet({ kioskIdleTimeoutSec: Number(e.target.value) })} />
-              <p className={hint}>How long an abandoned order waits before the kiosk clears it.</p>
+              <p className={hint}>Combien de temps une commande abandonnée attend avant que la borne l’efface.</p>
             </div>
 
             <div>
-              <label className={lbl} htmlFor="reset">Ticket display (seconds)</label>
+              <label className={lbl} htmlFor="reset">Affichage du ticket (secondes)</label>
               <input id="reset" className={field} type="number" min={3} max={120}
                 value={settings.kioskResetDelaySec}
                 onChange={(e) => setSet({ kioskResetDelaySec: Number(e.target.value) })} />
-              <p className={hint}>How long the order number stays on screen before the next customer.</p>
+              <p className={hint}>Combien de temps le numéro de commande reste affiché avant le client suivant.</p>
             </div>
           </div>
 
           <div className="mt-4 space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={settings.showProductImages}
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className={check} checked={settings.showProductImages}
                 onChange={(e) => setSet({ showProductImages: e.target.checked })} />
-              Show product photos
+              Afficher les photos des articles
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={settings.showAllergens}
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className={check} checked={settings.showAllergens}
                 onChange={(e) => setSet({ showAllergens: e.target.checked })} />
-              Show allergens on the product sheet
+              Afficher les allergènes sur la fiche article
             </label>
           </div>
 
           <div className="mt-4">
-            <label className={lbl} htmlFor="footer">Ticket footer</label>
-            <textarea id="footer" rows={2} maxLength={500}
-              className="w-full rounded-lg border border-(--color-line) bg-(--color-surface-2) p-3"
+            <label className={lbl} htmlFor="footer">Pied de page du ticket</label>
+            <textarea id="footer" rows={2} maxLength={500} className="field"
               value={settings.ticketFooterText ?? ""}
               onChange={(e) => setSet({ ticketFooterText: e.target.value })} />
-            <p className={hint}>Printed under the order number. Leave empty for none.</p>
+            <p className={hint}>Imprimé sous le numéro de commande. Laissez vide pour ne rien imprimer.</p>
           </div>
         </div>
       </section>
 
-      {error ? <p className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
-      {justSaved && !dirty ? <p className="mb-4 text-sm text-(--color-ink-muted)">Saved.</p> : null}
+      {error ? <p role="alert" className="note note-err">{error}</p> : null}
 
-      <div className="flex gap-3">
-        <button type="button" onClick={save} disabled={!dirty || busy}
-          className="h-11 rounded-lg bg-(--color-brand) px-6 font-medium text-(--color-brand-ink) disabled:opacity-50">
-          {busy ? "Saving…" : "Save changes"}
+      {/* Always in reach while editing, like the mockup's form footer. */}
+      <div className="sticky bottom-0 -mx-1 flex flex-wrap items-center gap-2.5 border-t border-(--color-line) bg-(--color-page) px-1 py-3">
+        <button type="button" onClick={save} disabled={!dirty || busy} className="btn btn-primary">
+          {busy ? "Enregistrement…" : "Enregistrer"}
         </button>
-        <button type="button" onClick={load} disabled={!dirty || busy}
-          className="h-11 rounded-lg border border-(--color-line) px-6 disabled:opacity-50">
-          Discard changes
-        </button>
+        <button type="button" onClick={load} disabled={!dirty || busy} className="btn btn-secondary">Annuler</button>
+        <span className="flex-1" />
+        {dirty ? (
+          <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-(--color-warning)"><span className="dot dot-warn" />Modifications non enregistrées</span>
+        ) : justSaved ? <span role="status" className="badge badge-ok">Enregistré</span> : null}
       </div>
     </div>
   );

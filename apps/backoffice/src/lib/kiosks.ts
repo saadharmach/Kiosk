@@ -36,8 +36,8 @@ export const deleteBorne = (slug: string, id: string) =>
 
 /** One line for a borne's printer, for the list. */
 export function printerState(p: PrinterView): { text: string; tone: "ok" | "warn" | "none" } {
-  if (!p.configured) return { text: "No printer yet", tone: "none" };
-  if (!p.isEnabled) return { text: "Printer switched off", tone: "warn" };
-  if (p.helper.online) return { text: "Printer online", tone: "ok" };
-  return { text: p.helper.lastSeenAt ? "Helper offline" : "Helper never connected", tone: "warn" };
+  if (!p.configured) return { text: "Pas encore d’imprimante", tone: "none" };
+  if (!p.isEnabled) return { text: "Imprimante désactivée", tone: "warn" };
+  if (p.helper.online) return { text: "Imprimante en ligne", tone: "ok" };
+  return { text: p.helper.lastSeenAt ? "Helper hors ligne" : "Helper jamais connecté", tone: "warn" };
 }

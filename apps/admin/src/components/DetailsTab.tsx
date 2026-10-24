@@ -45,7 +45,7 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h2 className="mb-3 text-lg font-medium">Details</h2>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Details</h2>
         <fieldset disabled={!canWrite || busy} className="grid gap-4 md:grid-cols-3">
           <Field label="Address on the kiosk" hint={slugEditable
             ? "Lowercase letters, digits and dashes. Changing it breaks any kiosk already opened at the old address, so do it before the kiosk is installed."
@@ -77,7 +77,7 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-medium">Status</h2>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Status</h2>
         <p className="mb-3 text-sm text-(--color-ink-muted)">
           Currently <strong>{r.status.toLowerCase()}</strong>. A restaurant that is not active has its kiosk switched off and its staff cannot sign in.
         </p>
@@ -91,7 +91,7 @@ export default function DetailsTab({ r, canWrite, onChanged }: { r: RestaurantDe
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-medium">Links</h2>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Links</h2>
         <ul className="space-y-1 text-sm">
           <li>Kiosk: <a className="underline" href={`${KIOSK_URL}/r/${r.slug}`} target="_blank" rel="noreferrer">{KIOSK_URL}/r/{r.slug}</a></li>
           <li>Restaurant back office: <a className="underline" href={BACKOFFICE_URL} target="_blank" rel="noreferrer">{BACKOFFICE_URL}</a> (sign in with the address <code>{r.slug}</code>)</li>

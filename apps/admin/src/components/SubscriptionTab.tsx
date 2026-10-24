@@ -18,18 +18,18 @@ const monthsLater = (from: string, n: number) => {
 };
 
 const STATE: Record<PeriodState, [string, string]> = {
-  current: ["Running", "bg-green-100 text-green-900"],
-  upcoming: ["Upcoming", "bg-sky-100 text-sky-900"],
+  current: ["Running", "bg-(--color-success-soft) text-(--color-success)"],
+  upcoming: ["Upcoming", "bg-(--color-info-soft) text-(--color-brand-deep)"],
   past: ["Over", "bg-(--color-surface-2) text-(--color-ink-muted)"],
-  cancelled: ["Cancelled", "bg-red-100 text-red-900"],
+  cancelled: ["Cancelled", "bg-(--color-danger-soft) text-(--color-danger)"],
 };
 
 function Standing({ v }: { v: SubscriptionView }) {
   const s = v.standing;
   const [tone, text] =
-    s.state === "active" ? ["border-green-600 bg-green-50", `Running until ${day(s.coveredUntil!)} — ${s.daysLeft} days left. The kiosks take orders.`]
-    : s.state === "ending" ? ["border-amber-500 bg-amber-50", `Ends on ${day(s.coveredUntil!)} — ${s.daysLeft === 1 ? "today is the last day" : `${s.daysLeft} days left`}. Add the next period to keep the kiosks on.`]
-    : ["border-red-600 bg-red-50", `No running subscription: the kiosks are not taking orders${s.state === "none" ? " (it never had one)" : ""}. ${v.closeBackofficeWhenEnded ? "The back office is closed too: its staff cannot sign in." : "The back office stays open."}`];
+    s.state === "active" ? ["border-(--color-success) bg-(--color-success-soft)", `Running until ${day(s.coveredUntil!)} — ${s.daysLeft} days left. The kiosks take orders.`]
+    : s.state === "ending" ? ["border-(--color-warning) bg-(--color-warning-soft)", `Ends on ${day(s.coveredUntil!)} — ${s.daysLeft === 1 ? "today is the last day" : `${s.daysLeft} days left`}. Add the next period to keep the kiosks on.`]
+    : ["border-(--color-danger) bg-(--color-danger-soft)", `No running subscription: the kiosks are not taking orders${s.state === "none" ? " (it never had one)" : ""}. ${v.closeBackofficeWhenEnded ? "The back office is closed too: its staff cannot sign in." : "The back office stays open."}`];
   return (
     <div role="status" className={`rounded-(--radius-card) border-2 p-4 ${tone}`}>
       <p className="font-medium">{text}</p>
@@ -126,7 +126,7 @@ export default function SubscriptionTab({ id, canWrite, onChanged }: { id: strin
     <div className="flex max-w-4xl flex-col gap-6">
       <Standing v={v} />
       <ErrorText message={error} />
-      {notice ? <p role="status" className="text-sm text-green-700">{notice}</p> : null}
+      {notice ? <p role="status" className="text-sm text-(--color-success)">{notice}</p> : null}
 
       <section className="rounded-(--radius-card) border border-(--color-line) p-5">
         <h2 className="mb-3 font-medium">When no period is running</h2>
@@ -145,7 +145,7 @@ export default function SubscriptionTab({ id, canWrite, onChanged }: { id: strin
       </section>
 
       {canWrite ? (
-        <section className="rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5">
+        <section className="card">
           <h2 className="mb-1 font-medium">Add a period</h2>
           <p className="mb-4 text-sm text-(--color-ink-muted)">
             From one day to another, both included, in the restaurant&apos;s own time. To renew, add the next period: it can start the day
@@ -179,9 +179,9 @@ export default function SubscriptionTab({ id, canWrite, onChanged }: { id: strin
       <section>
         <h2 className="mb-2 font-medium">Periods</h2>
         {v.periods.length === 0 ? <p className="text-sm text-(--color-ink-muted)">None yet.</p> : (
-          <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-            <table className="w-full text-sm">
-              <thead className="bg-(--color-surface-2) text-start text-(--color-ink-muted)">
+          <div className="table-wrap">
+            <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+              <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)">
                 <tr><th className="px-4 py-2 text-start font-medium">From</th><th className="px-4 py-2 text-start font-medium">To</th><th className="px-4 py-2 text-start font-medium">Amount</th><th className="px-4 py-2 text-start font-medium">State</th><th /></tr>
               </thead>
               <tbody>

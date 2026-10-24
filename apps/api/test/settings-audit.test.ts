@@ -26,27 +26,27 @@ describe("what Settings warns about", () => {
     assert.equal(w!.code, "SALES_AREA_MISSING");
     assert.equal(w!.severity, "error");
     assert.equal(w!.orderType, "EAT_IN");
-    assert.match(w!.message, /^Eat in: the sales area chosen for it is no longer in unTill/);
-    assert.match(w!.message, /Choose one of the current sales areas/);
+    assert.match(w!.message, /^Sur place : la zone de vente choisie n’existe plus dans unTill/);
+    assert.match(w!.message, /Choisissez une des zones de vente actuelles/);
     assert.ok(!w!.message.includes("EAT_IN") && !w!.message.includes("1941"), "plain words, no codes");
   });
 
   it("a range partly outside the area's tables names exactly the missing numbers and the tables there are", () => {
     const [w] = only(audit(settings(), [ot("EAT_IN", { tableRangeFrom: 1, tableRangeTo: 100 })], areas), "TABLE_OUTSIDE_SALES_AREA");
     assert.equal(w!.severity, "error");
-    assert.match(w!.message, /unTill has no 26–29, 49 and 61–100/);
-    assert.match(w!.message, /has tables 1–25, 30–48, 50–60 and 9999/);
-    assert.doesNotMatch(w!.message, /every order/, "only some orders are refused");
+    assert.match(w!.message, /unTill n’a pas 26–29, 49 et 61–100/);
+    assert.match(w!.message, /a les tables 1–25, 30–48, 50–60 et 9999/);
+    assert.doesNotMatch(w!.message, /toutes les commandes/, "only some orders are refused");
   });
 
   it("a range entirely outside says every order will be refused", () => {
     const [w] = only(audit(settings(), [ot("TAKE_AWAY", { salesAreaId: "1291", tableRangeFrom: 800, tableRangeTo: 899 })], areas), "TABLE_OUTSIDE_SALES_AREA");
-    assert.match(w!.message, /Take away uses tables 800–899, none of which unTill has, so it will refuse every order/);
+    assert.match(w!.message, /À emporter utilise les tables 800–899, dont aucune n’existe dans unTill : il refusera toutes les commandes/);
   });
 
   it("a fixed table that does not exist is an error", () => {
     const [w] = only(audit(settings(), [ot("TAKE_AWAY", { salesAreaId: "1291", tableRangeFrom: null, tableRangeTo: null, fixedTableNumber: 99 })], areas), "TABLE_OUTSIDE_SALES_AREA");
-    assert.match(w!.message, /table 99, which unTill does not have/);
+    assert.match(w!.message, /la table 99, qu’unTill n’a pas/);
   });
 
   it("switched on with no sales area, no way of ordering at all, no table source: errors", () => {

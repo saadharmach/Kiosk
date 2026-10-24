@@ -261,12 +261,13 @@ export class SettingsService {
   }
 }
 
-const LABEL: Record<OrderTypeName, string> = { EAT_IN: "Eat in", TAKE_AWAY: "Take away", DELIVERY: "Delivery" };
+// In French: these warnings are read in the back office, which restaurants use in French.
+const LABEL: Record<OrderTypeName, string> = { EAT_IN: "Sur place", TAKE_AWAY: "À emporter", DELIVERY: "Livraison" };
 
-/** "1–25, 30–48 and 50–60". */
+/** "1–25, 30–48 et 50–60". */
 const listRanges = (ranges: TableRange[]) => {
   const parts = ranges.map((r) => (r.fromTable === r.toTable ? `${r.fromTable}` : `${r.fromTable}–${r.toTable}`));
-  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : (parts[0] ?? "none");
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} et ${parts.at(-1)}` : (parts[0] ?? "aucune");
 };
 
 /** The numbers from..to that none of the sales area's ranges contains, as ranges. */
@@ -305,7 +306,7 @@ export function audit(
   if (!settings.eatInEnabled && !settings.takeAwayEnabled && !settings.deliveryEnabled) {
     warnings.push({
       code: "NO_ORDER_TYPE", severity: "error",
-      message: "No way of ordering is switched on, so the kiosk cannot take any order. Switch on Eat in or Take away below.",
+      message: "Aucun mode de commande n’est activé : la borne ne peut prendre aucune commande. Activez Sur place ou À emporter ci-dessous.",
     });
   }
 
@@ -316,7 +317,7 @@ export function audit(
     if (!ot.configured || !ot.salesAreaId) {
       warnings.push({
         code: "NOT_CONFIGURED", severity: "error", orderType: ot.orderType,
-        message: `${label} is switched on but has no sales area, so the kiosk does not offer it. Choose its sales area.`,
+        message: `${label} est activé mais n’a pas de zone de vente : la borne ne le propose pas. Choisissez sa zone de vente.`,
       });
       continue;
     }
@@ -325,7 +326,7 @@ export function audit(
     if (!area) {
       warnings.push({
         code: "SALES_AREA_MISSING", severity: "error", orderType: ot.orderType,
-        message: `${label}: the sales area chosen for it is no longer in unTill (unTill's setup or the connection to it changed), so the kiosk does not offer ${label}. Choose one of the current sales areas, and check the table numbers too.`,
+        message: `${label} : la zone de vente choisie n’existe plus dans unTill (la configuration d’unTill ou la connexion a changé), la borne ne propose donc pas ${label}. Choisissez une des zones de vente actuelles, et vérifiez aussi les numéros de table.`,
       });
       continue;
     }
@@ -337,31 +338,31 @@ export function audit(
     if (asksCustomer && !hasRange && area.tableRanges.length === 0) {
       warnings.push({
         code: "NO_TABLE_RANGES", severity: "error", orderType: ot.orderType,
-        message: `Customers are asked for their table number, but neither ${label} nor sales area "${area.name}" says which tables exist, so every number would be refused. Set the lowest and highest table number.`,
+        message: `On demande leur numéro de table aux clients, mais ni ${label} ni la zone de vente « ${area.name} » ne disent quelles tables existent : tout numéro serait refusé. Indiquez le plus petit et le plus grand numéro de table.`,
       });
     }
 
     if (!asksCustomer && !hasFixed && !hasRange) {
       warnings.push({
         code: "NO_TABLE_SOURCE", severity: "error", orderType: ot.orderType,
-        message: `${label} has no table to send its orders to: set a range of numbers for the kiosk to hand out (or one fixed table).`,
+        message: `${label} n’a pas de table où envoyer ses commandes : indiquez une plage de numéros que la borne attribue (ou une table fixe).`,
       });
     }
 
     if (hasFixed && hasRange) {
       warnings.push({
         code: "TWO_TABLE_SOURCES", severity: "warning", orderType: ot.orderType,
-        message: `${label} has both a fixed table and a range. Only one is used — clear the other so it is clear which.`,
+        message: `${label} a à la fois une table fixe et une plage. Une seule est utilisée : effacez l’autre pour que ce soit clair.`,
       });
     }
 
     // unTill refuses a table that no range of the sales area contains (ReturnCode 7).
     if (area.tableRanges.length > 0) {
-      const has = `Sales area "${area.name}" has tables ${listRanges(area.tableRanges)}.`;
+      const has = `La zone de vente « ${area.name} » a les tables ${listRanges(area.tableRanges)}.`;
       if (hasFixed && uncovered(ot.fixedTableNumber!, ot.fixedTableNumber!, area.tableRanges).length) {
         warnings.push({
           code: "TABLE_OUTSIDE_SALES_AREA", severity: "error", orderType: ot.orderType,
-          message: `${label} sends its orders to table ${ot.fixedTableNumber}, which unTill does not have, so it will refuse them. ${has}`,
+          message: `${label} envoie ses commandes à la table ${ot.fixedTableNumber}, qu’unTill n’a pas : il les refusera. ${has}`,
         });
       }
       if (hasRange) {
@@ -371,8 +372,8 @@ export function audit(
           warnings.push({
             code: "TABLE_OUTSIDE_SALES_AREA", severity: "error", orderType: ot.orderType,
             message: all
-              ? `${label} uses tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, none of which unTill has, so it will refuse every order. ${has}`
-              : `${label} uses tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, but unTill has no ${listRanges(missing)}: an order given one of those numbers will be refused. ${has}`,
+              ? `${label} utilise les tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, dont aucune n’existe dans unTill : il refusera toutes les commandes. ${has}`
+              : `${label} utilise les tables ${ot.tableRangeFrom}–${ot.tableRangeTo}, mais unTill n’a pas ${listRanges(missing)} : une commande avec un de ces numéros sera refusée. ${has}`,
           });
         }
       }
@@ -381,7 +382,7 @@ export function audit(
     if (!ot.tablePart) {
       warnings.push({
         code: "DEFAULT_TABLE_PART", severity: "info", orderType: ot.orderType,
-        message: `${label} has no table part set; "a" (the main bill) is used.`,
+        message: `${label} n’a pas de partie de table : « a » (l’addition principale) est utilisée.`,
       });
     }
   }

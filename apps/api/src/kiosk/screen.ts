@@ -43,6 +43,32 @@ export async function resolveScreen(
   return resolveBorne(prisma as never, restaurant.id, restaurant.name, borneCode);
 }
 
+/** A borne's last contact is written at most this often, however often its screen asks. */
+export const HEARTBEAT_EVERY_MS = 60_000;
+
+/**
+ * A registered screen checks in (it asks /version every 20 seconds): its borne was seen now. Written at most once a
+ * minute, and only for this restaurant's own borne with that secret; an unknown or unregistered screen changes nothing.
+ */
+export async function noteHeartbeat(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Prisma client, or a test's stand-in
+  prisma: { kiosk: { updateMany: (a: any) => Promise<unknown> } },
+  restaurantId: string,
+  secret: string | undefined | null,
+  now = new Date(),
+): Promise<void> {
+  if (!secret || !/^ksc_[A-Za-z0-9_-]{20,100}$/.test(secret)) return;
+  await prisma.kiosk.updateMany({
+    where: {
+      restaurantId,
+      tokenHash: sha256(secret),
+      tokenRevokedAt: null,
+      OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: new Date(now.getTime() - HEARTBEAT_EVERY_MS) } }],
+    },
+    data: { lastHeartbeatAt: now },
+  });
+}
+
 /**
  * A screen trades the one-time code from the back office for its secret, and from then on is that borne. The code
  * belongs to one borne of one restaurant, works once and only for 15 minutes; a wrong, used or expired code all get the

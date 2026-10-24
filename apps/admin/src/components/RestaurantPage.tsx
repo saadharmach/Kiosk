@@ -33,30 +33,30 @@ export default function RestaurantPage({ id, canWrite, initialTab = "Go-live", i
 
   return (
     <>
-      <button onClick={onBack} className="mb-4 text-sm text-(--color-ink-muted) underline">← Back</button>
+      <button onClick={onBack} className="btn btn-ghost mb-2">← Back</button>
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{r.name}</h1>
+        <h2 className="text-[19px] font-bold">{r.name}</h2>
         <StatusBadge status={r.status} />
         <PosBadge health={r.tpapi} />
         {readiness ? (
           <button onClick={() => setTab("Go-live")}
-            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${readiness.ready ? "bg-(--color-brand) text-(--color-brand-ink)" : "bg-amber-200 text-amber-950"}`}>
+            className={`badge cursor-pointer ${readiness.ready ? "badge-ok" : "badge-warn"}`}>
             {readiness.ready ? "Ready to go live" : `${readiness.requiredTotal - readiness.requiredDone} to do before going live`}
           </button>
         ) : null}
         <span className="text-sm text-(--color-ink-muted)">/r/{r.slug} · {r._count.orders} orders</span>
       </div>
 
-      <div role="tablist" className="mb-6 flex flex-wrap gap-x-1 border-b border-(--color-line)">
+      <div role="tablist" className="mb-5 flex flex-wrap gap-1 border-b border-(--color-line)">
         {TABS.map((t) => (
           <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-3 py-2 md:px-4 ${t === tab ? "border-(--color-brand) font-medium" : "border-transparent text-(--color-ink-muted) hover:text-(--color-ink)"}`}>
+            className={`-mb-px border-b-2 px-3.5 py-2.5 font-semibold ${t === tab ? "border-(--color-brand) text-(--color-brand)" : "border-transparent text-(--color-ink-muted) hover:text-(--color-ink)"}`}>
             {t}
           </button>
         ))}
       </div>
 
-      {!canWrite ? <p className="mb-4 rounded-lg bg-(--color-surface-2) p-3 text-sm text-(--color-ink-muted)">Read-only: your support account can look at everything and run a sync, but not change anything.</p> : null}
+      {!canWrite ? <p className="mb-4 note note-info">Read-only: your support account can look at everything and run a sync, but not change anything.</p> : null}
 
       {tab === "Go-live" ? <GoLiveTab r={r} readiness={readiness} onOpenTab={setTab} /> : null}
       {tab === "Subscription" ? <SubscriptionTab id={r.id} canWrite={canWrite} onChanged={load} /> : null}

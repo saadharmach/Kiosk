@@ -32,14 +32,14 @@ export default function ProductsPage({ slug }: { slug: string }) {
   /** Show all / Hide all: exactly the products listed with the current filters (every page). */
   const setAll = async (isVisible: boolean) => {
     if (!data) return;
-    const what = data.total === 1 ? "this product" : `these ${data.total} products`;
-    if (!window.confirm(isVisible ? `Show ${what} on the kiosk?` : `Hide ${what} from the kiosk?`)) return;
+    const what = data.total === 1 ? "cet article" : `ces ${data.total} articles`;
+    if (!window.confirm(isVisible ? `Afficher ${what} sur la borne ?` : `Masquer ${what} de la borne ?`)) return;
     setBusy(true); setError(null); setNotice(null);
     try {
       const { changed } = await setProductsVisibility(slug, {
         isVisible, search: search || undefined, categoryId: categoryId || undefined, missing: missing || undefined, visibility: visibility || undefined,
       });
-      setNotice(`${changed} product${changed === 1 ? "" : "s"} ${isVisible ? "shown on" : "hidden from"} the kiosk.`);
+      setNotice(`${changed} article${changed === 1 ? "" : "s"} ${isVisible ? "affiché" : "masqué"}${changed === 1 ? "" : "s"} sur la borne.`);
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -60,126 +60,130 @@ export default function ProductsPage({ slug }: { slug: string }) {
     await updateProduct(slug, p.articleId, { isVisible: !p.isVisible });
     load();
   };
+  const categoryName = (id: string | null) => {
+    const d = departments.find((x) => x.untillId === id);
+    return d ? (d.displayName?.fr || d.posName) : "—";
+  };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap gap-3">
-        <input value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }}
-          placeholder="Search products" aria-label="Search products"
-          className="h-10 w-full min-w-0 flex-1 rounded-lg sm:min-w-64 border border-(--color-line) bg-(--color-surface-2) px-3" />
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <input value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} type="search"
+          placeholder="Rechercher un article…" aria-label="Rechercher un article"
+          className="field min-w-52 flex-1" />
         <select value={categoryId} onChange={(e) => { setPage(1); setCategoryId(e.target.value); }}
-          aria-label="Category"
-          className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3">
-          <option value="">All categories</option>
+          aria-label="Catégorie" className="field w-auto">
+          <option value="">Toutes les catégories</option>
           {departments.map((d) => (
-            <option key={d.untillId} value={d.untillId}>{d.posName}</option>
+            <option key={d.untillId} value={d.untillId}>{d.displayName?.fr || d.posName}</option>
           ))}
         </select>
         <select value={missing} onChange={(e) => { setPage(1); setMissing(e.target.value); }}
-          aria-label="Filter by what is missing"
-          className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3">
-          <option value="">Everything</option>
-          <option value="translation">Missing a translation</option>
-          <option value="image">Missing an image</option>
+          aria-label="Filtrer ce qui manque" className="field w-auto">
+          <option value="">Tout</option>
+          <option value="translation">Traduction manquante</option>
+          <option value="image">Photo manquante</option>
         </select>
         <select value={visibility} onChange={(e) => { setPage(1); setVisibility(e.target.value); }}
-          aria-label="Shown or hidden"
-          className="h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3">
-          <option value="">Shown and hidden</option>
-          <option value="shown">Shown on the kiosk</option>
-          <option value="hidden">Hidden</option>
+          aria-label="Affichés ou masqués" className="field w-auto">
+          <option value="">Affichés et masqués</option>
+          <option value="shown">Affichés sur la borne</option>
+          <option value="hidden">Masqués</option>
         </select>
       </div>
 
-      <p className="mb-4 text-sm text-(--color-ink-muted)">
-        New products from unTill start <b>hidden</b>: choose what the kiosk shows. Show all and Hide all act on the products
-        listed with the filters above (all pages).
+      <p className="note note-info">
+        Les nouveaux articles venant d’unTill sont <b>masqués</b> au départ : choisissez ce que la borne affiche. « Tout afficher » et
+        « Tout masquer » agissent sur les articles listés avec les filtres ci-dessus (toutes les pages).
       </p>
 
-      {error ? <p className="mb-4 text-(--color-danger)">{error}</p> : null}
-      {notice ? <p role="status" className="mb-4 text-green-700">{notice}</p> : null}
+      {error ? <p role="alert" className="note note-err">{error}</p> : null}
+      {notice ? <p role="status" className="note note-ok">{notice}</p> : null}
 
       {!data ? (
-        <p className="text-(--color-ink-muted)">Loading…</p>
+        <p className="text-(--color-ink-muted)">Chargement…</p>
       ) : data.products.length === 0 ? (
-        <p className="text-(--color-ink-muted)">Nothing matches those filters.</p>
+        <p className="card text-(--color-ink-muted)">Aucun article ne correspond à ces filtres.</p>
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <p className="me-auto text-sm text-(--color-ink-muted)">
-              {data.total} product{data.total === 1 ? "" : "s"}
-            </p>
-            <button type="button" disabled={busy} onClick={() => void setAll(true)}
-              className="h-9 rounded-lg bg-(--color-brand) px-4 text-sm font-medium text-(--color-brand-ink) disabled:opacity-50">
-              Show all ({data.total})
+          <div className="flex flex-wrap items-center justify-end gap-2.5">
+            <button type="button" disabled={busy} onClick={() => void setAll(false)} className="btn btn-secondary">
+              Tout masquer ({data.total})
             </button>
-            <button type="button" disabled={busy} onClick={() => void setAll(false)}
-              className="h-9 rounded-lg border border-(--color-line) px-4 text-sm font-medium disabled:opacity-50">
-              Hide all ({data.total})
+            <button type="button" disabled={busy} onClick={() => void setAll(true)} className="btn btn-primary">
+              Tout afficher ({data.total})
             </button>
           </div>
-          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
-            {data.products.map((p) => (
-              <li key={p.articleId} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
-                {p.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imageUrl} alt="" className="size-12 rounded object-cover" />
-                ) : (
-                  <div className="size-12 rounded bg-(--color-surface-2)" />
-                )}
 
-                {/* Phone: the name has the first line; the languages and buttons go to a second one. */}
-                <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
-                  <p className="flex items-center gap-2 font-medium">
-                    <span className="truncate">{p.displayName?.fr ?? p.posName}</span>
-                    {p.isNew ? (
-                      <span className="shrink-0 rounded bg-(--color-brand) px-1.5 py-0.5 text-xs font-semibold text-(--color-brand-ink)">
-                        New{p.newUntil ? ` until ${p.newUntil}` : ""}
+          <div className="table-wrap">
+            <table className="table min-w-[760px]">
+              <thead>
+                <tr>
+                  <th className="w-[60px]">Photo</th>
+                  <th>Article</th>
+                  <th>Catégorie</th>
+                  <th>Langues</th>
+                  <th>Borne</th>
+                  <th className="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.products.map((p) => (
+                  <tr key={p.articleId}>
+                    <td>
+                      {p.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt="" className="size-11 rounded-md border border-(--color-line) object-cover" />
+                      ) : (
+                        <div className="size-11 rounded-md border border-(--color-line) bg-(--color-page)" />
+                      )}
+                    </td>
+                    <td>
+                      <p className="flex items-center gap-2 font-bold">
+                        <span className="truncate">{p.displayName?.fr ?? p.posName}</span>
+                        {p.isNew ? <span className="badge badge-info">Nouveau{p.newUntil ? ` jusqu’au ${p.newUntil}` : ""}</span> : null}
+                      </p>
+                      {p.displayName?.fr && p.displayName.fr !== p.posName ? (
+                        <p className="truncate text-[12.5px] text-(--color-ink-muted)">unTill : {p.posName}</p>
+                      ) : null}
+                    </td>
+                    <td className="text-(--color-ink-muted)">{categoryName(p.categoryId)}</td>
+                    <td>
+                      <span className="flex gap-1">
+                        {LOCALES.map((l) => (
+                          <span key={l} title={p.translatedInto.includes(l) ? "Traduit" : "Pas encore traduit"}
+                            className={`badge px-2 uppercase ${p.translatedInto.includes(l) ? "badge-info" : "badge-muted"}`}>
+                            {l}
+                          </span>
+                        ))}
                       </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-sm text-(--color-ink-muted)">{p.posName}</p>
-                </div>
-
-                <div className="flex w-full items-center gap-4 sm:w-auto">
-                <div className="flex flex-1 gap-1 sm:flex-none">
-                  {LOCALES.map((l) => (
-                    <span key={l}
-                      className={`rounded px-1.5 py-0.5 text-xs uppercase ${
-                        p.translatedInto.includes(l)
-                          ? "bg-(--color-brand) text-(--color-brand-ink)"
-                          : "bg-(--color-surface-2) text-(--color-ink-muted)"
-                      }`}>
-                      {l}
-                    </span>
-                  ))}
-                </div>
-
-                <button onClick={() => toggleVisible(p)}
-                  className={`w-24 rounded-lg border px-2 py-1 text-sm ${
-                    p.isVisible ? "border-(--color-line)" : "border-(--color-danger) text-(--color-danger)"
-                  }`}>
-                  {p.isVisible ? "Visible" : "Hidden"}
-                </button>
-
-                <button onClick={() => setEditing(p)}
-                  className="rounded-lg bg-(--color-brand) px-4 py-2 text-sm font-medium text-(--color-brand-ink)">
-                  Edit
-                </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {data.pages > 1 ? (
-            <div className="mt-4 flex items-center gap-3">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}
-                className="h-10 rounded-lg border border-(--color-line) px-4 disabled:opacity-40">Previous</button>
-              <span className="text-sm text-(--color-ink-muted)">Page {data.page} of {data.pages}</span>
-              <button disabled={page >= data.pages} onClick={() => setPage(page + 1)}
-                className="h-10 rounded-lg border border-(--color-line) px-4 disabled:opacity-40">Next</button>
+                    </td>
+                    <td>
+                      <button onClick={() => toggleVisible(p)} title={p.isVisible ? "Masquer de la borne" : "Afficher sur la borne"}
+                        className={`badge cursor-pointer ${p.isVisible ? "badge-ok" : "badge-err"}`}>
+                        {p.isVisible ? "Affiché" : "Masqué"}
+                      </button>
+                    </td>
+                    <td className="text-end">
+                      <button onClick={() => setEditing(p)} className="btn btn-secondary btn-sm">Modifier</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex items-center justify-between gap-3 border-t border-(--color-line) px-3.5 py-2.5 text-[12.5px] text-(--color-ink-muted)">
+              <span>{data.total} article{data.total === 1 ? "" : "s"}</span>
+              <span className="flex items-center gap-2">
+                {data.pages > 1 ? (
+                  <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="btn btn-ghost btn-sm">Précédente</button>
+                ) : null}
+                Page {data.page} / {data.pages}
+                {data.pages > 1 ? (
+                  <button disabled={page >= data.pages} onClick={() => setPage(page + 1)} className="btn btn-ghost btn-sm">Suivante</button>
+                ) : null}
+              </span>
             </div>
-          ) : null}
+          </div>
         </>
       )}
 

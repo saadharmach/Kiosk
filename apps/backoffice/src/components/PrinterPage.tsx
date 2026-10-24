@@ -6,39 +6,39 @@ import {
   type CodePage, type PrintJobRow, type PrinterView, type SavePrinterBody,
 } from "@/lib/printer";
 
-const field = "h-10 w-full rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3";
-const lbl = "mb-1 block text-sm text-(--color-ink-muted)";
-const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-5";
-const hint = "mt-1 text-xs text-(--color-ink-muted)";
-const btn = "h-10 rounded-lg px-4 font-medium disabled:opacity-50";
-const primary = `${btn} bg-(--color-brand) text-(--color-brand-ink)`;
-const secondary = `${btn} border border-(--color-line)`;
+const field = "field";
+const lbl = "field-label";
+// Shown inside a borne's card (or the default printer's): a soft panel, not another white card.
+const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-page) p-4";
+const hint = "mt-1 text-[12.5px] text-(--color-ink-muted)";
+const primary = "btn btn-primary";
+const secondary = "btn btn-secondary";
 
 const CODEPAGES: { value: CodePage; label: string }[] = [
-  { value: "CP858", label: "PC858: French accents and the € sign (recommended)" },
-  { value: "CP437", label: "PC437: the common default, fewer accents" },
-  { value: "CP1252", label: "Windows-1252: for printers that use it" },
+  { value: "CP858", label: "PC858 : accents français et signe € (conseillé)" },
+  { value: "CP437", label: "PC437 : le réglage courant, moins d’accents" },
+  { value: "CP1252", label: "Windows-1252 : pour les imprimantes qui l’utilisent" },
 ];
 
 const EMPTY: SavePrinterBody = {
-  name: "Ticket printer", address: "", port: 9100, isEnabled: true,
+  name: "Imprimante tickets", address: "", port: 9100, isEnabled: true,
   autoPrint: true, copies: 1, cut: true, codepage: "CP858",
 };
 
-/** "12 s ago", "3 min ago", or the date, for a sign of life. */
+/** "il y a 12 s", "il y a 3 min", or the date, for a sign of life. */
 function ago(iso: string | null): string {
-  if (!iso) return "never";
+  if (!iso) return "jamais";
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `${s} s ago`;
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  return new Date(iso).toLocaleString();
+  if (s < 60) return `il y a ${s} s`;
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
-const STATUS_CLASS: Record<PrintJobRow["status"], string> = {
-  PRINTED: "text-green-700",
-  QUEUED: "text-(--color-ink-muted)",
-  PRINTING: "text-(--color-ink-muted)",
-  FAILED: "text-(--color-danger)",
+const STATUS: Record<PrintJobRow["status"], [string, string]> = {
+  PRINTED: ["Imprimé", "badge-ok"],
+  QUEUED: ["En file", "badge-muted"],
+  PRINTING: ["Impression…", "badge-info"],
+  FAILED: ["Échec", "badge-err"],
 };
 
 /** The printer settings, helper and recent tickets: the restaurant's default printer, or one borne's when `kioskId` is given. */
@@ -92,7 +92,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
     else if (pairing && sawWaiting.current && new Date(pairing.expiresAt).getTime() > Date.now()) {
       sawWaiting.current = false;
       setPairing(null);
-      setNotice("The helper used the code. It is set up and will show as Online in a moment.");
+      setNotice("Le Helper a utilisé le code. Il est configuré et apparaîtra En ligne dans un instant.");
     }
   }, [waiting, pairing]);
 
@@ -121,19 +121,19 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
     formTouched.current = false;
     setDirty(false);
     adopt(res);
-    setNotice("Saved.");
+    setNotice("Enregistré.");
   });
 
   const generateToken = () => run(async () => {
     if (view?.configured && view.helper.tokenIssuedAt &&
-        !window.confirm("This replaces the current token. The helper at the restaurant stops printing until you give it the new one. Continue?")) return;
+        !window.confirm("Cela remplace le jeton actuel. Le Helper du restaurant n’imprime plus tant qu’il n’a pas le nouveau. Continuer ?")) return;
     setToken((await issuePrinterToken(slug, kioskId)).token);
     await refresh();
   });
 
   const getCode = () => run(async () => {
     if (view?.configured && view.helper.tokenIssuedAt &&
-        !window.confirm("The helper that is already set up keeps working until the new code is used. Running the setup replaces its secret. Continue?")) return;
+        !window.confirm("Le Helper déjà configuré continue de fonctionner jusqu’à l’utilisation du nouveau code. La configuration remplace son secret. Continuer ?")) return;
     sawWaiting.current = false;
     setPairing(await issuePairingCode(slug, kioskId));
     await refresh();
@@ -141,181 +141,181 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
 
   const sendTest = () => run(async () => {
     await testPrint(slug, kioskId);
-    setNotice("Test ticket queued. It prints as soon as the helper picks it up.");
+    setNotice("Ticket de test en file d’attente. Il s’imprime dès que le Helper le récupère.");
     await refresh();
   });
 
   if (!view) {
-    return error ? <p className="text-(--color-danger)">{error}</p> : <p className="text-(--color-ink-muted)">Loading…</p>;
+    return error ? <p className="note note-err">{error}</p> : <p className="text-(--color-ink-muted)">Chargement…</p>;
   }
 
   const configured = view.configured;
   const helper = configured ? view.helper : null;
   const neverConnected = configured && !helper?.lastSeenAt;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-3xl flex-col gap-4">
       {/* ---- status */}
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-(--color-ink-muted)">Print helper</p>
-            <p className={`text-lg font-medium ${helper?.online ? "text-green-700" : ""}`}>
-              {!configured ? "Not set up" : helper?.online ? "Online" : neverConnected ? "Never connected" : "Offline"}
+            <p className="text-[12.5px] text-(--color-ink-muted)">NEXBORN Helper (impression)</p>
+            <p className="mt-1">
+              {!configured ? <span className="badge badge-muted">Pas configuré</span>
+                : helper?.online ? <span className="badge badge-ok">En ligne</span>
+                : neverConnected ? <span className="badge badge-warn">Jamais connecté</span>
+                : <span className="badge badge-err">Hors ligne</span>}
             </p>
-            {configured && helper?.lastSeenAt ? (
-              <p className={hint}>Last contact {ago(helper.lastSeenAt)}</p>
-            ) : null}
+            {configured && helper?.lastSeenAt ? <p className={hint}>Dernier contact {ago(helper.lastSeenAt)}</p> : null}
           </div>
           <button type="button" className={secondary} disabled={busy || !configured} onClick={sendTest}>
-            Print a test ticket
+            Imprimer un ticket de test
           </button>
         </div>
         {view.configured && view.lastError ? (
-          <p className="mt-3 rounded-lg border border-(--color-danger) p-3 text-sm text-(--color-danger)" role="alert">
-            Last printing error ({ago(view.lastError.at)}): {view.lastError.message}
+          <p className="note note-err mt-3" role="alert">
+            Dernière erreur d’impression ({ago(view.lastError.at)}) : {view.lastError.message}
           </p>
         ) : null}
-        {!configured ? (
-          <p className={hint}>Save the printer's address below, then generate a token for the helper.</p>
-        ) : null}
+        {!configured ? <p className={hint}>Enregistrez l’adresse de l’imprimante ci-dessous, puis configurez le Helper.</p> : null}
       </section>
 
-      {error ? <p className="text-sm text-(--color-danger)" role="alert">{error}</p> : null}
-      {notice ? <p className="text-sm text-green-700" role="status">{notice}</p> : null}
+      {error ? <p className="note note-err" role="alert">{error}</p> : null}
+      {notice ? <p className="note note-ok" role="status">{notice}</p> : null}
 
       {/* ---- settings */}
       <section className={card}>
-        <h2 className="mb-4 text-lg font-medium">Ticket printer</h2>
+        <h2 className="card-title">Imprimante tickets</h2>
         <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
           <div>
-            <label className={lbl} htmlFor="p-address">Printer address (IP or host name)</label>
-            <input id="p-address" className={field} value={form.address} placeholder="192.168.1.50"
+            <label className={lbl} htmlFor={`p-address-${kioskId ?? "d"}`}>Adresse de l’imprimante (IP ou nom)</label>
+            <input id={`p-address-${kioskId ?? "d"}`} className={field} value={form.address} placeholder="192.168.1.50"
               onChange={(e) => edit({ address: e.target.value })} />
-            <p className={hint}>The printer's address on the restaurant's network, without http://.</p>
+            <p className={hint}>L’adresse de l’imprimante sur le réseau du restaurant, sans http://.</p>
           </div>
           <div>
-            <label className={lbl} htmlFor="p-port">Port</label>
-            <input id="p-port" className={field} type="number" min={1} max={65535} value={form.port}
+            <label className={lbl} htmlFor={`p-port-${kioskId ?? "d"}`}>Port</label>
+            <input id={`p-port-${kioskId ?? "d"}`} className={field} type="number" min={1} max={65535} value={form.port}
               onChange={(e) => edit({ port: Number(e.target.value) })} />
-            <p className={hint}>Usually 9100.</p>
+            <p className={hint}>En général 9100.</p>
           </div>
         </div>
 
         <div className="mt-4">
-          <label className={lbl} htmlFor="p-name">Name</label>
-          <input id="p-name" className={field} value={form.name} onChange={(e) => edit({ name: e.target.value })} />
+          <label className={lbl} htmlFor={`p-name-${kioskId ?? "d"}`}>Nom</label>
+          <input id={`p-name-${kioskId ?? "d"}`} className={field} value={form.name} onChange={(e) => edit({ name: e.target.value })} />
         </div>
 
-        <div className="mt-5 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-2.5">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.isEnabled} onChange={(e) => edit({ isEnabled: e.target.checked })} />
-            <span>Printer is switched on</span>
+            <input type="checkbox" className="size-4 accent-(--color-brand)" checked={form.isEnabled} onChange={(e) => edit({ isEnabled: e.target.checked })} />
+            <span>Imprimante en service</span>
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.autoPrint} onChange={(e) => edit({ autoPrint: e.target.checked })} />
-            <span>Print a ticket automatically for every order</span>
+            <input type="checkbox" className="size-4 accent-(--color-brand)" checked={form.autoPrint} onChange={(e) => edit({ autoPrint: e.target.checked })} />
+            <span>Imprimer automatiquement un ticket pour chaque commande</span>
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.cut} onChange={(e) => edit({ cut: e.target.checked })} />
-            <span>Cut the paper after each ticket</span>
+            <input type="checkbox" className="size-4 accent-(--color-brand)" checked={form.cut} onChange={(e) => edit({ cut: e.target.checked })} />
+            <span>Couper le papier après chaque ticket</span>
           </label>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-[9rem_1fr]">
+        <div className="mt-4 grid gap-4 sm:grid-cols-[9rem_1fr]">
           <div>
-            <label className={lbl} htmlFor="p-copies">Copies</label>
-            <select id="p-copies" className={field} value={form.copies} onChange={(e) => edit({ copies: Number(e.target.value) })}>
+            <label className={lbl} htmlFor={`p-copies-${kioskId ?? "d"}`}>Exemplaires</label>
+            <select id={`p-copies-${kioskId ?? "d"}`} className={field} value={form.copies} onChange={(e) => edit({ copies: Number(e.target.value) })}>
               {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div>
-            <label className={lbl} htmlFor="p-codepage">Character set</label>
-            <select id="p-codepage" className={field} value={form.codepage} onChange={(e) => edit({ codepage: e.target.value as CodePage })}>
+            <label className={lbl} htmlFor={`p-codepage-${kioskId ?? "d"}`}>Jeu de caractères</label>
+            <select id={`p-codepage-${kioskId ?? "d"}`} className={field} value={form.codepage} onChange={(e) => edit({ codepage: e.target.value as CodePage })}>
               {CODEPAGES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
-            <p className={hint}>If accents print wrongly on the test ticket, try another one.</p>
+            <p className={hint}>Si les accents s’impriment mal sur le ticket de test, essayez-en un autre.</p>
           </div>
         </div>
 
-        <p className={`${hint} mt-4`}>
-          Tickets are printed in French on 80 mm paper. The footer line is set in Settings.
-        </p>
+        <p className={`${hint} mt-4`}>Les tickets sont imprimés en français sur du papier 80 mm. La ligne de pied de page se règle dans Paramètres.</p>
 
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" className={primary} disabled={busy || !dirty || !form.address.trim()} onClick={save}>
-            {busy ? "Saving…" : "Save printer"}
+            {busy ? "Enregistrement…" : "Enregistrer l’imprimante"}
           </button>
-          {dirty ? <span className="text-sm text-(--color-ink-muted)">Unsaved changes</span> : null}
+          {dirty ? (
+            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-(--color-warning)">
+              <span className="dot dot-warn" />Modifications non enregistrées
+            </span>
+          ) : null}
         </div>
       </section>
 
       {/* ---- helper setup */}
       <section className={card}>
-        <h2 className="mb-1 text-lg font-medium">Print helper</h2>
-        <p className="mb-3 text-sm text-(--color-ink-muted)">
-          A small app on a computer at the restaurant (on the same network as the printer). It fetches new tickets and
-          sends them to the printer. Install it, then paste a code from here into it.
+        <h2 className="card-title mb-1">NEXBORN Helper</h2>
+        <p className="mb-3 text-(--color-ink-muted)">
+          Une petite application sur un ordinateur du restaurant (sur le même réseau que l’imprimante). Elle récupère les nouveaux
+          tickets et les envoie à l’imprimante. Installez-la, puis collez-y un code obtenu ici.
         </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <a href="/downloads/NEXBORN-Helper.exe" download className={`${secondary} inline-flex items-center`}>
-            Download NEXBORN Helper (Windows)
-          </a>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <a href="/downloads/NEXBORN-Helper.exe" download className={secondary}>Télécharger NEXBORN Helper (Windows)</a>
           <button type="button" className={primary} disabled={busy || !configured} onClick={getCode}>
-            {pairing ? "Get a new code" : "Set up the helper"}
+            {pairing ? "Obtenir un nouveau code" : "Configurer le Helper"}
           </button>
         </div>
-        {!configured ? <p className={hint}>Save the printer's address first.</p> : null}
+        {!configured ? <p className={hint}>Enregistrez d’abord l’adresse de l’imprimante.</p> : null}
         {configured && helper?.tokenIssuedAt ? (
-          <p className={hint}>A helper was set up {ago(helper.tokenIssuedAt)}. Setting it up again replaces its secret.</p>
+          <p className={hint}>Un Helper a été configuré {ago(helper.tokenIssuedAt)}. Le reconfigurer remplace son secret.</p>
         ) : null}
 
         {pairing ? (
-          <div className="mt-4 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
-            <p className="text-sm">Your setup code (works once, until {new Date(pairing.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}):</p>
-            <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{pairing.code}</p>
-            <ol className="list-decimal space-y-1 pl-5 text-sm">
-              <li>On the restaurant computer, <a href="/downloads/NEXBORN-Helper.exe" download className="underline">download NEXBORN Helper</a> and open it. The first time, Windows asks to allow it: choose <b>Yes</b> (if a blue &quot;Windows protected your PC&quot; box appears: <i>More info</i> › <i>Run anyway</i>). It installs itself and starts with Windows.</li>
-              <li>Its page opens in the browser: paste this code, press <b>Add</b>. A test ticket prints.</li>
+          <div className="note note-info mt-4" role="status">
+            <p>Votre code de configuration (valable une fois, jusqu’à {new Date(pairing.expiresAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}) :</p>
+            <p className="my-2 font-mono text-3xl font-bold tracking-widest text-(--color-ink) select-all">{pairing.code}</p>
+            <ol className="list-decimal space-y-1 ps-5">
+              <li>Sur l’ordinateur du restaurant, <a href="/downloads/NEXBORN-Helper.exe" download className="underline">téléchargez NEXBORN Helper</a> et ouvrez-le. La première fois, Windows demande l’autorisation : choisissez <b>Oui</b> (si un cadre bleu « Windows a protégé votre ordinateur » apparaît : <i>Informations complémentaires</i> › <i>Exécuter quand même</i>). Il s’installe et démarre avec Windows.</li>
+              <li>Sa page s’ouvre dans le navigateur : collez ce code, appuyez sur <b>Ajouter</b>. Un ticket de test s’imprime.</li>
             </ol>
-            <div className="mt-2 flex items-center gap-3">
-              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(pairing.code).then(() => setNotice("Code copied."))}>
-                Copy the code
+            <div className="mt-2 flex items-center gap-2.5">
+              <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(pairing.code).then(() => setNotice("Code copié."))}>
+                Copier le code
               </button>
-              <button type="button" className="underline" onClick={() => setPairing(null)}>Hide</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setPairing(null)}>Masquer</button>
             </div>
-            <p className={`${hint} mt-3`}>
-              This page shows <b>Online</b> when it works. To add another borne&apos;s printer to the same computer, paste that
-              printer&apos;s own code in the same app (open NEXBORN Helper again to see its page).
+            <p className="mt-3 text-[12.5px]">
+              Cette page affiche <b>En ligne</b> quand cela fonctionne. Pour ajouter l’imprimante d’une autre borne sur le même ordinateur,
+              collez le code de cette imprimante dans la même application (rouvrez NEXBORN Helper pour voir sa page).
             </p>
             <details className="mt-3">
-              <summary className="cursor-pointer text-sm text-(--color-ink-muted)">Not Windows? Use the command instead</summary>
-              <p className={`${hint} mt-2`}>Needs Node.js 20 or newer. <a href="/downloads/kiosk-print-helper.zip" download className="underline">Download the helper (zip)</a>, unzip it, and in its folder run:</p>
-              <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs select-all">
-{`node src/cli.mjs setup ${typeof window !== "undefined" ? window.location.origin : ""} ${pairing.code}`}
+              <summary className="cursor-pointer">Pas Windows ? Utilisez plutôt la commande</summary>
+              <p className="mt-2 text-[12.5px]">Il faut Node.js 20 ou plus récent. <a href="/downloads/kiosk-print-helper.zip" download className="underline">Téléchargez le Helper (zip)</a>, décompressez-le, et dans son dossier lancez :</p>
+              <pre className="mt-1 overflow-x-auto rounded-(--radius-card) bg-(--color-nav) p-2.5 text-[12.5px] text-[#d6e2f2] select-all">
+{`node src/cli.mjs setup ${origin} ${pairing.code}`}
               </pre>
             </details>
           </div>
         ) : null}
 
         <details className="mt-4">
-          <summary className="cursor-pointer text-sm text-(--color-ink-muted)">Set up by hand with a token instead</summary>
+          <summary className="cursor-pointer text-(--color-ink-muted)">Configurer à la main avec un jeton</summary>
           <button type="button" className={`${secondary} mt-3`} disabled={busy || !configured} onClick={generateToken}>
-            {configured && helper?.tokenIssuedAt ? "Generate a new token" : "Generate token"}
+            {configured && helper?.tokenIssuedAt ? "Générer un nouveau jeton" : "Générer un jeton"}
           </button>
           {token ? (
-            <div className="mt-4 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
-              <p className="mb-2 text-sm font-medium">Copy this token now. It is shown only once.</p>
-              <code className="block overflow-x-auto rounded bg-(--color-surface-2) p-2 text-sm select-all">{token}</code>
-              <div className="mt-2 flex items-center gap-3">
-                <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(token).then(() => setNotice("Token copied."))}>
-                  Copy
+            <div className="note note-warn mt-4" role="status">
+              <p className="mb-2 font-semibold">Copiez ce jeton maintenant : il n’est affiché qu’une fois.</p>
+              <code className="block overflow-x-auto rounded-(--radius-card) bg-(--color-surface) p-2 text-[13px] text-(--color-ink) select-all">{token}</code>
+              <div className="mt-2 flex items-center gap-2.5">
+                <button type="button" className={secondary} onClick={() => navigator.clipboard?.writeText(token).then(() => setNotice("Jeton copié."))}>
+                  Copier
                 </button>
-                <button type="button" className="underline" onClick={() => setToken(null)}>I have saved it</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setToken(null)}>Je l’ai enregistré</button>
               </div>
-              <p className={`${hint} mt-3`}>On the restaurant computer, run the helper with:</p>
-              <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-2) p-2 text-xs">
-{`KIOSK_API_URL=${typeof window !== "undefined" ? window.location.origin : ""}
+              <p className="mt-3 text-[12.5px]">Sur l’ordinateur du restaurant, lancez le Helper avec :</p>
+              <pre className="mt-1 overflow-x-auto rounded-(--radius-card) bg-(--color-nav) p-2.5 text-[12.5px] text-[#d6e2f2]">
+{`KIOSK_API_URL=${origin}
 PRINT_HELPER_TOKEN=${token}
 node tools/print-helper/src/cli.mjs`}
               </pre>
@@ -326,23 +326,31 @@ node tools/print-helper/src/cli.mjs`}
 
       {/* ---- recent jobs */}
       <section>
-        <h2 className="mb-2 text-lg font-medium">Recent tickets</h2>
+        <h2 className="card-title mb-2">Derniers tickets</h2>
         {jobs.length === 0 ? (
-          <p className="text-sm text-(--color-ink-muted)">Nothing has been sent to the printer yet.</p>
+          <p className="text-(--color-ink-muted)">Rien n’a encore été envoyé à l’imprimante.</p>
         ) : (
-          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
-            {jobs.map((j) => (
-              <li key={j.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3 text-sm">
-                <span className="w-32 text-(--color-ink-muted)">{ago(j.createdAt)}</span>
-                <span className="w-40 font-mono">{j.order?.reference ?? (j.kind === "TEST" ? "Test ticket" : "Ticket")}</span>
-                <span className={`w-24 font-medium ${STATUS_CLASS[j.status]}`}>{j.status}</span>
-                {j.attempts > 1 ? <span className="text-(--color-ink-muted)">{j.attempts} attempts</span> : null}
-                {j.lastError && j.status !== "PRINTED" ? (
-                  <span className="basis-full text-(--color-danger)">{j.lastError}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <div className="table-wrap">
+            <table className="table min-w-[480px]">
+              <thead><tr><th>Quand</th><th>Ticket</th><th>Statut</th><th>Tentatives</th></tr></thead>
+              <tbody>
+                {jobs.map((j) => {
+                  const [label, badge] = STATUS[j.status];
+                  return (
+                    <tr key={j.id}>
+                      <td className="whitespace-nowrap text-(--color-ink-muted)">{ago(j.createdAt)}</td>
+                      <td className="font-semibold">{j.order?.reference ?? (j.kind === "TEST" ? "Ticket de test" : "Ticket")}</td>
+                      <td>
+                        <span className={`badge ${badge}`}>{label}</span>
+                        {j.lastError && j.status !== "PRINTED" ? <span className="block text-[12px] text-(--color-danger)">{j.lastError}</span> : null}
+                      </td>
+                      <td className="tabular-nums">{j.attempts}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

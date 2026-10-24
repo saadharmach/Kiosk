@@ -35,17 +35,16 @@ export default function TeamPage({ myId }: { myId: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <h1 className="me-auto text-2xl font-semibold">Team</h1>
+      <div className="flex items-center justify-end gap-3">
         {!adding ? <button className={primary} onClick={() => setAdding(true)}>Add a team member</button> : null}
       </div>
-      <p className="-mt-3 text-sm text-(--color-ink-muted)">The people who can sign in to this admin. A super admin can change everything; support can look and run a menu sync or re-check an order. Only the owner can delete an account (the others can switch it off), and only the owner changes the owner&apos;s own account.</p>
+      <p className="note note-info">The people who can sign in to this admin. A super admin can change everything; support can look and run a menu sync or re-check an order. Only the owner can delete an account (the others can switch it off), and only the owner changes the owner&apos;s own account.</p>
 
-      {notice ? <p role="status" className={`rounded-lg p-3 text-sm ${notice.tone === "ok" ? "bg-(--color-surface-2)" : "bg-amber-100 text-amber-950"}`}>{notice.text}</p> : null}
+      {notice ? <p role="status" className={`note ${notice.tone === "ok" ? "note-ok" : "note-warn"}`}>{notice.text}</p> : null}
       <ErrorText message={error} />
 
       {adding ? (
-        <form className="rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-4"
+        <form className="card"
           onSubmit={(e) => {
             e.preventDefault();
             void act("create", async () => {
@@ -72,9 +71,9 @@ export default function TeamPage({ myId }: { myId: string }) {
         </form>
       ) : null}
 
-      <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-        <table className="w-full text-sm">
-          <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["Person", "Role", "Status", "Last sign-in", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
+      <div className="table-wrap">
+        <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+          <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["Person", "Role", "Status", "Last sign-in", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-(--color-line)">
             {team.map((m) => {
               const me = m.id === myId;
@@ -83,9 +82,9 @@ export default function TeamPage({ myId }: { myId: string }) {
               const locked = m.lockedUntil !== null && Date.parse(m.lockedUntil) > Date.now();
               return (
                 <tr key={m.id} className={m.isActive ? "" : "opacity-60"}>
-                  <td className="px-4 py-3"><div className="font-medium">{m.fullName ?? m.email}{m.isOwner ? <span className="ms-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">owner</span> : null}{me ? <span className="ms-2 rounded-full bg-(--color-surface-2) px-2 py-0.5 text-xs font-normal">you</span> : null}</div>{m.fullName ? <div className="text-(--color-ink-muted)">{m.email}</div> : null}</td>
+                  <td className="px-4 py-3"><div className="font-medium">{m.fullName ?? m.email}{m.isOwner ? <span className="badge badge-info ms-2">Owner</span> : null}{me ? <span className="ms-2 rounded-full bg-(--color-surface-2) px-2 py-0.5 text-xs font-normal">you</span> : null}</div>{m.fullName ? <div className="text-(--color-ink-muted)">{m.email}</div> : null}</td>
                   <td className="px-4 py-3">
-                    <select aria-label={`Role of ${m.email}`} className="h-9 rounded-lg border border-(--color-line) bg-(--color-surface) px-2 disabled:opacity-60" value={m.role} disabled={me || ownersOnly || busy !== null}
+                    <select aria-label={`Role of ${m.email}`} className="field w-auto py-1" value={m.role} disabled={me || ownersOnly || busy !== null}
                       title={me ? "Ask another super admin to change your own role" : ownersOnly ? "Only the owner can change the owner's account" : undefined}
                       onChange={(e) => void act(m.id, async () => { await updateTeamMember(m.id, { role: e.target.value as TeamRole }); })}>
                       <option value="SUPER_ADMIN">{ROLE_LABEL.SUPER_ADMIN}</option><option value="SUPPORT">{ROLE_LABEL.SUPPORT}</option>
@@ -132,9 +131,9 @@ export default function TeamPage({ myId }: { myId: string }) {
       </div>
 
       <section aria-label="Recent changes">
-        <h2 className="mb-2 text-lg font-medium">Recent changes to the team</h2>
+        <h2 className="mb-2 text-[14.5px] font-bold">Recent changes to the team</h2>
         {activity.length === 0 ? <p className="text-sm text-(--color-ink-muted)">Nothing recorded yet.</p> : (
-          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) text-sm">
+          <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface) text-sm">
             {activity.map((a) => (
               <li key={a.id} className="flex flex-wrap gap-x-4 px-4 py-2"><span className="w-44 shrink-0 text-(--color-ink-muted)">{when(a.at)}</span><span>{a.actor} · {readable(a.action)}{a.target ? ` · ${a.target}` : ""}</span></li>
             ))}

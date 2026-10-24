@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CLOSED_MESSAGE, getSubscription, type SubscriptionStanding } from "@/lib/subscription";
 
-const day = (s: string) => new Date(`${s}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const day = (s: string) => new Date(`${s}T12:00:00Z`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 /**
  * Only shown when it matters: the last week of the subscription, and once it has ended (the kiosks are then off, but
@@ -28,22 +28,22 @@ export default function SubscriptionBanner({ slug, onClosed }: { slug: string; o
   if (!s || s.state === "active") return null;
   if (s.state === "ending") {
     return (
-      <div role="status" className="mb-6 rounded-(--radius-card) border-2 border-amber-500 bg-amber-50 p-4 text-amber-950">
-        <p className="font-medium">
-          Your subscription ends on {day(s.coveredUntil!)} ({s.daysLeft === 1 ? "today is the last day" : `in ${s.daysLeft} days`}).
+      <div role="status" className="note note-warn mb-4">
+        <p className="font-semibold">
+          Votre abonnement se termine le {day(s.coveredUntil!)} ({s.daysLeft === 1 ? "c’est le dernier jour" : `dans ${s.daysLeft} jours`}).
         </p>
-        <p className="text-sm">
-          After that your kiosks stop taking orders{s.closesWhenEnded ? " and this back office closes" : ""}. Contact us to renew.
+        <p>
+          Ensuite, vos bornes ne prennent plus de commandes{s.closesWhenEnded ? " et ce back-office ferme" : ""}. Contactez-nous pour le renouveler.
         </p>
       </div>
     );
   }
   return (
-    <div role="alert" className="mb-6 rounded-(--radius-card) border-2 border-(--color-danger) bg-red-50 p-4 text-red-950">
-      <p className="font-medium">Your subscription has ended: your kiosks are not taking orders.</p>
-      <p className="text-sm">
-        Everything here is kept and still works. Contact us to renew and the kiosks come back on by themselves.
-        {s.next ? ` Your next period starts on ${day(s.next.startsOn)}.` : ""}
+    <div role="alert" className="note note-err mb-4">
+      <p className="font-semibold">Votre abonnement est terminé : vos bornes ne prennent plus de commandes.</p>
+      <p>
+        Tout est conservé et fonctionne ici. Contactez-nous pour le renouveler : les bornes repartent d’elles-mêmes.
+        {s.next ? ` Votre prochaine période commence le ${day(s.next.startsOn)}.` : ""}
       </p>
     </div>
   );

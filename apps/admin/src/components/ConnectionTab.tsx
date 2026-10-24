@@ -55,7 +55,7 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h2 className="mb-3 text-lg font-medium">Connection to the till (unTill TPAPI)</h2>
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Connection to the till (unTill TPAPI)</h2>
         {conn ? (
           <dl className="mb-4 grid gap-x-8 gap-y-1 text-sm md:grid-cols-2">
             <div><dt className="inline text-(--color-ink-muted)">Last success: </dt><dd className="inline">{when(conn.lastSuccessAt)}</dd></div>
@@ -101,11 +101,11 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
         </div>
 
         {conn?.route === "BRIDGE" ? (
-          <div className="mt-5 rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-4">
+          <div className="mt-5 card">
             <p className="font-medium">
               Bridge:{" "}
               {conn.bridge.online
-                ? <span className="text-green-700">connected</span>
+                ? <span className="text-(--color-success)">connected</span>
                 : <span className="text-(--color-danger)">{conn.bridge.paired ? "not connected (the computer at the restaurant is off, or the helper is not running)" : "not set up yet"}</span>}
             </p>
             {conn.bridge.pairedAt ? <p className="text-sm text-(--color-ink-muted)">Set up {when(conn.bridge.pairedAt)}.</p> : null}
@@ -136,7 +136,7 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
         ) : null}
 
         {test ? (
-          <p role="status" className={`mt-3 rounded-lg p-3 text-sm ${test.ok ? "bg-(--color-surface-2)" : "text-(--color-danger) bg-(--color-surface-2)"}`}>
+          <p role="status" className={`note mt-3 ${test.ok ? "note-ok" : "note-err"}`}>
             {test.ok ? `Reached the till in ${test.durationMs} ms${test.version ? `, unTill ${test.version}` : ""}.` : `Could not reach the till: ${test.error ?? test.message ?? "no answer"}`}
           </p>
         ) : null}
@@ -145,7 +145,7 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
       {conn ? (
         <section>
           <div className="mb-3 flex items-center gap-4">
-            <h2 className="text-lg font-medium">Menu sync</h2>
+            <h2 className="text-[14.5px] font-bold">Menu sync</h2>
             <button disabled={busy !== null} className={secondary} onClick={() => {
               if (window.confirm("Read the menu from the till now? The kiosk keeps showing the current menu until the new one is complete. Photos, translations and suggestions are kept.")) {
                 void act("sync", async () => { await runSync(id); await load(); onChanged(); });
@@ -162,9 +162,9 @@ export default function ConnectionTab({ id, canWrite, onChanged }: { id: string;
             </p>
           ) : null}
           {runs.length === 0 ? <p className="text-sm text-(--color-ink-muted)">No sync has run yet.</p> : (
-            <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-              <table className="w-full text-sm">
-                <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["Started", "Result", "How", "Took", "Message"].map((h) => <th key={h} className="px-4 py-2 text-start font-medium">{h}</th>)}</tr></thead>
+            <div className="table-wrap">
+              <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+                <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["Started", "Result", "How", "Took", "Message"].map((h) => <th key={h} className="px-4 py-2 text-start font-medium">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-(--color-line)">
                   {runs.map((r) => (
                     <tr key={r.id}>

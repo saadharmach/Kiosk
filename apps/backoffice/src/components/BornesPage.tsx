@@ -6,13 +6,12 @@ import {
 } from "@/lib/kiosks";
 import PrinterPage from "./PrinterPage";
 
-const field = "h-10 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3";
-const btn = "h-10 rounded-lg px-4 font-medium disabled:opacity-50";
-const primary = `${btn} bg-(--color-brand) text-(--color-brand-ink)`;
-const secondary = `${btn} border border-(--color-line)`;
-const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2)";
+const field = "field";
+const primary = "btn btn-primary";
+const secondary = "btn btn-secondary";
+const card = "rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)";
 
-const TONE = { ok: "text-green-700", warn: "text-amber-700", none: "text-(--color-ink-muted)" } as const;
+const TONE = { ok: "badge-ok", warn: "badge-warn", none: "badge-muted" } as const;
 
 function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
   slug: string; b: Borne; open: boolean; onToggle: () => void; onChanged: () => void; onError: (m: string | null) => void;
@@ -32,98 +31,101 @@ function BorneCard({ slug, b, open, onToggle, onChanged, onError }: {
   return (
     <li className={card}>
       <div className="flex flex-wrap items-center gap-3 p-4">
-        <span className="rounded bg-(--color-brand) px-2 py-0.5 text-sm font-semibold text-(--color-brand-ink)">{b.code}</span>
+        <span className="grid size-10 shrink-0 place-items-center rounded-(--radius-card) bg-(--color-nav) text-[13px] font-bold text-white">{b.code}</span>
         <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-start">
-          <span className="block truncate text-lg font-medium">{b.name}</span>
-          <span className={`block text-sm ${TONE[state.tone]}`}>● {state.text}{b.orders ? ` · ${b.orders} order${b.orders === 1 ? "" : "s"}` : ""}</span>
-          <span className={`block text-sm ${b.screen.registered ? "text-green-700" : "text-(--color-ink-muted)"}`}>
-            {b.screen.registered ? "● Screen registered" : "○ Screen not registered"}
+          <span className="block truncate font-bold">{b.name}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={`badge ${b.screen.registered ? "badge-ok" : "badge-warn"}`}>
+              {b.screen.registered ? "Écran enregistré" : "Écran non enregistré"}
+            </span>
+            <span className={`badge ${TONE[state.tone]}`}>{state.text}</span>
+            {b.orders ? <span className="text-[12.5px] text-(--color-ink-muted)">{b.orders} commande{b.orders === 1 ? "" : "s"}</span> : null}
           </span>
         </button>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={b.isEnabled} disabled={busy}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={b.isEnabled} disabled={busy} className="size-4 accent-(--color-brand)"
             onChange={(e) => void act(() => updateBorne(slug, b.id, { isEnabled: e.target.checked }))} />
-          Takes orders
+          Prend des commandes
         </label>
-        <button type="button" className={secondary} onClick={onToggle}>{open ? "Close" : "Open"}</button>
+        <button type="button" className={secondary} onClick={onToggle}>{open ? "Fermer" : "Configurer"}</button>
       </div>
 
       {open ? (
-        <div className="flex flex-col gap-6 border-t border-(--color-line) p-4">
+        <div className="flex flex-col gap-5 border-t border-(--color-line) p-4">
           <section>
-            <h3 className="mb-2 font-medium">Name</h3>
+            <h3 className="card-title mb-2">Nom</h3>
             <div className="flex gap-2">
-              <input aria-label="Borne name" className={`${field} w-full sm:w-72`} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+              <input aria-label="Nom de la borne" className={`${field} w-full sm:w-72`} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
               <button type="button" className={secondary} disabled={busy || !name.trim() || name.trim() === b.name}
-                onClick={() => void act(() => updateBorne(slug, b.id, { name: name.trim() }))}>Rename</button>
+                onClick={() => void act(() => updateBorne(slug, b.id, { name: name.trim() }))}>Renommer</button>
             </div>
-            <p className="mt-1 text-xs text-(--color-ink-muted)">The name is printed on this borne&apos;s tickets, so staff know where the customer is.</p>
+            <p className="field-hint">Le nom est imprimé sur les tickets de cette borne : l’équipe sait où se trouve le client.</p>
           </section>
 
           <section>
-            <h3 className="mb-2 font-medium">Address for this machine</h3>
+            <h3 className="card-title mb-2">Adresse de cette machine</h3>
             <div className="flex gap-2">
-              <input readOnly aria-label="Borne address" className={`${field} min-w-0 flex-1 font-mono text-sm`} value={b.url} onFocus={(e) => e.target.select()} />
+              <input readOnly aria-label="Adresse de la borne" className={`${field} min-w-0 flex-1 font-mono text-[13px]`} value={b.url} onFocus={(e) => e.target.select()} />
               <button type="button" className={secondary}
                 onClick={() => navigator.clipboard?.writeText(b.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })}>
-                {copied ? "Copied" : "Copy"}
+                {copied ? "Copiée" : "Copier"}
               </button>
             </div>
-            <p className="mt-1 text-xs text-(--color-ink-muted)">
-              Open exactly this address in the browser of the machine. It remembers which borne it is, so reloading is safe. Orders from
-              it start with {b.code} and print on this borne&apos;s printer.
+            <p className="field-hint">
+              Ouvrez exactement cette adresse dans le navigateur de la machine. Elle retient quelle borne elle est : recharger ne pose pas de
+              problème. Ses commandes commencent par {b.code} et s’impriment sur l’imprimante de cette borne.
             </p>
           </section>
 
           <section>
-            <h3 className="mb-2 font-medium">Screen</h3>
+            <h3 className="card-title mb-2">Écran</h3>
             {b.screen.registered ? (
-              <p className="text-sm">Registered{b.screen.registeredAt ? ` on ${new Date(b.screen.registeredAt).toLocaleString()}` : ""}: this machine is {b.code}, whatever its address says.</p>
+              <p>Enregistré{b.screen.registeredAt ? ` le ${new Date(b.screen.registeredAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}` : ""} : cette machine est {b.code}, quelle que soit son adresse.</p>
             ) : (
-              <p className="text-sm text-(--color-ink-muted)">Not registered yet. Register the machine&apos;s screen so the server knows it is really this borne.</p>
+              <p className="text-(--color-ink-muted)">Pas encore enregistré. Enregistrez l’écran de la machine pour que le serveur sache que c’est bien cette borne.</p>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className={secondary} disabled={busy}
                 onClick={() => void act(async () => setCode(await screenCode(slug, b.id)))}>
-                {b.screen.registered ? "Register another screen" : "Register a screen"}
+                {b.screen.registered ? "Enregistrer un autre écran" : "Enregistrer un écran"}
               </button>
               {b.screen.registered ? (
-                <button type="button" className={`${secondary} text-(--color-danger)`} disabled={busy}
-                  onClick={() => { if (window.confirm(`Unregister ${b.name}'s screen? If only registered screens may order, it stops at once until it is registered again.`)) void act(() => unregisterScreen(slug, b.id)); }}>
-                  Unregister
+                <button type="button" className="btn btn-ghost text-(--color-danger)" disabled={busy}
+                  onClick={() => { if (window.confirm(`Désenregistrer l’écran de ${b.name} ? Si seuls les écrans enregistrés peuvent commander, il s’arrête aussitôt jusqu’à un nouvel enregistrement.`)) void act(() => unregisterScreen(slug, b.id)); }}>
+                  Désenregistrer
                 </button>
               ) : null}
             </div>
             {code ? (
-              <div className="mt-3 rounded-lg border border-(--color-line) bg-(--color-surface) p-4" role="status">
-                <ol className="list-decimal space-y-1 pl-5 text-sm">
-                  <li>On the kiosk machine, open <a className="font-mono underline" href={registerUrl} target="_blank" rel="noreferrer">{registerUrl}</a> (when only registered screens are allowed, any unregistered screen shows this page by itself).</li>
-                  <li>Type this code with the keys on the screen and press <b>Enregistrer</b>:</li>
+              <div className="note note-info mt-3" role="status">
+                <ol className="list-decimal space-y-1 ps-5">
+                  <li>Sur la borne, ouvrez <a className="font-mono underline" href={registerUrl} target="_blank" rel="noreferrer">{registerUrl}</a> (quand seuls les écrans enregistrés sont autorisés, tout écran non enregistré affiche cette page de lui-même).</li>
+                  <li>Tapez ce code avec les touches de l’écran puis appuyez sur <b>Enregistrer</b> :</li>
                 </ol>
-                <p className="my-2 font-mono text-3xl font-semibold tracking-widest select-all">{code.code}</p>
-                <p className="text-xs text-(--color-ink-muted)">
-                  It works once, until {new Date(code.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Registering a screen replaces this
-                  borne&apos;s previous one.
+                <p className="my-2 font-mono text-3xl font-bold tracking-widest text-(--color-ink) select-all">{code.code}</p>
+                <p className="text-[12.5px]">
+                  Valable une fois, jusqu’à {new Date(code.expiresAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}. Enregistrer un écran
+                  remplace le précédent de cette borne.
                 </p>
               </div>
             ) : null}
           </section>
 
           <section>
-            <h3 className="mb-2 font-medium">This borne&apos;s printer</h3>
+            <h3 className="card-title mb-2">Imprimante de cette borne</h3>
             <PrinterPage slug={slug} kioskId={b.id} />
           </section>
 
           <section className="border-t border-(--color-line) pt-4">
             {b.orders === 0 ? (
-              <button type="button" className={`${secondary} text-(--color-danger)`} disabled={busy}
-                onClick={() => { if (window.confirm(`Delete ${b.name} (${b.code}) and its printer settings? This cannot be undone.`)) void act(() => deleteBorne(slug, b.id)); }}>
-                Delete this borne
+              <button type="button" className="btn btn-danger" disabled={busy}
+                onClick={() => { if (window.confirm(`Supprimer ${b.name} (${b.code}) et les réglages de son imprimante ? C’est définitif.`)) void act(() => deleteBorne(slug, b.id)); }}>
+                Supprimer cette borne
               </button>
             ) : (
-              <p className="text-sm text-(--color-ink-muted)">
-                This borne has taken {b.orders} order{b.orders === 1 ? "" : "s"}, so it cannot be deleted: its orders keep its name. Untick
-                &ldquo;Takes orders&rdquo; to switch it off.
+              <p className="text-[12.5px] text-(--color-ink-muted)">
+                Cette borne a pris {b.orders} commande{b.orders === 1 ? "" : "s"} : elle ne peut pas être supprimée, ses commandes gardent son nom.
+                Décochez « Prend des commandes » pour l’arrêter.
               </p>
             )}
           </section>
@@ -148,43 +150,43 @@ export default function BornesPage({ slug }: { slug: string }) {
   }, [slug]);
   useEffect(() => { load(); const t = setInterval(load, 10_000); return () => clearInterval(t); }, [load]);
 
-  if (!bornes) return error ? <p className="text-(--color-danger)">{error}</p> : <p className="text-(--color-ink-muted)">Loading…</p>;
+  if (!bornes) return error ? <p className="note note-err">{error}</p> : <p className="text-(--color-ink-muted)">Chargement…</p>;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
-      <p className="text-sm text-(--color-ink-muted)">
-        A borne is one kiosk machine. Give each machine its own borne, with its own printer: tickets then print where the customer is.
-        Orders from a machine with no borne, or from a borne whose printer is off, go to the default printer below.
+    <div className="flex max-w-3xl flex-col gap-4">
+      <p className="note note-info">
+        Une borne = une machine. Donnez à chaque machine sa borne, avec sa propre imprimante : les tickets s’impriment là où se trouve le
+        client. Les commandes d’une machine sans borne, ou d’une borne dont l’imprimante est arrêtée, vont à l’imprimante par défaut (plus bas).
       </p>
-      {error ? <p className="text-sm text-(--color-danger)" role="alert">{error}</p> : null}
+      {error ? <p className="note note-err" role="alert">{error}</p> : null}
 
       {required === false && bornes.some((b) => b.screen.registered) ? (
-        <p role="status" className="rounded-lg border-2 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">
-          <b>Not protected yet.</b> {bornes.filter((b) => b.screen.registered).length} of {bornes.length} borne screen(s) registered, but any other
-          device can still open the kiosk address until you tick the box below.
-          {bornes.some((b) => b.isEnabled && !b.screen.registered) ? " Register the other bornes' screens first, or they will stop too." : ""}
+        <p role="status" className="note note-warn">
+          <b>Pas encore protégé.</b> {bornes.filter((b) => b.screen.registered).length} écran(s) de borne sur {bornes.length} enregistré(s), mais
+          n’importe quel autre appareil peut encore ouvrir l’adresse de la borne tant que la case ci-dessous n’est pas cochée.
+          {bornes.some((b) => b.isEnabled && !b.screen.registered) ? " Enregistrez d’abord les écrans des autres bornes, sinon elles s’arrêteront aussi." : ""}
         </p>
       ) : null}
       {required === true ? (
-        <p role="status" className="rounded-lg border-2 border-green-600 bg-green-50 p-3 text-sm text-green-900">
-          <b>Protected.</b> Only registered screens show the menu and take orders; any other device sees &ldquo;Register this screen&rdquo;.
+        <p role="status" className="note note-ok">
+          <b>Protégé.</b> Seuls les écrans enregistrés affichent le menu et prennent des commandes ; tout autre appareil voit « Enregistrer cet écran ».
         </p>
       ) : null}
       {required !== null ? (
-        <section className={`${card} p-4`}>
+        <section className="card">
           <label className="flex items-start gap-3">
-            <input type="checkbox" className="mt-1 h-5 w-5" checked={required} disabled={savingRequired}
+            <input type="checkbox" className="mt-0.5 size-[18px] accent-(--color-brand)" checked={required} disabled={savingRequired}
               onChange={async (e) => {
                 const next = e.target.checked;
-                if (next && !window.confirm("Only registered screens will show the menu and take orders. Any other device, and any borne whose screen is not registered yet, sees “Register this screen”. Continue?")) return;
+                if (next && !window.confirm("Seuls les écrans enregistrés afficheront le menu et prendront des commandes. Tout autre appareil, et toute borne dont l’écran n’est pas encore enregistré, verra « Enregistrer cet écran ». Continuer ?")) return;
                 setSavingRequired(true); setError(null);
                 try { setRequired((await setRegistration(slug, next)).required); } catch (err) { setError((err as Error).message); } finally { setSavingRequired(false); }
               }} />
             <span>
-              <span className="block font-medium">Only registered screens can show the menu and take orders</span>
-              <span className="block text-sm text-(--color-ink-muted)">
-                Recommended once every borne&apos;s screen is registered. Then the kiosk address alone is worth nothing: someone opening it
-                on their phone sees only &ldquo;Register this screen&rdquo;, and no one can pretend to be one of your bornes.
+              <span className="block font-bold">Seuls les écrans enregistrés peuvent afficher le menu et prendre des commandes</span>
+              <span className="block text-[12.5px] text-(--color-ink-muted)">
+                Conseillé une fois l’écran de chaque borne enregistré. L’adresse de la borne seule ne sert alors à rien : quelqu’un qui
+                l’ouvre sur son téléphone ne voit que « Enregistrer cet écran », et personne ne peut se faire passer pour une de vos bornes.
               </span>
             </span>
           </label>
@@ -200,15 +202,15 @@ export default function BornesPage({ slug }: { slug: string }) {
         }}
       >
         <div>
-          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="borne-name">New borne</label>
+          <label className="field-label" htmlFor="borne-name">Nouvelle borne</label>
           <input id="borne-name" className={`${field} w-full sm:w-72`} value={name} maxLength={60} placeholder="Borne entrée" onChange={(e) => setName(e.target.value)} />
         </div>
-        <button type="submit" className={primary} disabled={adding || !name.trim()}>{adding ? "Adding…" : "Add a borne"}</button>
+        <button type="submit" className={primary} disabled={adding || !name.trim()}>{adding ? "Ajout…" : "Ajouter une borne"}</button>
       </form>
 
       {bornes.length === 0 ? (
         <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-6 text-center text-(--color-ink-muted)">
-          No borne yet. Everything uses the default printer. Add a borne for each machine that should have its own printer.
+          Pas encore de borne. Tout passe par l’imprimante par défaut. Ajoutez une borne pour chaque machine qui doit avoir sa propre imprimante.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -221,10 +223,10 @@ export default function BornesPage({ slug }: { slug: string }) {
       <section className={card}>
         <button type="button" className="flex w-full items-center justify-between p-4 text-start" aria-expanded={open === "default"} onClick={() => setOpen(open === "default" ? null : "default")}>
           <span>
-            <span className="block text-lg font-medium">Default printer</span>
-            <span className="block text-sm text-(--color-ink-muted)">Used for orders from no borne, and when a borne&apos;s own printer is missing or switched off.</span>
+            <span className="block font-bold">Imprimante par défaut</span>
+            <span className="block text-[12.5px] text-(--color-ink-muted)">Pour les commandes sans borne, et quand l’imprimante d’une borne manque ou est arrêtée.</span>
           </span>
-          <span className={secondary + " flex items-center"}>{open === "default" ? "Close" : "Open"}</span>
+          <span className={secondary}>{open === "default" ? "Fermer" : "Configurer"}</span>
         </button>
         {open === "default" ? <div className="border-t border-(--color-line) p-4"><PrinterPage slug={slug} /></div> : null}
       </section>

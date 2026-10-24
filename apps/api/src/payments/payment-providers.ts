@@ -30,7 +30,7 @@ export const simulatorAllowed = (env: Record<string, string | undefined> = proce
 
 /** Charges nothing; the payment is approved or declined by hand (the kiosk shows two test buttons). */
 const simulator: PaymentProvider = {
-  label: "Test simulator (no real payment)",
+  label: "Simulateur de test (aucun vrai paiement)",
   async start() { /* the test buttons answer */ },
   async cancel() { /* nothing to tell */ },
 };

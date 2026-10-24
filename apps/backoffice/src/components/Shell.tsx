@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ForgotPassword from "./ForgotPassword";
 import { useAuth } from "@/state/auth";
 import ProductsPage from "./ProductsPage";
@@ -13,7 +13,45 @@ import SuggestionsPage from "./SuggestionsPage";
 import BrandingPage from "./BrandingPage";
 import SubscriptionBanner from "./SubscriptionBanner";
 import PaymentPage from "./PaymentPage";
-const SECTIONS = ["Products", "Categories", "Suggestions", "Allergens", "Orders", "Bornes", "Payment", "Branding", "Settings"] as const;
+import DashboardPage from "./DashboardPage";
+import { AppFrame, ThemeButton, since, type NavGroup } from "./frame";
+import { getDashboard } from "@/lib/dashboard";
+import { CLOSED_MESSAGE, isClosedMessage } from "@/lib/subscription";
+
+type Section = "dashboard" | "products" | "categories" | "suggestions" | "allergens" | "bornes" | "branding" | "orders" | "payment" | "settings";
+
+const GROUPS: NavGroup<Section>[] = [
+  { label: "Pilotage", items: [{ key: "dashboard", label: "Tableau de bord", icon: "dashboard" }] },
+  {
+    label: "Catalogue",
+    items: [
+      { key: "products", label: "Articles", icon: "book" },
+      { key: "categories", label: "Catégories", icon: "tag" },
+      { key: "suggestions", label: "Suggestions", icon: "spark" },
+      { key: "allergens", label: "Allergènes", icon: "alert" },
+    ],
+  },
+  { label: "Équipements", items: [{ key: "bornes", label: "Bornes et imprimantes", icon: "borne" }] },
+  { label: "Interface", items: [{ key: "branding", label: "Accueil et marque", icon: "image" }] },
+  {
+    label: "Exploitation",
+    items: [
+      { key: "orders", label: "Commandes", icon: "cart" },
+      { key: "payment", label: "Paiement", icon: "card" },
+      { key: "settings", label: "Paramètres", icon: "settings" },
+    ],
+  },
+];
+const ALL = GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, group: g.label })));
+const isSection = (s: string): s is Section => ALL.some((i) => i.key === s);
+
+/** The section in the address (#products), so a reload or a shared link opens the same page. */
+function fromHash(): Section {
+  const h = typeof window === "undefined" ? "" : window.location.hash.slice(1);
+  return isSection(h) ? h : "dashboard";
+}
+
+const LABELS = { menu: "Menu", fold: "Réduire le menu", signOut: "Se déconnecter", theme: "Thème clair / sombre", close: "Fermer" };
 
 export default function Shell() {
   const { user, slug, loading, signIn, signOut } = useAuth();
@@ -21,12 +59,31 @@ export default function Shell() {
   const [forgot, setForgot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>("Products");
-  // On a phone the sections sit behind a Menu button at the top instead of a sidebar.
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [section, setSection] = useState<Section>("dashboard");
+  useEffect(() => {
+    setSection(fromHash());
+    const onHash = () => setSection(fromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const open = useCallback((s: Section) => {
+    setSection(s);
+    try { history.replaceState(null, "", `#${s}`); } catch { /* the address just does not follow */ }
+  }, []);
+
+  // The top bar's "catalogue synchronised 4 min ago", when there is a till to speak of.
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [tillDown, setTillDown] = useState(false);
+  useEffect(() => {
+    if (!user || !slug) return;
+    const load = () => getDashboard(slug).then((d) => { setSyncedAt(d.till?.lastSyncAt ?? null); setTillDown(d.till ? !d.till.reachable : false); }, () => undefined);
+    load();
+    const id = window.setInterval(load, 120_000);
+    return () => window.clearInterval(id);
+  }, [user, slug]);
 
   if (loading) {
-    return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Loading…</main>;
+    return <main className="grid min-h-dvh place-items-center text-(--color-ink-muted)">Chargement…</main>;
   }
 
   if (!user && forgot) {
@@ -35,7 +92,8 @@ export default function Shell() {
 
   if (!user) {
     return (
-      <main className="grid min-h-dvh place-items-center p-6">
+      <main className="relative grid min-h-dvh place-items-center p-6">
+        <div className="absolute end-4 top-4"><ThemeButton label={LABELS.theme} /></div>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -47,107 +105,86 @@ export default function Shell() {
             } catch (err) {
               // The API gives one answer for every kind of mismatch, on purpose; say what to check.
               const m = (err as Error).message;
-              setError(m === "Invalid credentials" ? "Wrong restaurant address, email or password. Check all three: the address is the short one (like resto-a), not the restaurant's name." : m);
+              setError(m === "Invalid credentials"
+                ? "Adresse du restaurant, e-mail ou mot de passe incorrect. Vérifiez les trois : l’adresse est la forme courte (comme resto-a), pas le nom du restaurant."
+                : isClosedMessage(m) ? CLOSED_MESSAGE
+                : m.startsWith("Too many") ? "Trop de tentatives. Attendez une minute puis réessayez."
+                : m);
             } finally {
               setBusy(false);
             }
           }}
-          className="w-full max-w-sm rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-8"
+          className="card flex w-full max-w-sm flex-col gap-4 p-8"
         >
-          <h1 className="mb-6 text-2xl font-semibold">Back office</h1>
+          {/* On a white tile, as the brand asks: the logo's dark letters stay readable in the dark theme too. */}
+          <span className="self-start rounded-(--radius-card) border border-(--color-line) bg-white px-4 py-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/nexborn-logo.png" alt="NEXBORN – The Next Generation of Restaurant Technology" className="h-auto w-[200px]" />
+          </span>
+          <h1 className="text-[19px] font-bold">Connexion au back-office</h1>
 
-          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="slug">Restaurant address</label>
-          <input id="slug" required value={form.slug} autoComplete="organization" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            onChange={(e) => setForm({ ...form, slug: e.target.value })}
-            className="mb-1 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
-          <p className="mb-4 text-xs text-(--color-ink-muted)">The short address of your restaurant (for example resto-a), not its display name. Ask the platform admin if you do not know it.</p>
+          <div>
+            <label className="field-label" htmlFor="slug">Adresse du restaurant</label>
+            <input id="slug" required value={form.slug} autoComplete="organization" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              onChange={(e) => setForm({ ...form, slug: e.target.value })} className="field" />
+            <span className="field-hint">La forme courte de votre restaurant (par exemple resto-a), pas son nom. Demandez-la à l’équipe NEXBORN si besoin.</span>
+          </div>
 
-          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="email">Email</label>
-          <input id="email" type="email" required value={form.email} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="mb-4 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
+          <div>
+            <label className="field-label" htmlFor="email">E-mail</label>
+            <input id="email" type="email" required value={form.email} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} className="field" />
+          </div>
 
-          <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="password">Password</label>
-          <input id="password" type="password" required value={form.password} autoComplete="current-password"
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            className="mb-6 h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3" />
+          <div>
+            <label className="field-label" htmlFor="password">Mot de passe</label>
+            <input id="password" type="password" required value={form.password} autoComplete="current-password"
+              onChange={(e) => setForm({ ...form, password: e.target.value })} className="field" />
+          </div>
 
-          {error ? <p className="mb-4 text-sm text-(--color-danger)">{error}</p> : null}
+          {error ? <p role="alert" className="note note-err">{error}</p> : null}
 
-          <button type="submit" disabled={busy}
-            className="h-11 w-full rounded-lg bg-(--color-brand) font-medium text-(--color-brand-ink) disabled:opacity-50">
-            {busy ? "Signing in…" : "Sign in"}
+          <button type="submit" disabled={busy} className="btn btn-primary w-full">
+            {busy ? "Connexion…" : "Se connecter"}
           </button>
-          <button type="button" onClick={() => setForgot(true)} className="mt-4 text-sm underline">Forgot your password?</button>
+          <button type="button" onClick={() => setForgot(true)} className="self-start text-[13px] text-(--color-brand) hover:underline">
+            Mot de passe oublié ?
+          </button>
         </form>
       </main>
     );
   }
 
-  const pick = (s: (typeof SECTIONS)[number]) => { setSection(s); setMenuOpen(false); window.scrollTo(0, 0); };
-  const sections = (
-    <nav className="flex flex-col gap-1" aria-label="Sections">
-      {SECTIONS.map((s) => (
-        <button key={s} onClick={() => pick(s)} aria-current={s === section ? "page" : undefined}
-          className={`h-11 rounded-lg px-3 text-start md:h-10 ${
-            s === section ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface)"
-          }`}>
-          {s}
-        </button>
-      ))}
-    </nav>
-  );
-  const account = (
-    <div className="px-2 pt-6 text-sm text-(--color-ink-muted)">
-      <p className="truncate">{user.email}</p>
-      <button onClick={signOut} className="mt-2 underline">Sign out</button>
-    </div>
-  );
-
+  const current = ALL.find((i) => i.key === section)!;
   return (
-    <div className="flex min-h-dvh flex-col md:flex-row">
-      {/* Phone: a bar at the top, the sections open below it. */}
-      <header className="sticky top-0 z-30 border-b border-(--color-line) bg-(--color-surface-2) md:hidden">
-        <div className="flex h-14 items-center gap-3 px-4">
-          <span className="min-w-0 flex-1 truncate text-sm text-(--color-ink-muted)">{slug}</span>
-          <button onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}
-            className="flex h-10 items-center gap-2 rounded-lg border border-(--color-line) bg-(--color-surface) px-3 font-medium">
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
-              {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-            </svg>
-            {menuOpen ? "Close" : section}
-          </button>
-        </div>
-        {menuOpen ? (
-          <div className="max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-(--color-line) p-3 pb-6">
-            {sections}
-            {account}
-          </div>
-        ) : null}
-      </header>
-
-      <aside className="hidden w-60 shrink-0 flex-col border-e border-(--color-line) bg-(--color-surface-2) p-4 md:flex">
-        <p className="mb-6 px-2 text-sm text-(--color-ink-muted)">{slug}</p>
-        {sections}
-        <div className="mt-auto">{account}</div>
-      </aside>
-
-        <main className="min-w-0 flex-1 p-4 md:p-8">
-          {slug ? (
-            <SubscriptionBanner slug={slug} onClosed={(message) => { setError(message); void signOut(); }} />
+    <AppFrame groups={GROUPS} active={section} onPick={open} title={current.label} crumb={current.group}
+      user={{ name: user.email.split("@")[0]!, detail: slug ?? undefined }} onSignOut={signOut} labels={LABELS}
+      topRight={
+        <>
+          {slug ? <span className="badge badge-muted max-[860px]:hidden">{slug}</span> : null}
+          {tillDown ? (
+            <span className="flex items-center gap-1.5 text-[12.5px] text-(--color-danger)"><span className="dot dot-off" />Caisse injoignable</span>
+          ) : syncedAt ? (
+            <span className="flex items-center gap-1.5 text-[12.5px] text-(--color-ink-muted) max-[600px]:hidden">
+              <span className="dot" />Synchronisé {since(syncedAt, "fr")}
+            </span>
           ) : null}
-          <h1 className="mb-4 text-2xl font-semibold md:mb-6">{section}</h1>
-          {section === "Products" && slug ? <ProductsPage slug={slug} />
-          : section === "Categories" && slug ? <CategoriesPage slug={slug} />
-          : section === "Suggestions" && slug ? <SuggestionsPage slug={slug} />
-          : section === "Allergens" && slug ? <AllergensPage slug={slug} />
-          : section === "Orders" && slug ? <OrdersPage slug={slug} />
-          : section === "Bornes" && slug ? <BornesPage slug={slug} />
-          : section === "Payment" && slug ? <PaymentPage slug={slug} />
-          : section === "Branding" && slug ? <BrandingPage slug={slug} />
-          : section === "Settings" && slug ? <SettingsPage slug={slug} />
-          : <p className="text-(--color-ink-muted)">Coming in the next step.</p>}
-        </main>
-    </div>
+        </>
+      }>
+      {slug ? (
+        <SubscriptionBanner slug={slug} onClosed={(message) => { setError(message); void signOut(); }} />
+      ) : null}
+      {!slug ? null
+        : section === "dashboard" ? <DashboardPage slug={slug} onOpen={open} />
+        : section === "products" ? <ProductsPage slug={slug} />
+        : section === "categories" ? <CategoriesPage slug={slug} />
+        : section === "suggestions" ? <SuggestionsPage slug={slug} />
+        : section === "allergens" ? <AllergensPage slug={slug} />
+        : section === "orders" ? <OrdersPage slug={slug} />
+        : section === "bornes" ? <BornesPage slug={slug} />
+        : section === "payment" ? <PaymentPage slug={slug} />
+        : section === "branding" ? <BrandingPage slug={slug} />
+        : <SettingsPage slug={slug} />}
+    </AppFrame>
   );
 }

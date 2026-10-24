@@ -26,9 +26,9 @@ export default function TillLogTab({ id }: { id: string }) {
       {!data ? (error ? null : <p className="text-(--color-ink-muted)">Loading…</p>) : data.items.length === 0 ? (
         <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-8 text-center text-(--color-ink-muted)">{failuresOnly ? "No failures recorded." : "Nothing recorded yet."}</p>
       ) : (
-        <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-          <table className="w-full text-sm">
-            <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["When", "Call", "Result", "Code", "Took", "Order", "Message"].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
+        <div className="table-wrap">
+          <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+            <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["When", "Call", "Result", "Code", "Took", "Order", "Message"].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-(--color-line)">
               {data.items.map((l) => (
                 <tr key={l.id}>

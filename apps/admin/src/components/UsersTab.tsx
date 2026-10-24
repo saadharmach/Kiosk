@@ -26,7 +26,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
 
   return (
     <div className="flex flex-col gap-5">
-      {notice ? <p role="status" className={`rounded-lg p-3 text-sm ${notice.tone === "ok" ? "bg-(--color-surface-2)" : "bg-amber-100 text-amber-950"}`}>{notice.text}</p> : null}
+      {notice ? <p role="status" className={`note ${notice.tone === "ok" ? "note-ok" : "note-warn"}`}>{notice.text}</p> : null}
       <ErrorText message={error} />
 
       <div className="flex items-center gap-3">
@@ -36,7 +36,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
 
       {adding ? (
         <form
-          className="rounded-(--radius-card) border border-(--color-line) bg-(--color-surface-2) p-4"
+          className="card"
           onSubmit={(e) => {
             e.preventDefault();
             void act("create", async () => {
@@ -65,9 +65,9 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
       ) : null}
 
       {users.length === 0 ? <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-8 text-center text-(--color-ink-muted)">Nobody can sign in yet. {canWrite ? "Add the owner first." : ""}</p> : (
-        <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-line)">
-          <table className="w-full text-sm">
-            <thead className="bg-(--color-surface-2) text-(--color-ink-muted)"><tr>{["Person", "Role", "Status", "Last sign-in", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
+        <div className="table-wrap">
+          <table className="w-full [&_tbody_tr:hover]:bg-(--color-info-soft)">
+            <thead className="bg-(--color-page) text-[12.5px] text-(--color-ink-muted)"><tr>{["Person", "Role", "Status", "Last sign-in", ""].map((h) => <th key={h} className="px-4 py-3 text-start font-medium">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-(--color-line)">
               {users.map((u) => {
                 const locked = u.lockedUntil !== null && Date.parse(u.lockedUntil) > Date.now();
@@ -76,7 +76,7 @@ export default function UsersTab({ id, canWrite, onChanged }: { id: string; canW
                     <td className="px-4 py-3"><div className="font-medium">{u.fullName ?? u.email}</div>{u.fullName ? <div className="text-(--color-ink-muted)">{u.email}</div> : null}</td>
                     <td className="px-4 py-3">
                       {canWrite ? (
-                        <select aria-label={`Role of ${u.email}`} className="h-9 rounded-lg border border-(--color-line) bg-(--color-surface) px-2" value={u.role} disabled={busy !== null}
+                        <select aria-label={`Role of ${u.email}`} className="field w-auto py-1" value={u.role} disabled={busy !== null}
                           onChange={(e) => void act(u.id, async () => { await updateUser(id, u.id, { role: e.target.value as UserRole }); })}>
                           {ROLES.map((r) => <option key={r} value={r}>{r.toLowerCase()}</option>)}
                         </select>

@@ -125,6 +125,6 @@ export const submitOrder = (slug: string, id: string) =>
 export const verifyOrder = (slug: string, id: string) =>
   request<unknown>(`/restaurant/${slug}/orders/${id}/verify`, { method: "POST" });
 
-export const money = (n: number, currency: string) => `${n.toFixed(2)} ${currency}`;
+export const money = (n: number, currency: string) => new Intl.NumberFormat("fr-MA", { style: "currency", currency }).format(n);
 export const when = (s: string | null | undefined) =>
-  s ? new Date(s).toLocaleString() : "—";
+  s ? new Date(s).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—";

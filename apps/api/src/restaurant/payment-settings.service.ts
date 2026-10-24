@@ -35,9 +35,9 @@ export class PaymentSettingsService {
     });
     const warnings: string[] = [];
     if (settings.cardEnabled && !bornes.some((b) => b.terminal?.usable)) {
-      warnings.push("Card payment is on, but no borne has a working card terminal: the kiosks only offer cash.");
+      warnings.push("Le paiement par carte est activé, mais aucune borne n’a de terminal de carte en service : les bornes ne proposent que les espèces.");
     }
-    if (payments.length === 0) warnings.push("No payment types from unTill yet: run a menu sync (the admin, or wait for the next one).");
+    if (payments.length === 0) warnings.push("Aucun moyen de paiement d’unTill pour l’instant : lancez une synchronisation du menu (l’administrateur), ou attendez la prochaine.");
     return {
       settings,
       untillPayments: payments.map((p) => ({ untillId: p.untillId.toString(), number: p.number, name: p.name, kind: p.kind })),

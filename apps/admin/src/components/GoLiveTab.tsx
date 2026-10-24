@@ -5,8 +5,8 @@ import { secondary } from "./ui";
 
 const ICON: Record<CheckState, { mark: string; label: string; tone: string }> = {
   done: { mark: "✓", label: "Done", tone: "bg-(--color-brand) text-(--color-brand-ink)" },
-  todo: { mark: "✗", label: "To do", tone: "bg-red-100 text-red-900" },
-  warning: { mark: "!", label: "Look at this", tone: "bg-amber-200 text-amber-950" },
+  todo: { mark: "✗", label: "To do", tone: "bg-(--color-danger-soft) text-(--color-danger)" },
+  warning: { mark: "!", label: "Look at this", tone: "bg-(--color-warning-soft) text-(--color-warning)" },
 };
 
 function Row({ c, onOpenTab }: { c: Check; onOpenTab: (t: RestaurantTab) => void }) {
@@ -34,7 +34,7 @@ export default function GoLiveTab({ r, readiness, onOpenTab }: { r: RestaurantDe
   return (
     <div className="flex flex-col gap-8">
       <section aria-label="Progress">
-        <p className="mb-2 text-lg font-medium">
+        <p className="mb-2 text-[14.5px] font-bold">
           {readiness.ready ? "Ready to go live." : `${readiness.requiredTotal - readiness.requiredDone} thing${readiness.requiredTotal - readiness.requiredDone === 1 ? "" : "s"} to do before going live.`}
           <span className="ms-3 text-sm font-normal text-(--color-ink-muted)">{readiness.requiredDone} of {readiness.requiredTotal} required</span>
         </p>
@@ -47,8 +47,8 @@ export default function GoLiveTab({ r, readiness, onOpenTab }: { r: RestaurantDe
       </section>
 
       <section aria-label="Required">
-        <h2 className="mb-3 text-lg font-medium">Required</h2>
-        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
+        <h2 className="mb-2.5 text-[14.5px] font-bold">Required</h2>
+        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)">
           {required.map((c) => <Row key={c.key} c={c} onOpenTab={onOpenTab} />)}
         </ul>
       </section>
@@ -56,7 +56,7 @@ export default function GoLiveTab({ r, readiness, onOpenTab }: { r: RestaurantDe
       <section aria-label="Recommended">
         <h2 className="mb-1 text-lg font-medium">Recommended</h2>
         <p className="mb-3 text-sm text-(--color-ink-muted)">These do not stop the restaurant from going live. {readiness.recommendedDone} of {readiness.recommendedTotal} done.</p>
-        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
+        <ul className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line) bg-(--color-surface)">
           {recommended.map((c) => <Row key={c.key} c={c} onOpenTab={onOpenTab} />)}
         </ul>
       </section>
