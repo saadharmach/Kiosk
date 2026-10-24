@@ -198,6 +198,8 @@ export interface Catalog {
   products: CatalogProduct[];
   /** Per department: the products to offer after something from it is added, first first. */
   suggestions: Record<string, string[]>;
+  /** The basket screen's own list, first first. Empty (or an older server): the basket uses the departments' lists. */
+  basketSuggestions?: string[];
 }
 
 /** What the API sends: each option group's name and choices once, products only list which they use. */

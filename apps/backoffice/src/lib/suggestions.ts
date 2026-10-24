@@ -20,10 +20,17 @@ export interface DepartmentSuggestions {
 export const MAX_SUGGESTIONS = 12;
 
 export const listSuggestions = (slug: string) =>
-  request<{ departments: DepartmentSuggestions[] }>(`/restaurant/${slug}/suggestions`);
+  request<{ departments: DepartmentSuggestions[]; basket?: SuggestionItem[] }>(`/restaurant/${slug}/suggestions`);
 
 export const saveSuggestions = (slug: string, departmentId: string, articleIds: string[]) =>
   request<{ articleIds: string[] }>(`/restaurant/${slug}/suggestions/${departmentId}`, {
+    method: "PUT",
+    body: JSON.stringify({ articleIds }),
+  });
+
+/** The basket screen's own list. Empty: the basket offers the suggestions of the departments in it. */
+export const saveBasketSuggestions = (slug: string, articleIds: string[]) =>
+  request<{ articleIds: string[] }>(`/restaurant/${slug}/suggestions/basket`, {
     method: "PUT",
     body: JSON.stringify({ articleIds }),
   });

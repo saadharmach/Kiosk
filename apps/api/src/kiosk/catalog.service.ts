@@ -237,7 +237,7 @@ export class CatalogService {
     const today = todayIn(restaurant.timezone);
     const priceLevelId = salesArea.priceLevelId ?? 0n;
 
-    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, suggestionRows, allergenLinks, allergenRows] =
+    const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, suggestionRows, basketRows, allergenLinks, allergenRows] =
       await Promise.all([
         this.prisma.tpapiGroup.findMany({ where: { restaurantId } }),
         this.prisma.tpapiDepartment.findMany({
@@ -259,6 +259,7 @@ export class CatalogService {
         this.prisma.productPresentation.findMany({ where: { restaurantId } }),
         this.prisma.categoryPresentation.findMany({ where: { restaurantId } }),
         this.prisma.departmentSuggestion.findMany({ where: { restaurantId } }),
+        this.prisma.basketSuggestion.findMany({ where: { restaurantId } }),
         // Nothing leaves the database when the switch is off.
         showAllergens
           ? this.prisma.productAllergen.findMany({ where: { restaurantId } })
@@ -426,6 +427,11 @@ export class CatalogService {
       if (!sellableIds.has(article)) continue;
       (suggestions[row.departmentId.toString()] ??= []).push(article);
     }
+    // The basket's own list, whatever is in it. Empty: the kiosk falls back to the departments' lists.
+    const basketSuggestions = [...basketRows]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((row) => row.articleId.toString())
+      .filter((id) => sellableIds.has(id));
 
     // Only the groups some shown product actually uses.
     const usedGroups: Record<string, { name: string; items: { articleId: string; name: string; price: number }[] }> = {};
@@ -443,6 +449,7 @@ export class CatalogService {
       products: shownProducts,
       groupDefs: usedGroups,
       suggestions,
+      basketSuggestions,
       counts: { categories: shownCategories.length, products: shownProducts.length },
     };
   }

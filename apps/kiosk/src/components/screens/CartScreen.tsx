@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
 import {
@@ -13,6 +13,8 @@ import { Icon } from "../icons";
 import ProductSheet from "../ProductSheet";
 import PaymentPanel from "../PaymentPanel";
 import { newId } from "../../lib/uuid";
+import { isNewToday } from "@/lib/new-badge";
+import { needsChoices, pickBasketSuggestions } from "@/lib/suggestions";
 
 /** Cart thumbnail that quietly disappears if the image cannot be loaded. */
 function Thumb({ src }: { src: string }) {
@@ -23,11 +25,20 @@ function Thumb({ src }: { src: string }) {
   return <img src={src} alt="" onError={() => setFailed(true)} className="size-36 shrink-0 rounded-3xl object-cover" />;
 }
 
+/** A suggestion's photo. A missing or broken one leaves a flat gap, so tiles stay aligned. */
+function TilePhoto({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className="size-36 shrink-0 bg-(--color-surface-2)" />;
+  // Decorative: the name beside it carries the meaning.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" onError={() => setFailed(true)} className="size-36 shrink-0 object-cover" />;
+}
+
 /** A server that does not say (older): cash, paid at the counter, as before. */
 const CASH_ONLY: PaymentOptions = { card: false, cash: true, cashClosed: false, simulator: false };
 
 export default function CartScreen({
-  slug, locale, name, currency, products, orderType, salesAreaId, tableNumber, borneCode, onLocale, onBack, onPlaced, onUnavailable,
+  slug, locale, name, currency, products, suggestions = {}, basketSuggestions, showImages = true, orderType, salesAreaId, tableNumber, borneCode, onLocale, onBack, onPlaced, onUnavailable,
   payment = CASH_ONLY, onPaying,
 }: {
   slug: string;
@@ -37,6 +48,11 @@ export default function CartScreen({
   currency: string;
   /** The menu, so a line can be reopened in its product sheet. */
   products: CatalogProduct[];
+  /** Per department, then the basket's own list: what the "You might also like" row offers. */
+  suggestions?: Record<string, string[]>;
+  basketSuggestions?: string[];
+  /** The restaurant can switch product photos off. */
+  showImages?: boolean;
   orderType: string;
   salesAreaId: string;
   tableNumber: number | null;
@@ -58,6 +74,18 @@ export default function CartScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ line: CartLine; product: CatalogProduct } | null>(null);
+  // A suggestion with a size or a required choice opens its sheet here; any other is added at a tap.
+  const [adding, setAdding] = useState<CatalogProduct | null>(null);
+  const offered = useMemo(
+    () => pickBasketSuggestions({ products, suggestions, basketSuggestions }, cart.lines.map((l) => l.articleId)),
+    [products, suggestions, basketSuggestions, cart.lines],
+  );
+  const photoSlot = showImages && offered.some((p) => p.imageUrl);
+  const takeSuggestion = (p: CatalogProduct) => {
+    if (needsChoices(p)) return setAdding(p);
+    // The price here is only for the screen: the server prices the basket again at once.
+    cart.add({ articleId: p.id, name: p.name, imageUrl: p.imageUrl, options: [], unitPrice: p.price ?? 0 });
+  };
 
   /** Only a dish with something to choose can be edited, and only if it is still on the menu. */
   const productFor = (l: CartLine) => {
@@ -252,6 +280,49 @@ export default function CartScreen({
               ))}
             </ul>
 
+            {offered.length > 0 ? (
+              <section aria-label={t.alsoLike} className="mt-10 flex flex-col gap-4">
+                <h2 className="font-display text-5xl leading-tight font-extrabold">{t.alsoLike}</h2>
+                <ul className="-mx-12 flex gap-4 overflow-x-auto px-12 pb-2">
+                  {offered.map((p) => (
+                    <li key={p.id} className="shrink-0">
+                      <button onClick={() => takeSuggestion(p)}
+                        className="relative flex h-36 w-[26rem] overflow-hidden rounded-[1.75rem] bg-(--color-surface) text-start shadow-md">
+                        {photoSlot ? <TilePhoto src={p.imageUrl} /> : null}
+                        <span className="flex min-w-0 flex-1 flex-col justify-between gap-1 p-4">
+                          <span className="flex flex-col gap-1">
+                            {isNewToday(p) ? (
+                              <span className="w-fit rounded-full bg-(--color-brand) px-3 py-0.5 font-display text-lg font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
+                                {t.newItem}
+                              </span>
+                            ) : null}
+                            <span className="line-clamp-2 font-display text-3xl leading-tight font-bold break-words">{p.name}</span>
+                          </span>
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="font-display text-3xl font-extrabold tabular-nums">
+                              {p.sizes.length > 0
+                                ? <><span className="me-1.5 text-xl font-bold">{t.fromPrice}</span>{money(Math.min(...p.sizes.map((s) => s.price)), currency, locale)}</>
+                                : money(p.price ?? 0, currency, locale)}
+                            </span>
+                            {needsChoices(p) ? (
+                              <span className="flex h-14 items-center gap-1 rounded-full bg-(--color-brand) ps-5 pe-3 font-display text-2xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
+                                {t.choose}
+                                <Icon name="chevron" className="size-6 rtl:-scale-x-100" strokeWidth={3} />
+                              </span>
+                            ) : (
+                              <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
+                                <Icon name="plus" className="size-7" strokeWidth={2.8} />
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <div className="mt-10 flex items-baseline justify-between border-t-2 border-(--color-line) px-3 pt-8">
               <span className="font-display text-6xl font-extrabold">{t.total}</span>
               <span className="font-display text-8xl font-extrabold tabular-nums">
@@ -280,6 +351,11 @@ export default function CartScreen({
       {editing ? (
         <ProductSheet product={editing.product} editing={editing.line} currency={currency} locale={locale}
           onClose={() => setEditing(null)} />
+      ) : null}
+
+      {adding ? (
+        <ProductSheet key={adding.id} product={adding} currency={currency} locale={locale} showImages={showImages}
+          onClose={() => setAdding(null)} />
       ) : null}
 
       {stage !== "cart" && serverTotal !== null ? (

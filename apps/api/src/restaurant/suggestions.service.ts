@@ -13,14 +13,15 @@ export class SuggestionsService {
     private readonly storage: StorageService,
   ) {}
 
-  /** Every department with its own list, in order. */
+  /** Every department with its own list, in order, and the basket's own list. */
   async list(restaurantId: string) {
-    const [departments, presentations, links] = await Promise.all([
+    const [departments, presentations, links, basketLinks] = await Promise.all([
       this.prisma.tpapiDepartment.findMany({ where: { restaurantId }, orderBy: { number: "asc" } }),
       this.prisma.categoryPresentation.findMany({ where: { restaurantId, scope: "DEPARTMENT" } }),
       this.prisma.departmentSuggestion.findMany({ where: { restaurantId }, orderBy: { sortOrder: "asc" } }),
+      this.prisma.basketSuggestion.findMany({ where: { restaurantId }, orderBy: { sortOrder: "asc" } }),
     ]);
-    const suggested = [...new Set(links.map((l) => l.articleId))];
+    const suggested = [...new Set([...links, ...basketLinks].map((l) => l.articleId))];
     const [articles, productPres] = await Promise.all([
       this.prisma.tpapiArticle.findMany({
         where: { restaurantId, untillId: { in: suggested } },
@@ -31,6 +32,22 @@ export class SuggestionsService {
     const productPresOf = new Map(productPres.map((p) => [p.articleId.toString(), p]));
     const articleOf = new Map(articles.map((a) => [a.untillId.toString(), a]));
     const presOf = new Map(presentations.map((p) => [p.untillId.toString(), p]));
+    const items = (rows: { articleId: bigint; sortOrder: number }[]) =>
+      [...rows]
+        .sort((x, y) => x.sortOrder - y.sortOrder)
+        .flatMap((l) => {
+          const a = articleOf.get(l.articleId.toString());
+          // An article that left unTill is not shown, and drops out of the list when it is next saved.
+          if (!a) return [];
+          const pres = productPresOf.get(l.articleId.toString());
+          return [{
+            articleId: l.articleId.toString(),
+            name: pickLocalized(pres?.displayName, "fr", a.name) ?? a.name,
+            imageUrl: this.storage.publicUrl(pres?.imagePath ?? null),
+            categoryId: a.departmentId?.toString() ?? null,
+            available: a.isActive && a.isPresent,
+          }];
+        });
 
     return {
       departments: departments.map((d) => {
@@ -39,24 +56,10 @@ export class SuggestionsService {
           departmentId: key,
           posName: d.name,
           name: pickLocalized(presOf.get(key)?.displayName, "fr", d.name) ?? d.name,
-          suggestions: links
-            .filter((l) => l.departmentId === d.untillId)
-            .sort((x, y) => x.sortOrder - y.sortOrder)
-            .flatMap((l) => {
-              const a = articleOf.get(l.articleId.toString());
-              // An article that left unTill is not shown, and drops out of the list when it is next saved.
-              if (!a) return [];
-              const pres = productPresOf.get(l.articleId.toString());
-              return [{
-                articleId: l.articleId.toString(),
-                name: pickLocalized(pres?.displayName, "fr", a.name) ?? a.name,
-                imageUrl: this.storage.publicUrl(pres?.imagePath ?? null),
-                categoryId: a.departmentId?.toString() ?? null,
-                available: a.isActive && a.isPresent,
-              }];
-            }),
+          suggestions: items(links.filter((l) => l.departmentId === d.untillId)),
         };
       }),
+      basket: items(basketLinks),
     };
   }
 
@@ -70,8 +73,41 @@ export class SuggestionsService {
     if (ids.length > MAX_SUGGESTIONS) {
       throw new BadRequestException(`A department can have at most ${MAX_SUGGESTIONS} suggestions`);
     }
-    const wanted = ids.map((a) => BigInt(a));
+    const wanted = await this.sellable(restaurantId, ids);
 
+    await this.prisma.$transaction([
+      this.prisma.departmentSuggestion.deleteMany({ where: { restaurantId, departmentId: dept } }),
+      ...(wanted.length > 0
+        ? [this.prisma.departmentSuggestion.createMany({
+            data: wanted.map((articleId, sortOrder) => ({ restaurantId, departmentId: dept, articleId, sortOrder })),
+          })]
+        : []),
+    ]);
+    return { departmentId, articleIds: ids };
+  }
+
+  /** Replaces the basket's whole list. Empty: the basket offers its departments' suggestions instead. */
+  async replaceBasket(restaurantId: string, articleIds: string[]) {
+    const ids = [...new Set(articleIds)];
+    if (ids.length > MAX_SUGGESTIONS) {
+      throw new BadRequestException(`The basket can have at most ${MAX_SUGGESTIONS} suggestions`);
+    }
+    const wanted = await this.sellable(restaurantId, ids);
+
+    await this.prisma.$transaction([
+      this.prisma.basketSuggestion.deleteMany({ where: { restaurantId } }),
+      ...(wanted.length > 0
+        ? [this.prisma.basketSuggestion.createMany({
+            data: wanted.map((articleId, sortOrder) => ({ restaurantId, articleId, sortOrder })),
+          })]
+        : []),
+    ]);
+    return { articleIds: ids };
+  }
+
+  /** The ids as articles of this restaurant that can be sold; refuses an unknown product or a menu. */
+  private async sellable(restaurantId: string, ids: string[]): Promise<bigint[]> {
+    const wanted = ids.map((a) => BigInt(a));
     if (wanted.length > 0) {
       const found = await this.prisma.tpapiArticle.findMany({
         where: { restaurantId, untillId: { in: wanted }, isActive: true, isPresent: true },
@@ -86,15 +122,6 @@ export class SuggestionsService {
         throw new BadRequestException(`Menus cannot be suggested yet: ${menus.map((i) => byId.get(i)!.name).join(", ")}`);
       }
     }
-
-    await this.prisma.$transaction([
-      this.prisma.departmentSuggestion.deleteMany({ where: { restaurantId, departmentId: dept } }),
-      ...(wanted.length > 0
-        ? [this.prisma.departmentSuggestion.createMany({
-            data: wanted.map((articleId, sortOrder) => ({ restaurantId, departmentId: dept, articleId, sortOrder })),
-          })]
-        : []),
-    ]);
-    return { departmentId, articleIds: ids };
+    return wanted;
   }
 }

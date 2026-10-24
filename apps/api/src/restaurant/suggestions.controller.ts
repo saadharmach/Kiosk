@@ -17,6 +17,12 @@ export class SuggestionsController {
     return this.suggestions.list(tenant.restaurantId);
   }
 
+  // Before ":departmentId", so "basket" is not taken for a department.
+  @Put("basket")
+  replaceBasket(@Tenant() tenant: TenantCtx, @Body() dto: SetSuggestionsDto) {
+    return this.suggestions.replaceBasket(tenant.restaurantId, dto.articleIds);
+  }
+
   @Put(":departmentId")
   replace(
     @Tenant() tenant: TenantCtx,

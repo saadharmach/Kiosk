@@ -614,6 +614,22 @@ model DepartmentSuggestion {
   @@map("department_suggestions")
 }
 
+/// The dishes the kiosk offers on the basket screen, whatever is in the basket. When the list is empty, the basket
+/// offers the suggestions of the departments already in it instead.
+model BasketSuggestion {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @db.Uuid
+  /// unTill ArticleId. No FK: a later sync may re-create it.
+  articleId    BigInt
+  /// Position in the list, first shown first.
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([restaurantId, articleId])
+  @@index([restaurantId])
+  @@map("basket_suggestions")
+}
+
 /// TPAPI has no article→allergen link, so it is declared here.
 model ProductAllergen {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

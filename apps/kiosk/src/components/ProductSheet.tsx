@@ -5,6 +5,7 @@ import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import type { CatalogOptionGroup, CatalogProduct } from "@/lib/api";
 import { isNewToday } from "@/lib/new-badge";
 import { orderedSteps } from "@/lib/steps";
+import { needsChoices } from "@/lib/suggestions";
 import { isComplete, limits, preselected, previouslyPicked, toggled } from "@/lib/options";
 import { useCart, type CartLine } from "@/state/cart";
 import { Icon } from "./icons";
@@ -16,12 +17,6 @@ const CHIP_COLORS: [string, string][] = [
   ["#fde2e2", "#7f1d1d"], ["#fef3c7", "#78350f"], ["#dbeafe", "#1e3a8a"],
   ["#fde9d2", "#7c2d12"], ["#dcfce7", "#14532d"], ["#ede9fe", "#4c1d95"],
 ];
-
-/**
- * A suggestion with a size or a required choice cannot be added from a tile: it opens its own sheet afterwards.
- * Optional extras alone do not stop it: it is added as it is.
- */
-const needsChoices = (p: CatalogProduct) => p.sizes.length > 0 || p.optionGroups.some((g) => limits(g).min > 0);
 
 /** A suggestion's photo. A missing or broken one leaves a flat gap, so tiles stay aligned. */
 function TilePhoto({ src }: { src: string | null }) {

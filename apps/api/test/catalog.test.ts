@@ -54,6 +54,7 @@ function world(over: Record<string, unknown[]> = {}) {
     ],
     categoryPresentation: [],
     departmentSuggestion: [],
+    basketSuggestion: [],
     productAllergen: [{ articleId: 10n, allergenId: 901n }],
     tpapiAllergen: [{ untillId: 901n, number: 1, name: "Gluten" }, { untillId: 902n, number: 2, name: "Nuts" }],
     ...over,
@@ -431,6 +432,15 @@ describe("CatalogService.catalog: suggestions per department", () => {
       departmentSuggestion: [sug(3n, 13n, 0), sug(3n, 15n, 1), sug(3n, 11n, 2), sug(3n, 999n, 3), sug(3n, 10n, 4)],
     });
     assert.deepEqual(c.suggestions, { "3": ["10"] });
+  });
+
+  it("sends the basket's own list in its order, without what the kiosk could not sell", async () => {
+    const { c } = await catalog({ basketSuggestion: [
+      { articleId: 13n, sortOrder: 0 }, { articleId: 10n, sortOrder: 3 }, { articleId: 11n, sortOrder: 1 },
+      { articleId: 999n, sortOrder: 2 }, { articleId: 16n, sortOrder: 4 }, { articleId: 15n, sortOrder: 5 },
+    ] });
+    assert.deepEqual(c.basketSuggestions, ["11", "10"]);
+    assert.deepEqual((await catalog()).c.basketSuggestions, [], "none set: empty, so the kiosk uses the departments' lists");
   });
 });
 

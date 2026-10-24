@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listProducts, type AdminProduct } from "@/lib/catalog";
 import {
-  MAX_SUGGESTIONS, listSuggestions, moved, saveSuggestions,
+  MAX_SUGGESTIONS, listSuggestions, moved, saveBasketSuggestions, saveSuggestions,
   type DepartmentSuggestions, type SuggestionItem,
 } from "@/lib/suggestions";
 
@@ -21,6 +21,9 @@ function Photo({ src, className }: { src: string | null; className: string }) {
 /** The most the chooser lists at once; a search or a department narrows it. */
 const PAGE = 120;
 
+/** The key of the basket's own list, beside the departments' ids (which are numbers). */
+const BASKET = "basket";
+
 function Editor({ slug, dept, departments, onSaved }: {
   slug: string; dept: DepartmentSuggestions; departments: DepartmentSuggestions[]; onSaved: () => void;
 }) {
@@ -33,6 +36,7 @@ function Editor({ slug, dept, departments, onSaved }: {
   const [savedAt, setSavedAt] = useState(false);
   const latest = useRef(0);
 
+  const basket = dept.departmentId === BASKET;
   const dirty = items.map((i) => i.articleId).join() !== dept.suggestions.map((i) => i.articleId).join();
   const full = items.length >= MAX_SUGGESTIONS;
   const chosen = new Set(items.map((i) => i.articleId));
@@ -63,7 +67,8 @@ function Editor({ slug, dept, departments, onSaved }: {
     setBusy(true);
     setError(null);
     try {
-      await saveSuggestions(slug, dept.departmentId, items.map((i) => i.articleId));
+      const ids = items.map((i) => i.articleId);
+      await (basket ? saveBasketSuggestions(slug, ids) : saveSuggestions(slug, dept.departmentId, ids));
       setSavedAt(true);
       onSaved();
     } catch (e) {
@@ -77,10 +82,18 @@ function Editor({ slug, dept, departments, onSaved }: {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-(--color-ink-muted)">
-        When a customer adds something from <strong>{dept.name}</strong>, the kiosk offers these, first one first. Up to four are
-        shown, skipping anything already in their order.
-      </p>
+      {basket ? (
+        <p className="text-sm text-(--color-ink-muted)">
+          On the <strong>basket</strong> screen, under &ldquo;You might also like&rdquo;, the kiosk offers these, first one first,
+          whatever is in the basket. Up to six are shown, skipping anything already in it. Leave the list empty and the basket
+          offers the suggestions of the departments already in it.
+        </p>
+      ) : (
+        <p className="text-sm text-(--color-ink-muted)">
+          When a customer adds something from <strong>{dept.name}</strong>, the kiosk offers these, first one first. Up to four are
+          shown, skipping anything already in their order.
+        </p>
+      )}
 
       <section aria-label="Suggested products">
         <h2 className="mb-2 text-lg font-medium">
@@ -88,7 +101,9 @@ function Editor({ slug, dept, departments, onSaved }: {
         </h2>
         {items.length === 0 ? (
           <p className="rounded-(--radius-card) border border-dashed border-(--color-line) p-6 text-center text-(--color-ink-muted)">
-            Nothing is suggested for this department yet. Choose products below.
+            {basket
+              ? "Nothing chosen: the basket offers the suggestions of the departments in it. Choose products below to offer your own."
+              : "Nothing is suggested for this department yet. Choose products below."}
           </p>
         ) : (
           <ol className="divide-y divide-(--color-line) rounded-(--radius-card) border border-(--color-line)">
@@ -173,18 +188,25 @@ function Editor({ slug, dept, departments, onSaved }: {
 
 export default function SuggestionsPage({ slug }: { slug: string }) {
   const [depts, setDepts] = useState<DepartmentSuggestions[] | null>(null);
+  const [basket, setBasket] = useState<DepartmentSuggestions | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   const load = useCallback(() => {
-    listSuggestions(slug).then((r) => { setDepts(r.departments); setSelected((s) => s ?? r.departments[0]?.departmentId ?? null); })
+    listSuggestions(slug).then((r) => {
+      setDepts(r.departments);
+      // The basket's list is edited like a department's; it is listed first.
+      setBasket({ departmentId: BASKET, posName: "Basket", name: "Basket", suggestions: r.basket ?? [] });
+      setSelected((s) => s ?? BASKET);
+    })
       .catch(() => setFailed(true));
   }, [slug]);
   useEffect(load, [load]);
 
   if (failed) return <p className="text-(--color-danger)">Could not load the suggestions.</p>;
   if (!depts) return <p className="text-(--color-ink-muted)">Loading…</p>;
-  const current = depts.find((d) => d.departmentId === selected);
+  const current = selected === BASKET ? basket : depts.find((d) => d.departmentId === selected);
+  const count = (n: number) => (n > 0 ? ` (${n})` : "");
 
   return (
     <div className="flex flex-col gap-4 md:flex-row md:gap-8">
@@ -193,14 +215,25 @@ export default function SuggestionsPage({ slug }: { slug: string }) {
         Department
         <select value={selected ?? ""} onChange={(e) => setSelected(e.target.value)}
           className="h-11 w-full rounded-lg border border-(--color-line) bg-(--color-surface) px-3 text-base text-(--color-ink)">
-          {depts.map((d) => (
-            <option key={d.departmentId} value={d.departmentId}>
-              {d.name}{d.suggestions.length > 0 ? ` (${d.suggestions.length})` : ""}
-            </option>
-          ))}
+          <option value={BASKET}>Basket screen{count(basket?.suggestions.length ?? 0)}</option>
+          <optgroup label="After adding from a department">
+            {depts.map((d) => (
+              <option key={d.departmentId} value={d.departmentId}>
+                {d.name}{count(d.suggestions.length)}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </label>
       <nav aria-label="Departments" className="hidden w-64 shrink-0 flex-col gap-1 md:flex">
+        <button onClick={() => setSelected(BASKET)} aria-current={selected === BASKET ? "true" : undefined}
+          className={`flex h-10 items-center justify-between gap-2 rounded-lg px-3 text-start font-medium ${
+            selected === BASKET ? "bg-(--color-brand) text-(--color-brand-ink)" : "hover:bg-(--color-surface-2)"
+          }`}>
+          <span className="truncate">Basket screen</span>
+          {basket && basket.suggestions.length > 0 ? <span className="text-xs opacity-80">{basket.suggestions.length}</span> : null}
+        </button>
+        <p className="mt-3 mb-1 px-3 text-xs tracking-wide text-(--color-ink-muted) uppercase">After adding from</p>
         {depts.map((d) => (
           <button key={d.departmentId} onClick={() => setSelected(d.departmentId)} aria-current={d.departmentId === selected ? "true" : undefined}
             className={`flex h-10 items-center justify-between gap-2 rounded-lg px-3 text-start ${

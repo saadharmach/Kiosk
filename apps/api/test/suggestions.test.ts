@@ -7,7 +7,7 @@ import { model, type Call } from "./helpers/fake-prisma.js";
 const art = (id: bigint, name: string, over: Record<string, unknown> = {}) =>
   ({ untillId: id, name, departmentId: 1n, isActive: true, isPresent: true, isMenu: false, ...over });
 
-function setup(links: Record<string, unknown>[] = []) {
+function setup(links: Record<string, unknown>[] = [], basketLinks: Record<string, unknown>[] = []) {
   const calls: Call[] = [];
   const writes: { op: string; args: unknown }[] = [];
   const prisma = {
@@ -20,6 +20,11 @@ function setup(links: Record<string, unknown>[] = []) {
     ], calls, "tpapiArticle"),
     departmentSuggestion: {
       ...model(links, calls, "departmentSuggestion"),
+      deleteMany: (args: unknown) => ({ op: "deleteMany", args }),
+      createMany: (args: unknown) => ({ op: "createMany", args }),
+    },
+    basketSuggestion: {
+      ...model(basketLinks, calls, "basketSuggestion"),
       deleteMany: (args: unknown) => ({ op: "deleteMany", args }),
       createMany: (args: unknown) => ({ op: "createMany", args }),
     },
@@ -77,6 +82,43 @@ describe("setting a department's suggestions", () => {
     const { svc, calls } = setup();
     await svc.replace("r1", "1", ["10"]);
     for (const c of calls) assert.equal((c.args as { where: { restaurantId: string } }).where.restaurantId, "r1", `${c.model}.${c.op}`);
+  });
+});
+
+describe("setting the basket's suggestions", () => {
+  it("replaces the whole list in the order given, scoped to this restaurant", async () => {
+    const { svc, writes } = setup();
+    await svc.replaceBasket("r1", ["11", "10", "11"]);
+    assert.deepEqual(writes, [
+      { op: "deleteMany", args: { where: { restaurantId: "r1" } } },
+      { op: "createMany", args: { data: [
+        { restaurantId: "r1", articleId: 11n, sortOrder: 0 },
+        { restaurantId: "r1", articleId: 10n, sortOrder: 1 },
+      ] } },
+    ]);
+  });
+
+  it("an empty list clears it (the basket then uses the departments' lists)", async () => {
+    const { svc, writes } = setup();
+    await svc.replaceBasket("r1", []);
+    assert.deepEqual(writes.map((w) => w.op), ["deleteMany"]);
+  });
+
+  it("refuses unknown, retired and removed products, menus, and more than 12, with nothing written", async () => {
+    const { svc, writes } = setup();
+    for (const bad of ["999", "13", "14", "12"]) {
+      await assert.rejects(svc.replaceBasket("r1", ["10", bad]), BadRequestException, bad);
+    }
+    await assert.rejects(svc.replaceBasket("r1", Array.from({ length: 13 }, (_, i) => String(100 + i))), BadRequestException);
+    assert.equal(writes.length, 0);
+  });
+
+  it("is listed for the back office, in order", async () => {
+    const { svc } = setup([], [
+      { restaurantId: "r1", articleId: 10n, sortOrder: 1 },
+      { restaurantId: "r1", articleId: 11n, sortOrder: 0 },
+    ]);
+    assert.deepEqual((await svc.list("r1")).basket.map((s) => [s.articleId, s.name]), [["11", "Coca (FR)"], ["10", "Burger"]]);
   });
 });
 
