@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireOrderable, requireSubscribed } from "./availability.js";
-import { isSubscribed } from "../common/subscription.js";
+import { isSubscribed, todayIn, ymd } from "../common/subscription.js";
 import { tillReachable } from "../common/till-health.js";
 import { findCardTerminal } from "../payments/payments.service.js";
 import { resolveScreen } from "./screen.js";
@@ -234,6 +234,7 @@ export class CatalogService {
     if (!salesArea) throw new NotFoundException("Sales area not found — has the catalog been synchronised?");
 
     const areaId = salesArea.untillId;
+    const today = todayIn(restaurant.timezone);
     const priceLevelId = salesArea.priceLevelId ?? 0n;
 
     const [groups, departments, articles, prices, sizePrices, sizeItems, artOptions, optGroups, optItems, prodPres, catPres, suggestionRows, allergenLinks, allergenRows] =
@@ -387,6 +388,10 @@ export class CatalogService {
           imageUrl: this.storage.publicUrl(pres?.imagePath ?? null),
           badgeText: pres?.badgeText ?? null,
           isFeatured: pres?.isFeatured ?? false,
+          // Past its last day it is no longer new. The kiosk checks newUntil again against its own date, so a
+          // menu loaded the day before does not keep the ribbon.
+          isNew: Boolean(pres?.isNew) && (!pres?.newUntil || pres.newUntil >= today),
+          newUntil: pres?.isNew && pres.newUntil ? ymd(pres.newUntil) : null,
           sortOrder: pres?.sortOrder ?? a.number,
           // A product from unTill is hidden until the restaurant shows it.
           visible: pres?.isVisible ?? false,

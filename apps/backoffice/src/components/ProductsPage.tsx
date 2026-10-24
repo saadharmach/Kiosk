@@ -130,7 +130,14 @@ export default function ProductsPage({ slug }: { slug: string }) {
 
                 {/* Phone: the name has the first line; the languages and buttons go to a second one. */}
                 <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
-                  <p className="truncate font-medium">{p.displayName?.fr ?? p.posName}</p>
+                  <p className="flex items-center gap-2 font-medium">
+                    <span className="truncate">{p.displayName?.fr ?? p.posName}</span>
+                    {p.isNew ? (
+                      <span className="shrink-0 rounded bg-(--color-brand) px-1.5 py-0.5 text-xs font-semibold text-(--color-brand-ink)">
+                        New{p.newUntil ? ` until ${p.newUntil}` : ""}
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="truncate text-sm text-(--color-ink-muted)">{p.posName}</p>
                 </div>
 

@@ -167,6 +167,10 @@ export interface CatalogProduct {
   imagePath: string | null;
   imageUrl: string | null;
   badgeText: string | null;
+  /** Shows the "New" ribbon; see isNewToday. */
+  isNew?: boolean;
+  /** Its last day as new, "YYYY-MM-DD", when the restaurant set one. */
+  newUntil?: string | null;
   sortOrder: number;
   visible: boolean;
   pricing: Pricing;

@@ -17,6 +17,9 @@ export interface AdminProduct {
   sortOrder: number;
   isFeatured: boolean;
   badgeText: string | null;
+  isNew: boolean;
+  /** "YYYY-MM-DD", or null: new until unticked. */
+  newUntil: string | null;
   allergenIds: string[];
   translatedInto: Locale[];
 }

@@ -9,6 +9,7 @@ import { Icon } from "../icons";
 import ProductSheet from "../ProductSheet";
 import SuggestionPanel from "../SuggestionPanel";
 import { pickSuggestions } from "@/lib/suggestions";
+import { isNewToday } from "@/lib/new-badge";
 
 /** Background / text pairs for allergen chips, picked by the allergen's number. */
 const CHIP_COLORS: [string, string][] = [
@@ -70,6 +71,8 @@ export default function MenuScreen({
   }, [toast]);
   const flash = (name: string) => setToast({ id: Date.now(), text: t.addedItem.replace("{name}", name) });
   const [sheet, setSheet] = useState<CatalogProduct | null>(null);
+  // What the open sheet offers as its last step (fixed when it opens).
+  const [sheetSuggestions, setSheetSuggestions] = useState<CatalogProduct[]>([]);
   // "Would you like to add…?": the products on offer, and whether the open sheet was reached from it.
   const [offer, setOffer] = useState<CatalogProduct[] | null>(null);
   const [sheetFromOffer, setSheetFromOffer] = useState(false);
@@ -110,9 +113,10 @@ export default function MenuScreen({
    * time: "No thanks" only closes this offer, the next product added offers again. What is already in the order is
    * left out, so once everything suggested has been taken, nothing more is offered.
    */
+  const suggestionsFor = (p: CatalogProduct) =>
+    pickSuggestions(catalog, p.categoryId, [...cart.lines.map((l) => l.articleId), p.id]);
   const offerAfterAdding = (p: CatalogProduct) => {
-    if (!p.categoryId) return;
-    const picks = pickSuggestions(catalog, p.categoryId, [...cart.lines.map((l) => l.articleId), p.id]);
+    const picks = suggestionsFor(p);
     if (picks.length === 0) return;
     setOffer(picks);
   };
@@ -121,6 +125,10 @@ export default function MenuScreen({
     // Sizes, option groups and allergens all live on the sheet.
     if (p.sizes.length > 0 || p.optionGroups.length > 0 || p.allergens.length > 0) {
       setSheetFromOffer(fromOffer);
+      // The sheet asks for the suggestions itself, as its last step (not for one reached from a suggestion).
+      setSheetSuggestions(fromOffer ? [] : suggestionsFor(p));
+      // A product opened from the menu replaces the strip of an earlier one; one opened from the strip keeps it.
+      if (!fromOffer) setOffer(null);
       return setSheet(p);
     }
     cart.add({ articleId: p.id, name: p.name, imageUrl: p.imageUrl, options: [], unitPrice: p.price ?? 0 });
@@ -209,6 +217,11 @@ export default function MenuScreen({
                       )
                     ) : null}
                     <span className="flex flex-col gap-2 px-6 pt-5">
+                      {!showImageSlot && isNewToday(p) ? (
+                        <span className="w-fit rounded-full bg-(--color-brand) px-4 py-1 font-display text-xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
+                          {t.newItem}
+                        </span>
+                      ) : null}
                       <span className="line-clamp-2 min-h-[2.2em] font-display text-4xl leading-[1.05] font-bold break-words">{p.name}</span>
                       {p.allergens.length > 0 ? (
                         <span className="flex flex-wrap gap-1.5">{p.allergens.map((a) => <AllergenChip key={a.id} a={a} />)}</span>
@@ -216,6 +229,12 @@ export default function MenuScreen({
                     </span>
                   </button>
 
+                  {/* On the photo when there is one; above the name otherwise. */}
+                  {showImageSlot && isNewToday(p) ? (
+                    <span className="pointer-events-none absolute start-4 top-4 rounded-full bg-(--color-brand) px-5 py-2 font-display text-2xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase shadow-lg">
+                      {t.newItem}
+                    </span>
+                  ) : null}
                   {n > 0 ? (
                     <span key={n} className="pill-pop absolute end-4 top-4 flex size-16 items-center justify-center rounded-full bg-(--color-brand) font-display text-4xl font-extrabold text-(--color-brand-ink) shadow-lg">{n}</span>
                   ) : null}
@@ -263,9 +282,12 @@ export default function MenuScreen({
       ) : null}
 
       {sheet ? (
-        <ProductSheet product={sheet} currency={catalog.currency} locale={locale}
-          // Adding from the offer does not start another offer.
-          onAdded={() => { flash(sheet.name); if (!sheetFromOffer) offerAfterAdding(sheet); }}
+        // Keyed: a suggestion opened from this sheet is a new sheet, not this one with its old choices.
+        <ProductSheet key={sheet.id} product={sheet} currency={catalog.currency} locale={locale} showImages={showImages}
+          suggestions={sheetFromOffer ? [] : sheetSuggestions}
+          // The suggestions were the sheet's last step, so no strip offers them again.
+          onAdded={(names) => flash(names.join(" + "))}
+          onPickSuggestion={(p) => open(p, true)}
           onClose={() => { setSheet(null); setSheetFromOffer(false); }} />
       ) : null}
 

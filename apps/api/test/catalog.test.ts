@@ -175,6 +175,19 @@ describe("CatalogService.catalog: what the restaurant chose to show", () => {
     assert.ok(c.products.some((p) => p.name === "Burger FR"), "shown: on the kiosk");
   });
 
+  it("marks a product new until its last day, and no longer after it", async () => {
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000);
+    const ymdOf = (d: Date) => d.toISOString().slice(0, 10);
+    const at = (newUntil: Date | null, isNew = true) =>
+      catalog({ productPresentation: [{ articleId: 10n, displayName: null, isVisible: true, isNew, newUntil: newUntil && new Date(`${ymdOf(newUntil)}T00:00:00.000Z`) }] })
+        .then(({ c }) => c.products.find((p) => p.id === "10")!);
+    assert.deepEqual(await at(null).then((p) => [p.isNew, p.newUntil]), [true, null], "no last day: new until unticked");
+    const later = await at(day(5));
+    assert.deepEqual([later.isNew, later.newUntil], [true, ymdOf(day(5))], "the kiosk gets the day to check it again");
+    assert.equal((await at(day(-5))).isNew, false, "past its last day");
+    assert.deepEqual(await at(day(5), false).then((p) => [p.isNew, p.newUntil]), [false, null], "unticked: the day is not sent");
+  });
+
   it("hides a product the manager switched off", async () => {
     const { c } = await catalog({ productPresentation: [{ articleId: 10n, displayName: null, isVisible: false }] });
     assert.ok(!names(c).includes("Burger"));

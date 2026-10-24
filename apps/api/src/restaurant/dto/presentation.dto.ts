@@ -1,7 +1,7 @@
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString,
-  Matches, MaxLength, Min, ValidateNested,
+  Matches, MaxLength, Min, ValidateIf, ValidateNested,
 } from "class-validator";
 
 /** An empty string clears that language; an absent key leaves it untouched. */
@@ -25,6 +25,10 @@ export class UpdateProductPresentationDto {
   @IsOptional() @IsInt() @Min(0) sortOrder?: number;
   @IsOptional() @IsBoolean() isFeatured?: boolean;
   @IsOptional() @IsString() @MaxLength(40) badgeText?: string;
+  @IsOptional() @IsBoolean() isNew?: boolean;
+  /** The last day it is new, like 2026-11-30; null or "" keeps it new until it is unticked. */
+  @IsOptional() @ValidateIf((_, v) => v !== null && v !== "") @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: "newUntil must be a date like 2026-11-30" })
+  newUntil?: string | null;
 }
 
 export class UpdateCategoryPresentationDto {

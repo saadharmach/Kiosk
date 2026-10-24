@@ -5,6 +5,7 @@ import type {
   UpdateProductPresentationDto,
 } from "./dto/presentation.dto.js";
 import { StorageService } from "../common/storage.service.js";
+import { parseDay, ymd } from "../common/subscription.js";
 type I18n = Record<string, string>;
 
 /**
@@ -109,6 +110,8 @@ export class CatalogAdminService {
         sortOrder: p?.sortOrder ?? a.number,
         isFeatured: p?.isFeatured ?? false,
         badgeText: p?.badgeText ?? null,
+        isNew: p?.isNew ?? false,
+        newUntil: p?.newUntil ? ymd(p.newUntil) : null,
         allergenIds: allergensOf.get(key) ?? [],
         translatedInto: filled(p?.displayName),
         imageUrl: this.storage.publicUrl(p?.imagePath ?? null),
@@ -167,6 +170,9 @@ export class CatalogAdminService {
 
     const displayName = mergeI18n(existing?.displayName, dto.displayName);
     const description = mergeI18n(existing?.description, dto.description);
+    // "" or null: new with no last day. A day that does not exist is refused rather than guessed.
+    const newUntil = dto.newUntil ? parseDay(dto.newUntil) : null;
+    if (dto.newUntil && !newUntil) throw new BadRequestException("newUntil is not a real day");
 
     const data = {
       ...(displayName !== undefined ? { displayName: displayName as never } : {}),
@@ -176,6 +182,8 @@ export class CatalogAdminService {
       ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       ...(dto.isFeatured !== undefined ? { isFeatured: dto.isFeatured } : {}),
       ...(dto.badgeText !== undefined ? { badgeText: dto.badgeText || null } : {}),
+      ...(dto.isNew !== undefined ? { isNew: dto.isNew } : {}),
+      ...(dto.newUntil !== undefined ? { newUntil } : {}),
     };
 
     return this.prisma.productPresentation.upsert({

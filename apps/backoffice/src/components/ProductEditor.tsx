@@ -22,6 +22,8 @@ export default function ProductEditor({
   const [visible, setVisible] = useState(product.isVisible);
   const [featured, setFeatured] = useState(product.isFeatured);
   const [badge, setBadge] = useState(product.badgeText ?? "");
+  const [isNew, setIsNew] = useState(product.isNew);
+  const [newUntil, setNewUntil] = useState(product.newUntil ?? "");
   const [sortOrder, setSortOrder] = useState(String(product.sortOrder));
   const [imageUrl, setImageUrl] = useState(product.imageUrl);
   const [busy, setBusy] = useState(false);
@@ -51,6 +53,8 @@ export default function ProductEditor({
         isVisible: visible,
         isFeatured: featured,
         badgeText: badge,
+        isNew,
+        newUntil: isNew ? newUntil || null : null,
         sortOrder: Number(sortOrder) || 0,
       });
       const before = [...product.allergenIds].sort().join(",");
@@ -161,10 +165,32 @@ export default function ProductEditor({
           <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
           <span>Show on the kiosk</span>
         </label>
-        <label className="mb-6 flex items-center gap-3">
+        <label className="mb-2 flex items-center gap-3">
           <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
           <span>Featured</span>
         </label>
+        <div className="mb-6">
+          <label className="mb-2 flex items-center gap-3">
+            <input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} />
+            <span>New — the kiosk shows a “New” ribbon on it</span>
+          </label>
+          {isNew ? (
+            <div className="ms-7">
+              <label className="mb-1 block text-sm text-(--color-ink-muted)" htmlFor="new-until">
+                Last day as new (optional: leave empty to keep it until you untick)
+              </label>
+              <div className="flex items-center gap-2">
+                <input id="new-until" type="date" value={newUntil} onChange={(e) => setNewUntil(e.target.value)}
+                  className="h-11 rounded-lg border border-(--color-line) bg-(--color-surface-2) px-3" />
+                {newUntil ? (
+                  <button type="button" onClick={() => setNewUntil("")} className="h-11 rounded-lg border border-(--color-line) px-3 text-sm">
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
         {allergens.length > 0 ? (
           <fieldset className="mb-6">
             <legend className="mb-2 text-sm text-(--color-ink-muted)">Allergens</legend>

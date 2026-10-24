@@ -561,6 +561,9 @@ model ProductPresentation {
   sortOrder    Int      @default(0)
   isFeatured   Boolean  @default(false)
   badgeText    String?
+  /// The kiosk shows a "New" ribbon on it, until newUntil (that day included, in the restaurant's time zone) when set.
+  isNew        Boolean  @default(false)
+  newUntil     DateTime? @db.Date
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
