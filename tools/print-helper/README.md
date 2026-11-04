@@ -1,0 +1,225 @@
+# Kiosk print helper
+
+A small program that runs at the restaurant. It fetches new customer tickets from the kiosk API and prints them on the
+restaurant's network receipt printer (80 mm, ESC/POS, raw TCP port 9100). It can also be the **till bridge** (see the
+end of this page): for a restaurant whose till (unTill) cannot be reached from the internet.
+
+It only makes **outbound** connections (HTTPS to the API, and TCP to the printer on the local network). No router or
+firewall changes are needed.
+
+```
+kiosk ── order ──> API ──(ticket queued)──> print helper ──(TCP 9100)──> printer
+```
+
+## What you need
+
+- A computer at the restaurant that is **always on** and on the **same network as the printer** (the kiosk PC is fine).
+- **Node.js 20 or newer** on that computer (https://nodejs.org, the LTS version). Nothing else: the helper has no
+  dependencies and needs no `npm install`.
+- The printer's **IP address**. Give the printer a fixed address (a DHCP reservation in the router, or a static IP on
+  the printer), otherwise tickets stop the day the router hands it a new one.
+- A printer that speaks **ESC/POS** on port **9100** (most 80 mm receipt printers: Epson TM-series, Xprinter, Star in
+  ESC/POS mode, and so on).
+
+## 1. Check the printer first
+
+Get the helper on that computer: in the back office, open the printer (Bornes > the borne, or Default printer) and click
+**Download the helper (zip)**. Unzip it somewhere it will stay (for example `C:\kiosk-print-helper`); it unzips into a
+`kiosk-print-helper` folder. In a terminal inside that folder:
+
+```
+node src/cli.mjs --printer 192.168.1.50
+```
+
+Use the printer's IP (add `:PORT` if it is not 9100). The printer should print "Kiosk print helper. The printer is
+reachable." and cut. If it does not, fix that before going further (see Troubleshooting).
+
+## 2. Save the printer in the back office
+
+Back office > **Bornes**. Open the borne (or the **Default printer**), enter the printer's **address** and **port**, leave
+*automatic printing* on, choose the *character set*, **Save printer**.
+
+Each borne has its own printer and its own helper secret, so tickets from a borne print where that borne is. The
+*Default printer* takes orders from a machine with no borne, and from a borne whose own printer is missing or off.
+
+## 3. Set up the helper with one command
+
+1. In the back office, under that printer's **Print helper**, click **Set up the helper**. A code like `K7QF-92XM` appears
+   (it works once and expires after 15 minutes), with the exact command to run.
+2. On the restaurant computer, in the helper folder, run that command:
+
+```
+node src/cli.mjs setup https://your-back-office-address K7QF-92XM
+```
+
+On Windows run it in PowerShell opened with **Run as administrator** (needed to start at boot). It does everything:
+
+- trades the code for the printer's secret (the secret is never shown on screen),
+- writes `helper.config.json` (readable by its owner only),
+- checks that this computer can reach the printer,
+- registers the start at boot and starts the helper (Windows: a scheduled task; Linux: a systemd user service),
+- queues a test ticket.
+
+The back office shows the helper as **Online** and the test ticket prints within a few seconds. Lines marked `!!` in the
+output say what still needs attention (printer not reachable, no permission to start at boot, ...); the pairing itself
+stays done.
+
+**Several bornes on one computer:** run the same command again with the other borne's own code. The running helper notices
+the new printer by itself (within about 10 seconds) and serves all of them. Each log line carries its printer's name.
+
+**Setting it up again** (new computer, lost config): get a new code and run the command. It replaces that printer's
+secret, so the old installation stops printing. Re-running with the same printer on the same computer just refreshes it.
+
+Other commands: `node src/cli.mjs install-service` / `uninstall-service` (the start at boot only), `--no-service` and
+`--no-test` on `setup`, `--help`.
+
+> **Not tried yet on real restaurant machines:** the Linux start at boot was tried on a development PC (it starts, prints,
+> comes back after being killed, and uninstalls); the Windows task was only checked up to the administrator-rights message.
+> After the first real setup, reboot the computer once to prove that tickets still print.
+> Linux: the service is a *user* service; setup also runs `loginctl enable-linger` so that it starts without anyone logged
+> in, and tells you to run it with `sudo` if that is not allowed. macOS is not supported for the start at boot: run
+> `node src/cli.mjs` by hand.
+
+## 4. Run it by hand (without the start at boot)
+
+```
+node src/cli.mjs
+```
+
+You should see `Print helper started` and `Serving <printer>`, then the test ticket printing. Stop it with Ctrl+C.
+
+## 5. Setting up with a token instead (older way)
+
+In the back office open *Set up by hand with a token instead* > **Generate token** and copy it (shown once). Then either put
+it in `helper.config.json`:
+
+```json
+{
+  "apiUrl": "https://api.your-domain.example",
+  "token": "pht_the-token-from-the-back-office",
+  "pollIntervalMs": 2000
+}
+```
+
+or use environment variables (`KIOSK_API_URL`, `PRINT_HELPER_TOKEN`, `POLL_INTERVAL_MS`; they win over the file). This form
+serves one printer and can sit next to the `printers` list that `setup` writes. To start it at boot use
+`node src/cli.mjs install-service`.
+
+Hand-made recipes, if you prefer them to `install-service`:
+
+### Windows (Task Scheduler)
+
+Open PowerShell **as Administrator** and run (change the two paths if needed; find node with `where node`):
+
+```powershell
+$dir  = "C:\kiosk-print-helper"
+$node = "C:\Program Files\nodejs\node.exe"
+
+$action   = New-ScheduledTaskAction -Execute "cmd.exe" `
+            -Argument "/c cd /d $dir && `"$node`" src\cli.mjs >> helper.log 2>&1"
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+            -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
+Register-ScheduledTask -TaskName "Kiosk Print Helper" -Action $action -Trigger $trigger `
+            -Settings $settings -User "SYSTEM" -RunLevel Highest
+
+Start-ScheduledTask -TaskName "Kiosk Print Helper"
+```
+
+Its log is `helper.log` in the helper folder; it grows slowly (a few lines per ticket), so archive it once in a while.
+To remove it: `Unregister-ScheduledTask -TaskName "Kiosk Print Helper" -Confirm:$false`.
+
+### Linux (systemd, system-wide)
+
+Save as `/etc/systemd/system/kiosk-print-helper.service` (adjust the paths and the user):
+
+```ini
+[Unit]
+Description=Kiosk print helper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/kiosk-print-helper
+ExecStart=/usr/bin/node src/cli.mjs
+Restart=always
+RestartSec=5
+User=kiosk
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now kiosk-print-helper
+journalctl -u kiosk-print-helper -f      # the log
+```
+
+## Day to day
+
+- **Status:** Back office > Bornes > (the borne) shows *Online* while the helper is running, the last contact, the last printing
+  error, and the recent tickets. A ticket that keeps failing is retried 5 times (waiting a little longer each time) and
+  then shows as **FAILED** with the reason. Open the order and use **Print ticket** to print it again.
+- **Reprint** any time from an order's page.
+- **New secret:** get a new setup code and run `setup` again (or *Generate a new token* and put it in the config file). The old
+  secret stops working immediately. Do this if the config file might have leaked or the computer is replaced.
+- **Update the helper:** replace the `src` folder with the new one and restart it. Tickets are built by the API, so
+  layout changes do not need a helper update.
+
+## Troubleshooting
+
+| What you see | Likely cause |
+|---|---|
+| `Connection refused by 192.168.1.50:9100` | The printer is off, or the port is wrong (some models use a different one, see the printer's self-test sheet). |
+| `Cannot reach 192.168.1.50:9100` or a timeout | Wrong IP, the printer is on another network, or a firewall blocks it. Ping it from the helper computer. |
+| `The API rejected the helper token` | The token was regenerated or mistyped. Get a new setup code and run `setup` again. |
+| `Cannot reach the API at ... (ENOTFOUND / ECONNREFUSED)` | Wrong `apiUrl`, or the computer has no internet. |
+| Helper shows *Offline* in the back office | It is not running, or cannot reach the API. Check `helper.log`. |
+| Accents print as strange symbols | Change the *Character set* in the back office and print another test ticket (try PC858, then PC437, then Windows-1252). |
+| Text is cut off at the edge, or lines wrap oddly | The printer is set to 58 mm paper or another width. Tickets are laid out for 80 mm (48 characters). |
+| The paper is not cut | Turn *Cut the paper after each ticket* on, or the printer has no cutter. |
+| Two tickets per order | *Copies* is set to 2, or two helpers use the same printer. |
+
+## Checklist for the first real printer
+
+1. `node src/cli.mjs --printer <ip>` prints the test page and cuts.
+2. Back office: address and port saved, then **Set up the helper** and the `setup` command run; status **Online**.
+3. **Print a test ticket**: check the width (nothing cut off), the accents (é è à ç ô ù œ €), the large number, and the cut.
+4. Place a real order on the kiosk and confirm the ticket prints **by itself**, within a few seconds.
+5. Switch the printer off, place an order, switch it on: the ticket must print by itself once the printer is back, and the
+   back office must show the error while it was off.
+6. Reboot the helper computer and confirm the helper comes back and prints without anyone touching it.
+7. Reprint an old order from the back office.
+
+
+## The till bridge (when the till cannot be reached from the internet)
+
+Our server talks to the restaurant's till (unTill TP-API). When the till is only on the restaurant's network (an address
+like `192.168.0.106`) and no port is opened in the router, the helper carries those calls instead:
+
+```
+server ── calls for the till ──> helper (bridge, connects OUT over https) ──(restaurant network)──> unTill :3063
+```
+
+Nothing is opened in the router. The bridge only talks to addresses on the restaurant's own network (192.168.x.x, 10.x.x.x,
+172.16-31.x.x, a computer name like `UNTILL-PC`, or `*.local`); anything else is refused unless it is listed in
+`"allowTillHosts"` in `helper.config.json`.
+
+1. **unTill:** TP-API switched on, and the till PC has a fixed address (a DHCP reservation in the router).
+2. **Admin** > the restaurant > **unTill**: choose **Through the bridge at the restaurant**, put the till's address on the
+   restaurant's network (for example `192.168.0.106`, port `3063`) and the TP-API login, **Save**.
+3. Click **Set up the bridge**. A code and the exact command appear. On a computer at the restaurant that is always on and
+   on the same network as the till (the print helper's computer is fine), in the helper's folder (Windows: PowerShell with
+   **Run as administrator**):
+
+```
+node src/cli.mjs setup-bridge https://your-admin-address K7QF-92XM
+```
+
+It trades the code for the bridge's secret, saves it, checks that this computer reaches the till, and starts the helper
+at boot (or, if it already runs for the printers, the running helper picks the bridge up by itself within 10 seconds).
+4. The admin shows **Bridge: connected** within a few seconds. Press **Test connection**, then **Sync now**.
+
+If the computer is off or the helper stops, the server cannot reach the till: after about a minute the kiosks show
+"no connection" and take no orders, and they come back by themselves when the bridge does.

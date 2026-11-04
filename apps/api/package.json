@@ -1,0 +1,49 @@
+{
+  "name": "@kiosk/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "create-admin": "tsx src/cli/create-admin.ts",
+    "create-restaurant": "tsx src/cli/create-restaurant.ts",
+    "create-restaurant-user": "tsx src/cli/create-restaurant-user.ts",
+    "set-tpapi-credentials": "tsx src/cli/set-tpapi-credentials.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "mail:test": "tsx --env-file-if-exists=../../.env src/cli/send-test-email.ts"
+  },
+  "dependencies": {
+    "@kiosk/db": "workspace:*",
+    "@kiosk/tpapi": "workspace:*",
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/platform-express": "^12.1.0",
+    "@nestjs/throttler": "^6.7.1",
+    "@node-rs/argon2": "^2.2.1",
+    "@prisma/client": "^6",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "jose": "^6.2.12",
+    "nodemailer": "^10.0.13",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.6",
+    "@nestjs/schematics": "^12.0.5",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/smtp-server": "^3.5.13",
+    "smtp-server": "^3.19.16",
+    "tsx": "^4.23.15",
+    "typescript": "^6"
+  },
+  "type": "module"
+}

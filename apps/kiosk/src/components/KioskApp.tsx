@@ -1,0 +1,399 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { STRINGS, dirOf, isLocale, money, type Locale } from "@/i18n";
+import { VERSION_POLL_MS, decideRefresh } from "@/lib/refresh";
+import { forgetScreenSecret, readBorne, readScreenSecret } from "@/lib/borne";
+import { api, getCatalog, isConnectionError, isNotRegisteredError, isTillError, isUnavailableError, setScreenSecret, type Bootstrap, type Catalog, type OrderTypeOption } from "@/lib/api";
+import RegisterScreen from "./screens/RegisterScreen";
+import { OFFLINE_POLL_MS, connectionState } from "@/lib/connection";
+import { brandColors } from "@/lib/theme";
+import { useKioskFullscreen } from "@/lib/useKioskFullscreen";
+import { BrandContext } from "@/state/brand";
+import { CartProvider, useCart } from "@/state/cart";
+import IdleWarning from "./IdleWarning";
+import { LogoTile } from "./icons";
+import StatusScreen from "./screens/StatusScreen";
+import WelcomeScreen from "./screens/WelcomeScreen";
+import OrderTypeScreen from "./screens/OrderTypeScreen";
+import TableScreen from "./screens/TableScreen";
+import MenuScreen from "./screens/MenuScreen";
+import CartScreen from "./screens/CartScreen";
+import TicketScreen from "./screens/TicketScreen";
+import type { PlacedOrder } from "@/lib/api";
+
+type Screen = "WELCOME" | "ORDER_TYPE" | "TABLE" | "MENU" | "CART" | "TICKET";
+ 
+
+export default function KioskApp({ slug }: { slug: string }) {
+  return (
+    <CartProvider>
+      <KioskFlow slug={slug} />
+    </CartProvider>
+  );
+}
+
+/** What the kiosk needs to know about a failed request. */
+function toKioskError(e: Error & { restaurantName?: string }) {
+  return { message: e.message, connection: isConnectionError(e), unavailable: isUnavailableError(e), notRegistered: isNotRegisteredError(e), name: e.restaurantName };
+}
+
+function KioskFlow({ slug }: { slug: string }) {
+  useKioskFullscreen();
+  const cart = useCart();
+  const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  // `connection` marks a request that never got an answer, as opposed to the server refusing it.
+  // `unavailable` marks a restaurant that is switched off: a calm screen, not an error, and `name` is its name.
+  const [error, setError] = useState<{ message: string; connection: boolean; unavailable: boolean; notRegistered?: boolean; name?: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  // Which borne this machine is (K1, K2...), from the address it was opened with. undefined: not read yet. Read once the page
+  // is in the browser (it is not available while the server builds the page).
+  const [borne, setBorne] = useState<string | null | undefined>(undefined);
+  // Registering this screen: asked for with ?register in the address, or because the server does not know it.
+  const [registering, setRegistering] = useState(false);
+  useEffect(() => {
+    // The screen's secret (if it was registered) goes with every request; the server knows the borne from it.
+    setScreenSecret(readScreenSecret(slug));
+    setRegistering(new URLSearchParams(window.location.search).has("register"));
+    setBorne(readBorne(slug, window.location.search));
+  }, [slug]);
+  // The server says this screen is not (or no longer) registered: its secret, if any, is worth nothing now.
+  const notRegistered = Boolean(error?.notRegistered);
+  useEffect(() => {
+    if (!notRegistered) return;
+    forgetScreenSecret(slug);
+    setScreenSecret(null);
+  }, [notRegistered, slug]);
+  const [locale, setLocale] = useState<Locale>("fr");
+  const [screen, setScreen] = useState<Screen>("WELCOME");
+  const [choice, setChoice] = useState<OrderTypeOption | null>(null);
+  const [table, setTable] = useState<number | null>(null);
+  const [order, setOrder] = useState<PlacedOrder | null>(null);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = dirOf(locale);
+  }, [locale]);
+
+  // The restaurant's accent colour, with readable text on top of it.
+  const primaryColor = boot?.restaurant.primaryColor;
+  useEffect(() => {
+    const { brand, ink } = brandColors(primaryColor);
+    const root = document.documentElement.style;
+    root.setProperty("--color-brand", brand);
+    root.setProperty("--color-brand-ink", ink);
+  }, [primaryColor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (borne === undefined) return;   // wait until we know which borne this is
+    api.bootstrap(slug, borne).then(
+      (d) => {
+        if (cancelled) return;
+        setBoot(d);
+        setTillOk(d.tillReachable !== false);
+        if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
+      },
+      (e) => !cancelled && setError(toKioskError(e)),
+    );
+    return () => { cancelled = true; };
+  }, [slug, attempt, borne]);
+
+  // A switched-off restaurant may be switched back on while nobody is standing here, so look again every
+  // minute without any flicker, and carry on by itself as soon as it answers.
+  const unavailable = Boolean(error?.unavailable);
+  useEffect(() => {
+    if (!unavailable) return;
+    const timer = setInterval(() => {
+      api.bootstrap(slug, borne).then((d) => {
+        setBoot(d);
+        if (isLocale(d.restaurant.locale)) setLocale(d.restaurant.locale);
+        setError(null);
+      }, () => undefined);
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [unavailable, slug, borne]);
+
+  // The restaurant changed something (back office, admin, a menu sync): reload what the kiosk shows. Asked every
+  // 20 seconds; done at once on the welcome screen or a problem screen, otherwise once the customer's order is over.
+  // The same question tells whether there is a connection: no answer twice in a row means no internet, and the
+  // server says whether it can reach the till. While something is missing it asks every 5 seconds instead.
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [browserOnline, setBrowserOnline] = useState(true);
+  const [failedPolls, setFailedPolls] = useState(0);
+  const [tillOk, setTillOk] = useState(true);
+  const [pollNow, setPollNow] = useState(0);
+  // Set by "Try again" and by the internet coming back: the next question is asked at once, not after the usual wait.
+  const askAtOnce = useRef(true);
+  const askAgainNow = () => { askAtOnce.current = true; setPollNow((n) => n + 1); };
+  const connection = connectionState({ browserOnline, failedPolls, tillOk });
+  useEffect(() => {
+    const wait = askAtOnce.current ? 0 : connection === "ok" ? VERSION_POLL_MS : OFFLINE_POLL_MS;
+    const timer = setTimeout(() => {
+      askAtOnce.current = false;
+      api.version(slug).then(
+        (v) => { setLatestVersion(v.version); setFailedPolls(0); setTillOk(v.tillReachable !== false); },
+        (e) => { if (isConnectionError(e)) setFailedPolls((n) => n + 1); },
+      ).finally(() => setPollNow((n) => n + 1));
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [slug, pollNow, connection]);
+  useEffect(() => {
+    setBrowserOnline(navigator.onLine);
+    const on = () => { setBrowserOnline(true); askAgainNow(); };
+    const off = () => setBrowserOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  const problem = Boolean(error) || Boolean(boot && (!boot.catalogReady || !boot.orderTypes.some((o) => o.configured)));
+  useEffect(() => {
+    if (decideRefresh({ known: boot?.version ?? null, latest: latestVersion, screen, problem }) !== "now") return;
+    // A quiet reload: the screen stays as it is until the new data is there (no flicker, no lost fullscreen).
+    api.bootstrap(slug, borne).then(
+      (d) => {
+        setBoot(d);
+        setError(null);
+      },
+      (e) => setError(toKioskError(e)),
+    );
+  }, [latestVersion, screen, problem, boot?.version, slug, borne]);
+
+  // Load the menu as soon as the order type resolves the sales area, so the
+  // customer never waits on a spinner after choosing their table.
+  useEffect(() => {
+    if (!choice?.salesAreaId) return;
+    let cancelled = false;
+    getCatalog(slug, choice.salesAreaId, locale).then(
+      (c) => !cancelled && setCatalog(c),
+      (e) => !cancelled && setError(toKioskError(e)),
+    );
+    return () => { cancelled = true; };
+  }, [slug, choice, locale, attempt]);
+
+  const reset = useCallback(() => {
+    setScreen("WELCOME");
+    setChoice(null);
+    setTable(null);
+    cart.clear();
+    if (boot && isLocale(boot.restaurant.locale)) setLocale(boot.restaurant.locale);
+  }, [boot, cart]);
+
+  // Idle handling: after `idleTimeoutSec` without a touch the kiosk resets itself for
+  // the next customer. The last seconds are a visible warning, so nobody loses a
+  // half-built order without a chance to keep it.
+  const [idleLeft, setIdleLeft] = useState<number | null>(null);
+  // While the borne's TPE is charging the customer (PIN, contactless…), the kiosk must not reset for inactivity.
+  const [paying, setPaying] = useState(false);
+  const idleTotal = boot ? Math.max(15, boot.ordering.idleTimeoutSec) : 90;
+  const warnSec = Math.min(30, Math.floor(idleTotal / 2));
+  const keepAlive = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    // Nothing to protect on the welcome screen, and the ticket resets itself.
+    if (!boot || screen === "WELCOME" || screen === "TICKET" || paying) return;
+    let warnTimer: number | undefined;
+    let tick: number | undefined;
+    let warning = false;
+
+    const stop = () => { window.clearTimeout(warnTimer); window.clearInterval(tick); };
+    const arm = () => {
+      stop();
+      warning = false;
+      setIdleLeft(null);
+      warnTimer = window.setTimeout(() => {
+        warning = true;
+        let left = warnSec;
+        setIdleLeft(left);
+        tick = window.setInterval(() => {
+          left -= 1;
+          if (left <= 0) { stop(); setIdleLeft(null); reset(); } else setIdleLeft(left);
+        }, 1000);
+      }, (idleTotal - warnSec) * 1000);
+    };
+    // While the warning is up, only its own buttons count as an answer.
+    const onActivity = () => { if (!warning) arm(); };
+
+    keepAlive.current = arm;
+    arm();
+    const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "wheel"];
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      stop();
+      setIdleLeft(null);
+    };
+  }, [boot, screen, reset, idleTotal, warnSec, paying]);
+
+  const t = STRINGS[locale];
+
+  const brand = { logoUrl: boot?.restaurant.logoUrl ?? null };
+  const withBrand = (node: React.ReactNode) => <BrandContext.Provider value={brand}>{node}</BrandContext.Provider>;
+
+  const retry = () => { setError(null); setAttempt((n) => n + 1); };
+  const startOver = () => { setError(null); reset(); setAttempt((n) => n + 1); };
+  const header = boot ? { name: boot.restaurant.name, locale, onLocale: setLocale } : undefined;
+
+  // No connection (the kiosk's own internet, or our server's link to the till): nothing can be ordered. Over an order in
+  // progress it is laid on top, so the customer comes back to exactly where they were; never over a ticket already
+  // given (the order went through, its number must stay readable).
+  const noConnection = connection !== "ok" && screen !== "TICKET" ? (
+    <StatusScreen header={header} icon="warning" title={t.noConnectionTitle}
+      text={cart.lines.length > 0 ? `${t.noConnectionText} ${t.orderKept}` : t.noConnectionText}
+      action={{ label: t.retry, icon: "refresh", onClick: askAgainNow }}
+      note={connection === "no-internet" ? t.staffNoInternet : t.staffNoTill} />
+  ) : null;
+  // Nothing to keep underneath (start-up, or already a problem screen): the message is the whole screen.
+  if (noConnection && (!boot || problem)) return withBrand(noConnection);
+  if (registering || error?.notRegistered) {
+    return (
+      <RegisterScreen slug={slug} locale={locale} onRegistered={(secret, code) => {
+        setScreenSecret(secret);
+        setBorne(code);
+        setRegistering(false);
+        // The address may still say ?register: drop it, so a reload is the kiosk, not this page.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("register");
+        window.history.replaceState(null, "", url.toString());
+        setError(null);
+        setAttempt((n) => n + 1);
+      }} />
+    );
+  }
+  if (error?.unavailable) {
+    const named = error.name ? { name: error.name, locale, onLocale: setLocale } : header;
+    return withBrand(
+      <StatusScreen header={named} icon="info" title={t.unavailableTitle} text={t.unavailableText}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} />,
+    );
+  }
+  if (error?.connection) {
+    return withBrand(
+      <StatusScreen header={header} icon="warning" title={t.connectionTitle} text={t.connectionText}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }}
+        secondary={{ label: t.startOver, onClick: startOver }} />,
+    );
+  }
+  // Nothing the customer could order: better a clear message than an empty choice screen.
+  const nothingOrderable = Boolean(boot) && !boot!.orderTypes.some((o) => o.configured);
+  if (error || (boot && !boot.catalogReady) || nothingOrderable) {
+    // Customers get the calm message; the line under it tells the staff why and where to fix it.
+    const note = error ? null : boot && !boot.catalogReady ? t.staffMenuNotRead : nothingOrderable ? t.staffNoOrderType : null;
+    return withBrand(
+      <StatusScreen header={header} icon="warning" title={t.errorTitle} text={error?.message ?? t.menuUnavailable}
+        action={{ label: t.retry, icon: "refresh", onClick: retry }} note={note} />,
+    );
+  }
+
+  if (!boot) {
+    return <LoadingScreen label={t.loading} />;
+  }
+
+  const renderScreen = () => {
+
+  const usable = boot.orderTypes.filter((o) => o.configured);
+  const pick = (o: OrderTypeOption) => { setChoice(o); setScreen(o.askTable ? "TABLE" : "MENU"); };
+  const begin = () => (usable.length === 1 ? pick(usable[0]) : setScreen("ORDER_TYPE"));
+
+  if (screen === "WELCOME") {
+    return <WelcomeScreen boot={boot} locale={locale} onLocale={setLocale} onStart={begin} />;
+  }
+  if (screen === "ORDER_TYPE") {
+    return <OrderTypeScreen options={usable} locale={locale} name={boot.restaurant.name} onLocale={setLocale}
+        onPick={pick} onBack={reset} />;
+  }
+  if (screen === "TABLE" && choice) {
+    return (
+      <TableScreen locale={locale} name={boot.restaurant.name} onLocale={setLocale} ranges={choice.tableRanges}
+        onBack={() => setScreen(usable.length === 1 ? "WELCOME" : "ORDER_TYPE")}
+        onConfirm={(n) => { setTable(n); setScreen("MENU"); }} />
+    );
+  }
+  if (screen === "MENU") {
+    if (!catalog) {
+      return (
+        <main className="flex min-h-dvh items-center justify-center">
+          <p className="text-3xl text-(--color-ink-muted)">{t.loading}</p>
+        </main>
+      );
+    }
+    return (
+      <MenuScreen catalog={catalog} locale={locale} name={boot.restaurant.name} onLocale={setLocale} tableNumber={table}
+        showImages={boot.ordering.showProductImages}
+        onViewOrder={() => setScreen("CART")}
+        onBack={() => setScreen(choice?.askTable ? "TABLE" : "WELCOME")} />
+    );
+  }
+
+    if (screen === "CART" && choice?.salesAreaId && catalog) {
+    return (
+      <CartScreen
+        slug={slug}
+        locale={locale}
+        name={boot.restaurant.name}
+        onLocale={setLocale}
+        currency={catalog.currency}
+        products={catalog.products}
+        suggestions={catalog.suggestions}
+        basketSuggestions={catalog.basketSuggestions}
+        showImages={boot.ordering.showProductImages}
+        orderType={choice.orderType}
+        salesAreaId={choice.salesAreaId}
+        tableNumber={table}
+        onBack={() => setScreen("MENU")}
+        onPlaced={(o) => { setOrder(o); setScreen("TICKET"); }}
+        borneCode={borne ?? undefined}
+        onUnavailable={(e) => (isTillError(e) ? setTillOk(false) : setError(toKioskError(e)))}
+        payment={boot.payment}
+        onPaying={setPaying}
+      />
+    );
+  }
+
+  if (screen === "TICKET" && order) {
+    return (
+      <TicketScreen
+        order={order}
+        locale={locale}
+        name={boot.restaurant.name}
+        onLocale={setLocale}
+        resetDelaySec={boot.ordering.resetDelaySec}
+        standNumber={choice?.askTable ? null : (order.tableNumber ?? null)}
+        onDone={reset}
+      />
+    );
+  }
+
+  return (
+    <LoadingScreen label={t.loading} />
+  );
+  };
+
+  return withBrand(
+    <>
+      {/* Each screen comes in with a fade and a short slide up (keyed: a new screen starts the animation again). */}
+      <div key={screen} className="screen-in">{renderScreen()}</div>
+      {idleLeft !== null ? (
+        <IdleWarning locale={locale} secondsLeft={idleLeft} totalSeconds={warnSec}
+          onContinue={() => keepAlive.current()} onDiscard={reset} />
+      ) : null}
+      {noConnection ? <div className="fixed inset-0 z-[80] overflow-y-auto bg-(--color-page)">{noConnection}</div> : null}
+    </>,
+  );
+}
+
+function LoadingScreen({ label }: { label: string }) {
+  return (
+    <main role="status" className="flex min-h-dvh flex-col items-center justify-center gap-14 bg-(--color-page) text-(--color-ink)">
+      <span className="relative flex size-64 items-center justify-center">
+        <svg viewBox="0 0 260 260" className="absolute inset-0 animate-spin [animation-duration:2.4s]" aria-hidden="true">
+          <circle cx="130" cy="130" r="120" fill="none" stroke="var(--color-brand)" strokeWidth="8"
+            strokeDasharray="34 22" strokeLinecap="round" />
+        </svg>
+        <LogoTile className="size-36 rounded-[2.4rem]" iconClass="size-20" />
+      </span>
+      <p className="font-display text-5xl font-bold">{label}</p>
+    </main>
+  );
+}

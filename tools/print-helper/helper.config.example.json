@@ -1,0 +1,5 @@
+{
+  "apiUrl": "https://api.your-domain.example",
+  "token": "pht_paste-the-token-from-the-back-office",
+  "pollIntervalMs": 2000
+}

@@ -1,0 +1,6 @@
+[Unit]
+Description=Email that %i failed
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '/usr/local/bin/kiosk-alert "%i failed" "$$(systemctl status %i --no-pager -n 30 2>&1)"'

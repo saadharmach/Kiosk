@@ -1,0 +1,7 @@
+[Unit]
+Description=Kiosk watchdog (emails when something is wrong)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kiosk-watch

@@ -1,0 +1,39 @@
+node_modules/
+dist/
+.next/
+coverage/
+*.log
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# TPAPI discovery output (can contain server details)
+tools/tpapi-discovery/output/
+
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json.testenv
+apps/kiosk/.next
+apps/kiosk/next-env.d.ts
+.logs/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+apps/backoffice/.next
+apps/backoffice/next-env.d.ts
+apps/admin/.next
+apps/admin/next-env.d.ts
+.testenv
+.logs/
+apps/admin/tsconfig.tsbuildinfo
+
+# Photos and logos uploaded in development (MEDIA_DIR)
+.media/
+apps/api/.media/
+
+# The print helper zip the back office offers (made by tools/print-helper/pack.mjs at dev/build time)
+apps/backoffice/public/downloads/
+apps/admin/public/downloads/
+deploy/config.resolved.sh
