@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getPrinter, issuePairingCode, issuePrinterToken, listPrintJobs, savePrinter, testPrint,
-  type CodePage, type PrintJobRow, type PrinterView, type SavePrinterBody,
+  type CodePage, type PrintJobRow, type UsbMode, type PrinterView, type SavePrinterBody,
 } from "@/lib/printer";
 
 const field = "field";
@@ -23,7 +23,7 @@ const CODEPAGES: { value: CodePage; label: string }[] = [
 
 const EMPTY: SavePrinterBody = {
   name: "Imprimante tickets", connection: "NETWORK", address: "", port: 9100, isEnabled: true,
-  autoPrint: true, copies: 1, cut: true, codepage: "CP858",
+  autoPrint: true, copies: 1, cut: true, codepage: "CP858", usbMode: "DRIVER",
 };
 
 /** "il y a 12 s", "il y a 3 min", or the date, for a sign of life. */
@@ -265,6 +265,21 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
           </label>
         </div>
 
+        {form.connection === "USB" ? (
+          <div className="mt-4">
+            <label className={lbl} htmlFor={`p-usbmode-${kioskId ?? "d"}`}>Façon d’imprimer</label>
+            <select id={`p-usbmode-${kioskId ?? "d"}`} className={field} value={form.usbMode} onChange={(e) => edit({ usbMode: e.target.value as UsbMode })}>
+              <option value="DRIVER">Par le pilote Windows, comme le Bloc-notes (conseillé)</option>
+              <option value="RAW">Commandes brutes de l’imprimante (ESC/POS)</option>
+            </select>
+            <p className={hint}>
+              {form.usbMode === "DRIVER"
+                ? "Les accents s’impriment comme dans le Bloc-notes et le numéro est imprimé en très grand. La coupe du papier suit le réglage du pilote."
+                : "Pour une imprimante dont le pilote imprime mal : les accents dépendent alors du jeu de caractères ci-dessous."}
+            </p>
+          </div>
+        ) : null}
+
         <div className="mt-4 grid gap-4 sm:grid-cols-[9rem_1fr]">
           <div>
             <label className={lbl} htmlFor={`p-copies-${kioskId ?? "d"}`}>Exemplaires</label>
@@ -272,13 +287,16 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
               {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
-          <div>
-            <label className={lbl} htmlFor={`p-codepage-${kioskId ?? "d"}`}>Jeu de caractères</label>
-            <select id={`p-codepage-${kioskId ?? "d"}`} className={field} value={form.codepage} onChange={(e) => edit({ codepage: e.target.value as CodePage })}>
-              {CODEPAGES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-            <p className={hint}>Si les accents s’impriment mal sur le ticket de test, essayez-en un autre.</p>
-          </div>
+          {/* Through the Windows driver, Windows draws the letters: no character set to choose. */}
+          {form.connection === "USB" && form.usbMode === "DRIVER" ? null : (
+            <div>
+              <label className={lbl} htmlFor={`p-codepage-${kioskId ?? "d"}`}>Jeu de caractères</label>
+              <select id={`p-codepage-${kioskId ?? "d"}`} className={field} value={form.codepage} onChange={(e) => edit({ codepage: e.target.value as CodePage })}>
+                {CODEPAGES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+              <p className={hint}>Si les accents s’impriment mal sur le ticket de test, essayez-en un autre.</p>
+            </div>
+          )}
         </div>
 
         <p className={`${hint} mt-4`}>Les tickets sont imprimés en français sur du papier 80 mm. La ligne de pied de page se règle dans Paramètres.</p>

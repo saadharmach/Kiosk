@@ -120,7 +120,7 @@ describe("PrintingService: settings", () => {
     const update = calls.find((c) => c.model === "printer" && c.op === "updateMany")!.args as { where: Record<string, unknown> };
     assert.equal(update.where.restaurantId, "r1");
     assert.equal(update.where.id, "p1");
-    assert.deepEqual(printers[0]!.config, { autoPrint: false, copies: 3, cut: false, codepage: "CP858" });
+    assert.deepEqual(printers[0]!.config, { autoPrint: false, copies: 3, cut: false, codepage: "CP858", usbMode: "DRIVER" });
     assert.equal(printers[0]!.address, "10.0.0.9");
   });
 });

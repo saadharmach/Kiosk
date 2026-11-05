@@ -116,3 +116,18 @@ describe("buildTicket", () => {
     assert.equal(decode(bytes, "CP1252").codepageByte, 16);
   });
 });
+
+describe("a USB printer reading the ticket back (NEXBORN Helper, Windows driver mode)", () => {
+  it("gets every line with its accents, and the chevalet number as the biggest line", async () => {
+    // The helper's own reader, so the two sides never drift apart.
+    const helperModule = "../../../tools/print-helper/src/escpos-read.mjs";
+    const { readTicket } = (await import(helperModule)) as { readTicket: (b: Buffer) => { text: string; height: number }[][] };
+    for (const codepage of ["CP858", "CP437", "CP1252"] as const) {
+      const [page] = readTicket(buildTicket({ ...base, headline: "CHEVALET N°", bigText: "12", payNote: "Présentez ce numéro à la caisse" }, { codepage }));
+      const texts = page!.map((l) => l.text);
+      assert.ok(texts.includes("CHEVALET N°"), codepage);
+      assert.ok(texts.some((t) => t.includes("Présentez ce numéro à la caisse")), codepage);
+      assert.equal(page!.find((l) => l.text === "12")?.height, 8, codepage);
+    }
+  });
+});

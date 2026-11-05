@@ -120,6 +120,7 @@ export class PrintingService {
       ...(dto.copies !== undefined ? { copies: dto.copies } : {}),
       ...(dto.cut !== undefined ? { cut: dto.cut } : {}),
       ...(dto.codepage !== undefined ? { codepage: dto.codepage } : {}),
+      ...(dto.usbMode !== undefined ? { usbMode: dto.usbMode } : {}),
     });
     const usb = dto.connection === "USB";
     if (!usb && !HOST.test(dto.address.trim())) throw new BadRequestException(NETWORK_ADDRESS_MESSAGE);
@@ -485,8 +486,9 @@ export class PrintingService {
       connection: usb ? "USB" : "NETWORK",
       host: usb ? null : printer.address,
       port: usb ? null : (printer.port ?? 9100),
-      /** USB: the Windows printer the helper sends the ticket to. */
+      /** USB: the Windows printer the helper sends the ticket to, and how (its Windows driver, or raw commands). */
       printerName: usb ? printer.address : null,
+      usbMode: usb ? readPrinterConfig(printer.config).usbMode : null,
       attempt: row.attempts,
       dataBase64: Buffer.from(row.payload).toString("base64"),
     };

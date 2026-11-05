@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { readTicket } from "./escpos-read.mjs";
 
 /**
  * USB printers, through Windows. The printer is plugged into this computer and installed in Windows with its driver
@@ -92,6 +93,98 @@ export async function sendToWindowsPrinter({ printerName, data, timeoutMs = 30_0
   fs.writeFileSync(file, data);
   try {
     const answer = await powershell(RAW_PRINT, {
+      env: { NEXBORN_TICKET_FILE: file, NEXBORN_PRINTER_NAME: printerName },
+      timeoutMs,
+      execImpl,
+    });
+    if (answer.trim() !== "ok") throw new Error(explainWindowsPrint(answer, printerName));
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+// Draws the ticket's lines with the printer's Windows driver, as Notepad prints: Windows draws the letters (so every
+// accent prints), in Consolas sized so 48 characters fill the paper's width. The big number (a line printed 4 times
+// or more) is drawn as large as fits the width, up to 14 times the normal size. One page per copy.
+const DRIVER_PRINT = String.raw`
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+$job = Get-Content -Raw -Encoding UTF8 $env:NEXBORN_TICKET_FILE | ConvertFrom-Json
+$doc = New-Object System.Drawing.Printing.PrintDocument
+$doc.PrinterSettings.PrinterName = $env:NEXBORN_PRINTER_NAME
+if (-not $doc.PrinterSettings.IsValid) { [Console]::Out.Write('open:1801'); exit }
+$doc.DocumentName = 'NEXBORN ticket'
+# No "Printing..." window: the helper runs in the background.
+$doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+$doc.OriginAtMargins = $false
+$doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+$script:page = 0
+$script:line = 0
+$doc.add_PrintPage({
+  param($s, $e)
+  $g = $e.Graphics
+  $area = $g.VisibleClipBounds
+  $left = $area.Left + 2
+  $width = $area.Width - 4
+  $fmt = [System.Drawing.StringFormat]::GenericTypographic
+  $probe = New-Object System.Drawing.Font('Consolas', 10)
+  $base = 10 * $width / $g.MeasureString(('M' * [int]$job.columns), $probe, 100000, $fmt).Width
+  $probe.Dispose()
+  $lines = @($job.pages[$script:page])
+  $y = $area.Top + 2
+  while ($script:line -lt $lines.Count) {
+    $l = $lines[$script:line]
+    $text = [string]$l.text
+    if ($text -eq '') { $text = ' ' }
+    $style = if ($l.bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
+    $big = [int]$l.height -ge 4
+    if ($big) {
+      $probe = New-Object System.Drawing.Font('Consolas', 10, $style)
+      $fit = 10 * 0.92 * $width / $g.MeasureString($text, $probe, 100000, $fmt).Width
+      $probe.Dispose()
+      $size = [Math]::Min($fit, $base * 14)
+      $sx = 1.0
+    } else {
+      $size = $base * [int]$l.height
+      $sx = [double]$l.width / [double]$l.height
+    }
+    $font = New-Object System.Drawing.Font('Consolas', [single]$size, $style)
+    $lineHeight = $font.GetHeight($g)
+    if (($y + $lineHeight) -gt $area.Bottom -and $script:line -gt 0 -and $y -gt ($area.Top + 10)) { $font.Dispose(); $e.HasMorePages = $true; return }
+    $drawn = $g.MeasureString($text, $font, 100000, $fmt).Width * $sx
+    $x = $left
+    if ($l.align -eq 'center') { $x = $left + ($width - $drawn) / 2 }
+    elseif ($l.align -eq 'right') { $x = $left + $width - $drawn }
+    $state = $g.Save()
+    $g.TranslateTransform([single]$x, [single]$y)
+    $g.ScaleTransform([single]$sx, 1)
+    $g.DrawString($text, $font, [System.Drawing.Brushes]::Black, 0, 0, $fmt)
+    $g.Restore($state)
+    $y += $lineHeight
+    $font.Dispose()
+    $script:line++
+  }
+  $script:page++
+  $script:line = 0
+  $e.HasMorePages = $script:page -lt @($job.pages).Count
+})
+$doc.Print()
+[Console]::Out.Write('ok')
+`;
+
+/**
+ * Prints a ticket through the printer's Windows driver, like Notepad: the server's ticket is read back into lines and
+ * Windows draws them. Accents print whatever the printer's character tables; the paper is cut as the driver is set to.
+ */
+export async function printWithWindowsDriver({ printerName, data, columns = 48, timeoutMs = 45_000, execImpl } = {}) {
+  if (process.platform !== "win32" && !execImpl) throw new Error("USB printers work only when NEXBORN Helper runs on Windows");
+  if (!printerName) throw new Error("No USB printer chosen: choose this printer's name in the back office (Bornes et imprimantes)");
+  const pages = readTicket(data);
+  if (pages.length === 0) throw new Error("The ticket was empty");
+  const file = path.join(os.tmpdir(), `nexborn-ticket-${randomBytes(6).toString("hex")}.json`);
+  fs.writeFileSync(file, JSON.stringify({ columns, pages }), "utf8");
+  try {
+    const answer = await powershell(DRIVER_PRINT, {
       env: { NEXBORN_TICKET_FILE: file, NEXBORN_PRINTER_NAME: printerName },
       timeoutMs,
       execImpl,

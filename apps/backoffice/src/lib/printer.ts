@@ -7,7 +7,11 @@ export interface PrinterConfig {
   copies: number;
   cut: boolean;
   codepage: CodePage;
+  /** A USB printer: through its Windows driver (like Notepad), or raw printer commands. */
+  usbMode: UsbMode;
 }
+
+export type UsbMode = "DRIVER" | "RAW";
 
 export type PrinterView =
   | { configured: false; config: PrinterConfig }
@@ -50,6 +54,7 @@ export interface SavePrinterBody {
   copies: number;
   cut: boolean;
   codepage: CodePage;
+  usbMode: UsbMode;
 }
 
 /** The restaurant's default printer, or one borne's printer when `kioskId` is given. */

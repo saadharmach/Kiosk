@@ -1,5 +1,5 @@
 import net from "node:net";
-import { listWindowsPrinters, sendToWindowsPrinter } from "./windows-printer.mjs";
+import { listWindowsPrinters, printWithWindowsDriver, sendToWindowsPrinter } from "./windows-printer.mjs";
 
 /**
  * The print helper's engine. It only ever makes outbound requests: it asks the API for the
@@ -74,7 +74,7 @@ function explain(e, host, port) {
 /**
  * Starts the loop. Returns { stop } which ends it cleanly.
  *
- * options: { apiUrl, token, intervalMs?, waitSec?, log?, fetchImpl?, sendImpl?, sendUsbImpl?, listPrintersImpl? }
+ * options: { apiUrl, token, intervalMs?, waitSec?, log?, fetchImpl?, sendImpl?, sendUsbImpl?, printUsbImpl?, listPrintersImpl? }
  *
  * The request for work is held open by the API for up to `waitSec` seconds and answered the
  * moment a ticket exists, so paper comes out right after the customer confirms. `waitSec: 0`
@@ -90,6 +90,7 @@ export function startHelper(options) {
     fetchImpl = fetch,
     sendImpl = sendToPrinter,
     sendUsbImpl = sendToWindowsPrinter,
+    printUsbImpl = printWithWindowsDriver,
     // Only Windows has USB printers to offer; elsewhere nothing is reported.
     listPrintersImpl = process.platform === "win32" ? listWindowsPrinters : null,
     printersEveryMs = 5 * 60_000,
@@ -136,7 +137,10 @@ export function startHelper(options) {
     log("INFO", `Ticket ${job.id.slice(0, 8)} (attempt ${job.attempt}) to ${usb ? `USB printer "${job.printerName ?? "?"}"` : `${job.host}:${job.port}`}`);
     try {
       const data = Buffer.from(job.dataBase64, "base64");
-      if (usb) await sendUsbImpl({ printerName: job.printerName, data });
+      // USB: through the printer's Windows driver, like Notepad (accents always right), unless the back office asked for
+      // raw printer commands.
+      if (usb && job.usbMode === "RAW") await sendUsbImpl({ printerName: job.printerName, data });
+      else if (usb) await printUsbImpl({ printerName: job.printerName, data });
       else await sendImpl({ host: job.host, port: job.port, data });
       log("INFO", `Ticket ${job.id.slice(0, 8)} printed`);
       state.lastTicket = { at: new Date().toISOString(), ok: true, error: null };

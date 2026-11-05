@@ -1,5 +1,5 @@
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from "class-validator";
-import { CODEPAGE_NAMES } from "./printer-config.js";
+import { CODEPAGE_NAMES, USB_MODES } from "./printer-config.js";
 
 /** A LAN address: an IPv4 or a host name. No scheme, no path, no port. */
 export const HOST = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$/;
@@ -39,6 +39,9 @@ export class SavePrinterDto {
 
   @IsOptional() @IsIn(CODEPAGE_NAMES)
   codepage?: string;
+
+  @IsOptional() @IsIn(USB_MODES)
+  usbMode?: string;
 }
 
 export class JobResultDto {
