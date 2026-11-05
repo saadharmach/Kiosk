@@ -45,6 +45,7 @@ export function decode(buf: Buffer, page: CodePageName = "CP858", columns = 48):
       else if (c === 0x64) { i += 2; for (let k = 0; k < at(i); k++) { lines.push(""); plain.push(""); } }
       continue;
     }
+    if (b === 0x1c) { i += 1; continue; } // FS . (leave Chinese mode)
     if (b === 0x1d) {
       const c = at(i + 1);
       if (c === 0x21) { size = (at(i + 2) >> 4) + 1; maxSize = Math.max(maxSize, size); i += 2; }

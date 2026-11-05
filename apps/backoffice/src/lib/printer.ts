@@ -1,6 +1,6 @@
 import { request } from "./api";
 
-export type CodePage = "CP858" | "CP437" | "CP1252";
+export type CodePage = "CP858" | "CP437" | "CP1252" | "ASCII";
 
 export interface PrinterConfig {
   autoPrint: boolean;

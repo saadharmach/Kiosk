@@ -18,6 +18,7 @@ const CODEPAGES: { value: CodePage; label: string }[] = [
   { value: "CP858", label: "PC858 : accents français et signe € (conseillé)" },
   { value: "CP437", label: "PC437 : le réglage courant, moins d’accents" },
   { value: "CP1252", label: "Windows-1252 : pour les imprimantes qui l’utilisent" },
+  { value: "ASCII", label: "Sans accents : si aucun autre n’imprime les accents (é → e, € → EUR)" },
 ];
 
 const EMPTY: SavePrinterBody = {

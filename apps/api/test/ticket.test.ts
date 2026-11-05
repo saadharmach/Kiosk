@@ -8,7 +8,7 @@ const base: TicketData = {
   reference: "K0-0930-005",
   printedAt: "30/09/26 14:32",
   orderType: "Sur place",
-  headline: "POSEZ CE NUMÉRO SUR VOTRE TABLE",
+  headline: "CHEVALET N°",
   bigText: "705",
   lines: [
     { quantity: 1, name: "Full Grid", total: 10.5, modifiers: [{ name: "Au plat", price: 1 }] },
@@ -48,7 +48,7 @@ describe("buildTicket", () => {
     const text = d.plain.join("\n");
     assert.match(text, /Commande K0-0930-005 +30\/09\/26 14:32/);
     assert.match(text, /Sur place/);
-    assert.match(text, /POSEZ CE NUMÉRO SUR VOTRE TABLE/);
+    assert.match(text, /CHEVALET N°/);
     assert.ok(d.plain.includes("705"));
     assert.ok(d.maxSize >= 4, "a short number is printed at 4x");
   });
@@ -97,11 +97,12 @@ describe("buildTicket", () => {
     assert.match(line, /oeufs/);
   });
 
-  it("uses a smaller scale for a long reference than for a stand number", () => {
-    const short = decode(buildTicket({ ...base, bigText: "705" })).maxSize;
+  it("prints the number as big as the paper allows: a chevalet number at 8 times, a long reference smaller but still on one line", () => {
+    assert.equal(decode(buildTicket({ ...base, bigText: "705" })).maxSize, 8);
     const long = decode(buildTicket({ ...base, bigText: "K0-0930-005" })).maxSize;
-    assert.ok(long < short);
+    assert.equal(long, 4);
     assert.ok(long * "K0-0930-005".length <= 48, "the big reference still fits the paper");
+    assert.ok(decode(buildTicket({ ...base, bigText: "705" }, { columns: 32 }), "CP858", 32).maxSize * 3 <= 32);
   });
 
   it("honours a narrower paper", () => {

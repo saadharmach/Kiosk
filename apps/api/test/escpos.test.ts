@@ -52,16 +52,22 @@ describe("encodeText", () => {
 });
 
 describe("EscPos", () => {
-  it("starts with reset and the code page, in that order", () => {
+  it("starts with reset, leaving Chinese mode (or accents vanish on many USB printers), and the code page, in that order", () => {
     const b = new EscPos("CP858").toBuffer();
-    assert.deepEqual([...b], [0x1b, 0x40, 0x1b, 0x74, 19]);
+    assert.deepEqual([...b], [0x1b, 0x40, 0x1c, 0x2e, 0x1b, 0x74, 19]);
     assert.deepEqual([...new EscPos("CP437").toBuffer()].slice(-1), [0]);
     assert.deepEqual([...new EscPos("CP1252").toBuffer()].slice(-1), [16]);
   });
 
+  it("without accents: letters lose them, the euro sign and the degree sign are spelled out", () => {
+    assert.equal(encodeText("Crème brûlée 3,50 € N°", "ASCII").toString("latin1"), "Creme brulee 3,50 EUR No");
+    assert.equal(toPrintable("Crème 3 €", "ASCII"), "Creme 3 EUR");
+    assert.deepEqual([...encodeText("N°", "CP858")], [0x4e, 0xf8], "the tables that have ° print it");
+  });
+
   it("builds the commands it promises", () => {
     const b = new EscPos("CP858").align("center").bold(true).size(2, 3).line("x").cut().toBuffer();
-    const tail = [...b].slice(5);
+    const tail = [...b].slice(7); // after reset, leaving Chinese mode, and the code page
     assert.deepEqual(tail, [0x1b, 0x61, 1, 0x1b, 0x45, 1, 0x1d, 0x21, 0x12, 0x78, 0x0a, 0x1d, 0x56, 0x42, 0x00]);
   });
 

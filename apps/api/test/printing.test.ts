@@ -266,18 +266,20 @@ describe("PrintingService: the ticket built from an order", () => {
     assert.ok(lines.some((l) => l.startsWith("2 x Soup of the day")), "any language with text beats a blank");
   });
 
-  it("shows the stand number big when the customer was not asked for a table", async () => {
-    const lines = await ticket();
-    assert.ok(lines.includes("705"));
-    assert.ok(lines.some((l) => l.includes("POSEZ CE NUMÉRO SUR VOTRE TABLE")));
-    assert.ok(lines.some((l) => l.includes("Sur place") && !l.includes("Table")));
+  it("eat in: the chevalet number big, under CHEVALET N°, whether the kiosk handed it out or the customer typed it", async () => {
+    for (const askTableForEatIn of [false, true]) {
+      const lines = await ticket({ restaurants: [restaurant({ settings: { ticketFooterText: null, askTableForEatIn } })], orders: [order({ tableNumber: 12 })] });
+      assert.ok(lines.includes("12"), `askTableForEatIn ${askTableForEatIn}`);
+      assert.ok(lines.some((l) => l.includes("CHEVALET N°")));
+      assert.ok(lines.some((l) => l.includes("Commande K0-0930-005")), "the order number stays in the header");
+      assert.ok(!lines.some((l) => /table/i.test(l)), "no more 'table' on the ticket");
+    }
   });
 
-  it("shows the order number big, and the table in the header, when the customer typed their table", async () => {
-    const lines = await ticket({ restaurants: [restaurant({ settings: { ticketFooterText: null, askTableForEatIn: true } })], orders: [order({ tableNumber: 12 })] });
+  it("no number from the kiosk: the order number big", async () => {
+    const lines = await ticket({ orders: [order({ tableNumber: null })] });
     assert.ok(lines.includes("K0-0930-005"));
     assert.ok(lines.some((l) => l.includes("VOTRE NUMÉRO DE COMMANDE")));
-    assert.ok(lines.some((l) => l.includes("Sur place - Table 12")));
   });
 
   it("treats a take-away order like the kiosk does: the stand number, even if eat-in asks for tables", async () => {

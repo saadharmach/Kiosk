@@ -4,7 +4,7 @@
  * tested on its own and reused by the helper.
  */
 
-export type CodePageName = "CP858" | "CP437" | "CP1252";
+export type CodePageName = "CP858" | "CP437" | "CP1252" | "ASCII";
 
 interface CodePage {
   /** The byte sent after ESC t so the printer switches to this table. */
@@ -17,7 +17,7 @@ const CP437: Record<string, number> = {
   Ç: 0x80, ü: 0x81, é: 0x82, â: 0x83, ä: 0x84, à: 0x85, å: 0x86, ç: 0x87, ê: 0x88, ë: 0x89,
   è: 0x8a, ï: 0x8b, î: 0x8c, ì: 0x8d, Ä: 0x8e, Å: 0x8f, É: 0x90, æ: 0x91, ô: 0x93, ö: 0x94,
   ò: 0x95, û: 0x96, ù: 0x97, ÿ: 0x98, Ö: 0x99, Ü: 0x9a, "£": 0x9c, ñ: 0xa4, Ñ: 0xa5,
-  "«": 0xae, "»": 0xaf,
+  "«": 0xae, "»": 0xaf, "°": 0xf8,
 };
 
 /** PC858 = PC850 plus the euro sign: the usual choice for French. */
@@ -36,12 +36,14 @@ export const CODEPAGES: Record<CodePageName, CodePage> = {
   CP858: { escT: 19, map: CP858 },
   CP437: { escT: 0, map: CP437 },
   CP1252: { escT: 16, map: CP1252 },
+  // For a printer that cannot print accents at all: letters lose their accent (é → e), the euro sign becomes EUR.
+  ASCII: { escT: 0, map: {} },
 };
 
 /** Typographic characters that have a plain equivalent every table can print. */
 const PLAIN: Record<string, string> = {
   "’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-",
-  "…": "...", " ": " ", " ": " ", " ": " ", "œ": "oe", "Œ": "OE",
+  "…": "...", " ": " ", " ": " ", " ": " ", "œ": "oe", "Œ": "OE", "€": "EUR", "°": "o",
 };
 
 /** One character to one byte. Unknown characters lose their accent, else become "?". */
@@ -84,6 +86,9 @@ export class EscPos {
 
   constructor(private readonly codepage: CodePageName = "CP858") {
     this.raw([0x1b, 0x40]); // ESC @: reset
+    // FS .: leave Chinese (double-byte) mode. Many USB receipt printers start in it, and then read every accented
+    // letter as half of a Chinese character, so é, à, € vanish. Printers without that mode ignore it.
+    this.raw([0x1c, 0x2e]);
     this.raw([0x1b, 0x74, CODEPAGES[codepage].escT]); // ESC t n: choose the code page
   }
 

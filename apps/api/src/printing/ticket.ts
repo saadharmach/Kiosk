@@ -105,10 +105,11 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
   if (data.borneName) for (const l of wrap(`Borne : ${data.borneName}`, width)) p.line(l);
   p.line(rule);
 
-  // The number the customer must not lose takes the middle of the ticket.
+  // The number the customer must not lose takes the middle of the ticket, as big as the paper allows
+  // (8 times the normal size at most: a chevalet number is then about 2.4 cm tall).
   p.align("center").bold(true);
   for (const l of wrap(data.headline, width)) p.line(l);
-  const scale = data.bigText.length <= 6 ? 4 : data.bigText.length <= 12 ? 2 : 1;
+  const scale = Math.max(1, Math.min(8, Math.floor(width / Math.max(1, data.bigText.length))));
   p.size(scale, scale).line(data.bigText).size(1, 1).bold(false).align("left");
   p.line(rule);
 

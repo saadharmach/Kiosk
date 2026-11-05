@@ -365,17 +365,18 @@ export class PrintingService {
         };
       });
 
-    // The same rule as the kiosk's ticket screen: a customer who typed their table keeps the
-    // order number; everyone else is told to put the stand number on their table.
-    const askedForTable = order.orderType === "EAT_IN" && (restaurant.settings?.askTableForEatIn ?? true);
+    // Eat in: the chevalet's number (typed by the customer, or handed out by the kiosk), as big as it goes. Other
+    // orders with a number from the kiosk show that number; with none, the order's reference. The reference is
+    // always in the header line too.
     const label = ORDER_TYPE_FR[order.orderType] ?? order.orderType;
+    const chevalet = order.orderType === "EAT_IN" && order.tableNumber !== null;
     return {
       restaurantName: restaurant.name,
       reference: order.reference,
       printedAt: formatLocal(order.createdAt, restaurant.timezone),
-      orderType: askedForTable && order.tableNumber ? `${label} - Table ${order.tableNumber}` : label,
-      headline: askedForTable ? "VOTRE NUMÉRO DE COMMANDE" : "POSEZ CE NUMÉRO SUR VOTRE TABLE",
-      bigText: askedForTable || order.tableNumber === null ? order.reference : String(order.tableNumber),
+      orderType: label,
+      headline: chevalet ? "CHEVALET N°" : order.tableNumber !== null ? "VOTRE NUMÉRO" : "VOTRE NUMÉRO DE COMMANDE",
+      bigText: order.tableNumber !== null ? String(order.tableNumber) : order.reference,
       lines,
       total: Number(order.total),
       currency: order.currency,
