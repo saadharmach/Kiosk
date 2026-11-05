@@ -4,7 +4,7 @@
    the platform admin; pages use the names, never the colours. Static: the pages read them as var(--…), which Tailwind
    cannot see, so they are always emitted. */
 @theme static {
-  --font-sans: var(--font-jakarta), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-nav: #073b4c;
   --color-nav-2: #0d4d61;

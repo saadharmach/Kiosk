@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/state/auth";
+// Plus Jakarta Sans from the project's own files, not downloaded from Google at build time: Google's answer for this
+// font changed and broke the build.
+import "@fontsource-variable/plus-jakarta-sans/index.css";
 import "./globals.css";
-
-const jakarta = Plus_Jakarta_Sans({ weight: ["400", "500", "600", "700"], subsets: ["latin", "latin-ext"], variable: "--font-jakarta", display: "swap" });
 
 export const metadata: Metadata = { title: "NEXBORN – Back-office" };
 
@@ -12,7 +12,7 @@ const THEME = `try{var t=localStorage.getItem("nexborn-theme");if(t==="dark"||t=
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={jakarta.variable} suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME }} /></head>
       <body><AuthProvider>{children}</AuthProvider></body>
     </html>

@@ -9,6 +9,7 @@
     "start": "next start -p 3003"
   },
   "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "5.2.8",
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
