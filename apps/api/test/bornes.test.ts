@@ -214,12 +214,12 @@ describe("tickets go to the right printer", () => {
   }
   const text = (job: any) => decode(job.payload).toString?.() ?? JSON.stringify(decode(job.payload));
 
-  it("an order from a borne prints on THAT borne's printer, with the borne's name on the ticket", async () => {
+  it("an order from a borne prints on THAT borne's printer (the ticket no longer names the borne)", async () => {
     const { svc, jobs } = setup([P("default", null), P("p2", "k2"), P("p3", "k3")]);
     await svc.enqueueForOrder("r1", "o1", true, order("k2") as never);
     assert.equal(jobs.length, 1);
     assert.equal(jobs[0].printerId, "p2");
-    assert.match(JSON.stringify(decode(jobs[0].payload)), /Borne : Borne terrasse/);
+    assert.equal(/Borne/.test(JSON.stringify(decode(jobs[0].payload))), false);
   });
   it("an order from no borne prints on the restaurant's default printer, never on a borne's", async () => {
     const { svc, jobs } = setup([P("p2", "k2"), P("default", null)]);

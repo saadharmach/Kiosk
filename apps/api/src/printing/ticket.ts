@@ -94,22 +94,19 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
   p.size(1, 1).bold(false).align("left");
   p.line(rule);
 
-  const head = `Commande ${data.reference}`;
-  if (head.length + 1 + data.printedAt.length <= width) p.line(pair(head, data.printedAt, width));
-  else {
-    // Narrow paper: the time goes on its own line instead of running off the edge.
-    for (const l of wrap(head, width)) p.line(l);
-    p.line(pair("", data.printedAt, width));
-  }
-  p.line(data.orderType);
-  if (data.borneName) for (const l of wrap(`Borne : ${data.borneName}`, width)) p.line(l);
+  // The order number and how it is eaten, at double size so staff read them at a glance; the time under them.
+  p.bold(true).size(2, 2);
+  for (const l of wrap(`Commande ${data.reference}`, Math.floor(width / 2))) p.line(l);
+  for (const l of wrap(data.orderType, Math.floor(width / 2))) p.line(l);
+  p.size(1, 1).bold(false);
+  p.line(data.printedAt);
   p.line(rule);
 
   // The number the customer must not lose takes the middle of the ticket, as big as the paper allows
-  // (8 times the normal size at most: a chevalet number is then about 2.4 cm tall).
+  // (7 times the normal size at most: a chevalet number is then about 2 cm tall).
   p.align("center").bold(true);
   for (const l of wrap(data.headline, width)) p.line(l);
-  const scale = Math.max(1, Math.min(8, Math.floor(width / Math.max(1, data.bigText.length))));
+  const scale = Math.max(1, Math.min(7, Math.floor(width / Math.max(1, data.bigText.length))));
   p.size(scale, scale).line(data.bigText).size(1, 1).bold(false).align("left");
   p.line(rule);
 

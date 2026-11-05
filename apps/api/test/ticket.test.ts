@@ -46,11 +46,19 @@ describe("buildTicket", () => {
 
   it("puts the reference, time, type and the big number on the ticket", () => {
     const text = d.plain.join("\n");
-    assert.match(text, /Commande K0-0930-005 +30\/09\/26 14:32/);
+    assert.match(text, /Commande K0-0930-005/);
+    assert.match(text, /30\/09\/26 14:32/);
     assert.match(text, /Sur place/);
     assert.match(text, /CHEVALET N°/);
     assert.ok(d.plain.includes("705"));
     assert.ok(d.maxSize >= 4, "a short number is printed at 4x");
+  });
+
+  it("prints the order number and the order type at double size, and no borne name", () => {
+    const t = decode(buildTicket({ ...base, borneName: "Borne terrasse" }));
+    assert.ok(t.lines.some((l) => l.startsWith("[x2]") && l.includes("Commande K0-0930-005")));
+    assert.ok(t.lines.some((l) => l.startsWith("[x2]") && l.includes("Sur place")));
+    assert.ok(!t.plain.some((l) => /Borne|terrasse/.test(l)));
   });
 
   it("lists items with quantity, price on the right and indented options", () => {
@@ -97,8 +105,8 @@ describe("buildTicket", () => {
     assert.match(line, /oeufs/);
   });
 
-  it("prints the number as big as the paper allows: a chevalet number at 8 times, a long reference smaller but still on one line", () => {
-    assert.equal(decode(buildTicket({ ...base, bigText: "705" })).maxSize, 8);
+  it("prints the number as big as the paper allows: a chevalet number at 7 times, a long reference smaller but still on one line", () => {
+    assert.equal(decode(buildTicket({ ...base, bigText: "705" })).maxSize, 7);
     const long = decode(buildTicket({ ...base, bigText: "K0-0930-005" })).maxSize;
     assert.equal(long, 4);
     assert.ok(long * "K0-0930-005".length <= 48, "the big reference still fits the paper");
@@ -127,7 +135,7 @@ describe("a USB printer reading the ticket back (NEXBORN Helper, Windows driver 
       const texts = page!.map((l) => l.text);
       assert.ok(texts.includes("CHEVALET N°"), codepage);
       assert.ok(texts.some((t) => t.includes("Présentez ce numéro à la caisse")), codepage);
-      assert.equal(page!.find((l) => l.text === "12")?.height, 8, codepage);
+      assert.equal(page!.find((l) => l.text === "12")?.height, 7, codepage);
     }
   });
 });
