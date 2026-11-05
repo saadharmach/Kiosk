@@ -103,10 +103,10 @@ export function buildTicket(source: TicketData, opts: TicketOptions = {}): Buffe
   p.line(rule);
 
   // The number the customer must not lose takes the middle of the ticket, as big as the paper allows
-  // (7 times the normal size at most: a chevalet number is then about 2 cm tall).
+  // (6 times the normal size at most: a chevalet number is then about 1.8 cm tall).
   p.align("center").bold(true);
   for (const l of wrap(data.headline, width)) p.line(l);
-  const scale = Math.max(1, Math.min(7, Math.floor(width / Math.max(1, data.bigText.length))));
+  const scale = Math.max(1, Math.min(6, Math.floor(width / Math.max(1, data.bigText.length))));
   p.size(scale, scale).line(data.bigText).size(1, 1).bold(false).align("left");
   p.line(rule);
 

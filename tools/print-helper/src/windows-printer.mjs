@@ -105,7 +105,7 @@ export async function sendToWindowsPrinter({ printerName, data, timeoutMs = 30_0
 
 // Draws the ticket's lines with the printer's Windows driver, as Notepad prints: Windows draws the letters (so every
 // accent prints), in Consolas sized so 48 characters fill the paper's width. The big number (a line printed 4 times
-// or more) is drawn across about 84% of the width, up to 13 times the normal size. One page per copy.
+// or more) is drawn across about 76% of the width, up to 12 times the normal size. One page per copy.
 const DRIVER_PRINT = String.raw`
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
@@ -140,9 +140,9 @@ $doc.add_PrintPage({
     $big = [int]$l.height -ge 4
     if ($big) {
       $probe = New-Object System.Drawing.Font('Consolas', 10, $style)
-      $fit = 10 * 0.84 * $width / $g.MeasureString($text, $probe, 100000, $fmt).Width
+      $fit = 10 * 0.76 * $width / $g.MeasureString($text, $probe, 100000, $fmt).Width
       $probe.Dispose()
-      $size = [Math]::Min($fit, $base * 13)
+      $size = [Math]::Min($fit, $base * 12)
       $sx = 1.0
     } else {
       $size = $base * [int]$l.height
