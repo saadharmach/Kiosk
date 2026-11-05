@@ -37,6 +37,17 @@ async function pageIsUp() {
   try { return (await fetch(`${PAGE}api/state`, { signal: AbortSignal.timeout(1500) })).ok; } catch { return false; }
 }
 
+/** The version of the copy already running on this computer, or null when none is. */
+async function runningVersion() {
+  try {
+    const res = await fetch(`${PAGE}api/state`, { signal: AbortSignal.timeout(1500) });
+    if (!res.ok) return null;
+    return String((await res.json())?.version ?? "");
+  } catch {
+    return null;
+  }
+}
+
 function openPage() {
   if (isWin) spawn("explorer.exe", [PAGE], { detached: true, stdio: "ignore" }).unref();
   else if (process.platform === "darwin") spawn("open", [PAGE], { detached: true, stdio: "ignore" }).unref();
@@ -94,10 +105,17 @@ async function main() {
   if (args.includes("--service")) return void (await runService());
   if (args.includes("--install")) return install();
 
-  // Double-click: already running → just show the page.
-  if (await pageIsUp()) { openPage(); return; }
+  const windowsApp = isWin && (process.execPath.toLowerCase().endsWith(EXE_NAME.toLowerCase()) || process.execPath.toLowerCase().includes("nexborn"));
 
-  if (!isWin || !process.execPath.toLowerCase().endsWith(EXE_NAME.toLowerCase()) && !process.execPath.toLowerCase().includes("nexborn")) {
+  // Double-click while it already runs: the same version just shows its page. A different one (a newer download)
+  // installs itself over it, otherwise the computer would keep the old version for ever.
+  const running = await runningVersion();
+  if (running !== null) {
+    if (!windowsApp || running === VERSION) { openPage(); return; }
+    console.log(`Updating NEXBORN Helper (${running || "older version"} → ${VERSION})…`);
+  }
+
+  if (!windowsApp) {
     // Not the Windows app (development, Linux): run here, in this window.
     await runService();
     openPage();
