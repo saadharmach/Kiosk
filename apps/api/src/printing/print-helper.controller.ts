@@ -5,7 +5,7 @@ import {
 import { Throttle } from "@nestjs/throttler";
 import type { Printer } from "@prisma/client";
 import type { Request, Response } from "express";
-import { JobResultDto, PairDto } from "./dto.js";
+import { HelperPrintersDto, JobResultDto, PairDto } from "./dto.js";
 import { PrintingService } from "./printing.service.js";
 
 type HelperRequest = Request & { printer?: Printer };
@@ -55,6 +55,15 @@ export class PrintHelperController {
   @Throttle(POLL_LIMIT)
   result(@Param("id", new ParseUUIDPipe()) id: string, @Body() dto: JobResultDto, @Req() req: HelperRequest) {
     return this.printing.report(req.printer as Printer, id, dto.ok, dto.error);
+  }
+
+  /** The printers installed in Windows on the helper's computer (sent at start and every few minutes). */
+  @Post("printers")
+  @HttpCode(200)
+  @UseGuards(PrinterHelperGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  printers(@Body() dto: HelperPrintersDto, @Req() req: HelperRequest) {
+    return this.printing.setHelperPrinters(req.printer as Printer, dto.names);
   }
 
   /** The helper's first call: trades the one-time setup code from the back office for its secret. No sign-in needed. */

@@ -21,7 +21,7 @@ const CODEPAGES: { value: CodePage; label: string }[] = [
 ];
 
 const EMPTY: SavePrinterBody = {
-  name: "Imprimante tickets", address: "", port: 9100, isEnabled: true,
+  name: "Imprimante tickets", connection: "NETWORK", address: "", port: 9100, isEnabled: true,
   autoPrint: true, copies: 1, cut: true, codepage: "CP858",
 };
 
@@ -60,7 +60,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
     if (formTouched.current) return;
     setForm(
       v.configured
-        ? { name: v.name, address: v.address ?? "", port: v.port ?? 9100, isEnabled: v.isEnabled, ...v.config }
+        ? { name: v.name, connection: v.connection, address: v.address ?? "", port: v.port ?? 9100, isEnabled: v.isEnabled, ...v.config }
         : { ...EMPTY, ...v.config },
     );
   }, []);
@@ -178,7 +178,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
             Dernière erreur d’impression ({ago(view.lastError.at)}) : {view.lastError.message}
           </p>
         ) : null}
-        {!configured ? <p className={hint}>Enregistrez l’adresse de l’imprimante ci-dessous, puis configurez le Helper.</p> : null}
+        {!configured ? <p className={hint}>Indiquez comment l’imprimante est branchée ci-dessous et enregistrez, puis configurez le Helper.</p> : null}
       </section>
 
       {error ? <p className="note note-err" role="alert">{error}</p> : null}
@@ -187,20 +187,62 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
       {/* ---- settings */}
       <section className={card}>
         <h2 className="card-title">Imprimante tickets</h2>
-        <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
-          <div>
-            <label className={lbl} htmlFor={`p-address-${kioskId ?? "d"}`}>Adresse de l’imprimante (IP ou nom)</label>
-            <input id={`p-address-${kioskId ?? "d"}`} className={field} value={form.address} placeholder="192.168.1.50"
-              onChange={(e) => edit({ address: e.target.value })} />
-            <p className={hint}>L’adresse de l’imprimante sur le réseau du restaurant, sans http://.</p>
+        <fieldset className="mb-4">
+          <legend className={lbl}>Branchement</legend>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {([
+              ["USB", "USB", "Branchée sur l’ordinateur où tourne NEXBORN Helper (par exemple la borne elle-même)."],
+              ["NETWORK", "Réseau", "Branchée au réseau du restaurant (câble ou Wi-Fi), avec son adresse IP."],
+            ] as const).map(([value, title, text]) => (
+              <label key={value} className={`flex cursor-pointer items-start gap-2.5 rounded-(--radius-card) border p-3 ${
+                form.connection === value ? "border-(--color-brand) bg-(--color-info-soft)" : "border-(--color-line) bg-(--color-surface)"
+              }`}>
+                <input type="radio" name={`p-conn-${kioskId ?? "d"}`} className="mt-0.5 size-4 accent-(--color-brand)"
+                  checked={form.connection === value}
+                  // The address of one kind means nothing for the other: start it empty.
+                  onChange={() => edit({ connection: value, address: configured && view.connection === value ? view.address ?? "" : "" })} />
+                <span><span className="font-semibold">{title}</span><span className="block text-[12.5px] text-(--color-ink-muted)">{text}</span></span>
+              </label>
+            ))}
           </div>
-          <div>
-            <label className={lbl} htmlFor={`p-port-${kioskId ?? "d"}`}>Port</label>
-            <input id={`p-port-${kioskId ?? "d"}`} className={field} type="number" min={1} max={65535} value={form.port}
-              onChange={(e) => edit({ port: Number(e.target.value) })} />
-            <p className={hint}>En général 9100.</p>
+        </fieldset>
+
+        {form.connection === "NETWORK" ? (
+          <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+            <div>
+              <label className={lbl} htmlFor={`p-address-${kioskId ?? "d"}`}>Adresse de l’imprimante (IP ou nom)</label>
+              <input id={`p-address-${kioskId ?? "d"}`} className={field} value={form.address} placeholder="192.168.1.50"
+                onChange={(e) => edit({ address: e.target.value })} />
+              <p className={hint}>L’adresse de l’imprimante sur le réseau du restaurant, sans http://.</p>
+            </div>
+            <div>
+              <label className={lbl} htmlFor={`p-port-${kioskId ?? "d"}`}>Port</label>
+              <input id={`p-port-${kioskId ?? "d"}`} className={field} type="number" min={1} max={65535} value={form.port}
+                onChange={(e) => edit({ port: Number(e.target.value) })} />
+              <p className={hint}>En général 9100.</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div>
+            <label className={lbl} htmlFor={`p-usb-${kioskId ?? "d"}`}>Imprimante Windows</label>
+            {configured && view.helperPrinters && view.helperPrinters.length > 0 ? (
+              <select id={`p-usb-${kioskId ?? "d"}`} className={field} value={form.address} onChange={(e) => edit({ address: e.target.value })}>
+                <option value="">Choisir l’imprimante…</option>
+                {/* The saved one, even if the Helper no longer lists it (unplugged, renamed). */}
+                {form.address && !view.helperPrinters.includes(form.address) ? <option value={form.address}>{form.address} (introuvable sur l’ordinateur)</option> : null}
+                {view.helperPrinters.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            ) : (
+              <input id={`p-usb-${kioskId ?? "d"}`} className={field} value={form.address} placeholder="Apparaît ici une fois le Helper configuré"
+                onChange={(e) => edit({ address: e.target.value })} />
+            )}
+            <p className={hint}>
+              {configured && view.helperPrinters
+                ? "Les imprimantes installées dans Windows sur l’ordinateur du Helper. Branchez l’imprimante en USB et installez son pilote Windows pour qu’elle apparaisse."
+                : "Enregistrez d’abord, puis configurez NEXBORN Helper sur l’ordinateur où l’imprimante est branchée : la liste de ses imprimantes Windows apparaîtra ici."}
+            </p>
+          </div>
+        )}
 
         <div className="mt-4">
           <label className={lbl} htmlFor={`p-name-${kioskId ?? "d"}`}>Nom</label>
@@ -241,7 +283,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
         <p className={`${hint} mt-4`}>Les tickets sont imprimés en français sur du papier 80 mm. La ligne de pied de page se règle dans Paramètres.</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button type="button" className={primary} disabled={busy || !dirty || !form.address.trim()} onClick={save}>
+          <button type="button" className={primary} disabled={busy || !dirty || (form.connection === "NETWORK" && !form.address.trim())} onClick={save}>
             {busy ? "Enregistrement…" : "Enregistrer l’imprimante"}
           </button>
           {dirty ? (
@@ -256,7 +298,10 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
       <section className={card}>
         <h2 className="card-title mb-1">NEXBORN Helper</h2>
         <p className="mb-3 text-(--color-ink-muted)">
-          Une petite application sur un ordinateur du restaurant (sur le même réseau que l’imprimante). Elle récupère les nouveaux
+          {form.connection === "USB"
+            ? "À installer sur l’ordinateur où l’imprimante est branchée en USB (la borne elle-même, si l’imprimante y est branchée). "
+            : "À installer sur un ordinateur du restaurant, sur le même réseau que l’imprimante. "}
+          Une petite application qui récupère les nouveaux
           tickets et les envoie à l’imprimante. Installez-la, puis collez-y un code obtenu ici.
         </p>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -265,7 +310,7 @@ export default function PrinterPage({ slug, kioskId }: { slug: string; kioskId?:
             {pairing ? "Obtenir un nouveau code" : "Configurer le Helper"}
           </button>
         </div>
-        {!configured ? <p className={hint}>Enregistrez d’abord l’adresse de l’imprimante.</p> : null}
+        {!configured ? <p className={hint}>Enregistrez d’abord l’imprimante ci-dessus.</p> : null}
         {configured && helper?.tokenIssuedAt ? (
           <p className={hint}>Un Helper a été configuré {ago(helper.tokenIssuedAt)}. Le reconfigurer remplace son secret.</p>
         ) : null}

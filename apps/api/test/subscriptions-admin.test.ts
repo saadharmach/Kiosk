@@ -30,12 +30,13 @@ const actor = { id: "admin-1" };
 describe("the platform team sets the periods", () => {
   it("adds a period from a day to a day, with an amount and a note; it is in the audit log", async () => {
     const { svc, rows, audits } = setup();
-    const r = await svc.add(R, { startsOn: "2026-11-01", endsOn: "2026-11-30", amount: 1200, note: " paid cash " }, actor);
+    // Far ahead, so it is "upcoming" whatever day the tests run on.
+    const r = await svc.add(R, { startsOn: "2099-11-01", endsOn: "2099-11-30", amount: 1200, note: " paid cash " }, actor);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].note, "paid cash");
     assert.equal(Number(rows[0].amount), 1200);
     assert.equal(rows[0].createdById, "admin-1");
-    assert.deepEqual(r.periods.map((p) => [p.startsOn, p.endsOn, p.state]), [["2026-11-01", "2026-11-30", "upcoming"]]);
+    assert.deepEqual(r.periods.map((p) => [p.startsOn, p.endsOn, p.state]), [["2099-11-01", "2099-11-30", "upcoming"]]);
     assert.equal(audits[0].action, "subscription.period_added");
   });
 

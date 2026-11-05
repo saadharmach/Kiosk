@@ -56,7 +56,11 @@ export async function runSetup({ apiUrl, code, configPath, cli, dir, service = t
   out(`OK  Saved to ${configPath}`);
 
   let problems = 0;
-  if (paired.host && paired.port) {
+  if (paired.connection === "USB") {
+    out(paired.printerName
+      ? `OK  USB printer "${paired.printerName}" (a Windows printer on this computer).`
+      : "!!  USB printer: choose which of this computer's printers to use in the back office (the list appears there within a minute).");
+  } else if (paired.host && paired.port) {
     const r = await canReachImpl(paired.host, paired.port);
     if (r.ok) out(`OK  This computer can reach the printer at ${paired.host}:${paired.port}.`);
     else {

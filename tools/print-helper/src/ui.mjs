@@ -2,6 +2,7 @@ import http from "node:http";
 import { readConfigFile, withBridge, withPrinter, writeConfigFile } from "./config.mjs";
 import { isLocalAddress } from "./bridge.mjs";
 import { canReach, pair, pairBridge, requestTest } from "./pairing.mjs";
+import { listWindowsPrinters } from "./windows-printer.mjs";
 
 /**
  * The app's page, on this computer only (127.0.0.1): what the helper serves and how it is doing, and a box to paste a
@@ -12,7 +13,10 @@ import { canReach, pair, pairBridge, requestTest } from "./pairing.mjs";
  */
 
 export function startUi({ port, supervisor, configPath, defaultApiUrl = "", version = "", log, deps = {} }) {
-  const { pairImpl = pair, pairBridgeImpl = pairBridge, canReachImpl = canReach, requestTestImpl = requestTest } = deps;
+  const {
+    pairImpl = pair, pairBridgeImpl = pairBridge, canReachImpl = canReach, requestTestImpl = requestTest,
+    listPrintersImpl = process.platform === "win32" ? listWindowsPrinters : null,
+  } = deps;
   // Filled in once listening (the port given may be 0: any free one).
   let hosts = new Set();
   let origins = new Set();
@@ -36,7 +40,13 @@ export function startUi({ port, supervisor, configPath, defaultApiUrl = "", vers
     if (printer) {
       await save(withPrinter({ pollIntervalMs: 2000, ...existing, apiUrl }, { id: printer.printerId, label: printer.label, token: printer.token }));
       const notes = [];
-      if (printer.host && printer.port) {
+      if (printer.connection === "USB") {
+        // A USB printer is one of this computer's Windows printers: the helper lists them for the back office.
+        const names = listPrintersImpl ? await listPrintersImpl().catch(() => null) : null;
+        if (!printer.printerName) notes.push("USB printer: in the back office, choose which of this computer's printers to use (the list appears there within a minute).");
+        else if (names && !names.includes(printer.printerName)) notes.push(`Windows on this computer has no printer called "${printer.printerName}": plug it in, install its driver, or choose another one in the back office.`);
+        else notes.push(`USB printer "${printer.printerName}".`);
+      } else if (printer.host && printer.port) {
         const r = await canReachImpl(printer.host, printer.port);
         notes.push(r.ok ? `This computer reaches the printer at ${printer.host}:${printer.port}.` : `This computer cannot reach the printer at ${printer.host}:${printer.port} (${r.reason}): check it is on and its address in the back office.`);
       }

@@ -1,9 +1,11 @@
 import net from "node:net";
+import { listWindowsPrinters, sendToWindowsPrinter } from "./windows-printer.mjs";
 
 /**
  * The print helper's engine. It only ever makes outbound requests: it asks the API for the
- * next ticket, sends the bytes to the printer over the restaurant's network (raw TCP, usually
- * port 9100), and tells the API how it went. The API decides what to print and when to retry.
+ * next ticket, sends the bytes to the printer — over the restaurant's network (raw TCP, usually
+ * port 9100), or to a USB printer through Windows — and tells the API how it went. The API decides
+ * what to print and when to retry.
  *
  * No dependencies on purpose: this runs on a restaurant PC that nobody maintains.
  */
@@ -72,7 +74,7 @@ function explain(e, host, port) {
 /**
  * Starts the loop. Returns { stop } which ends it cleanly.
  *
- * options: { apiUrl, token, intervalMs?, waitSec?, log?, fetchImpl?, sendImpl? }
+ * options: { apiUrl, token, intervalMs?, waitSec?, log?, fetchImpl?, sendImpl?, sendUsbImpl?, listPrintersImpl? }
  *
  * The request for work is held open by the API for up to `waitSec` seconds and answered the
  * moment a ticket exists, so paper comes out right after the customer confirms. `waitSec: 0`
@@ -87,6 +89,10 @@ export function startHelper(options) {
     log = (level, msg) => console.log(`${new Date().toISOString()} ${level} ${msg}`),
     fetchImpl = fetch,
     sendImpl = sendToPrinter,
+    sendUsbImpl = sendToWindowsPrinter,
+    // Only Windows has USB printers to offer; elsewhere nothing is reported.
+    listPrintersImpl = process.platform === "win32" ? listWindowsPrinters : null,
+    printersEveryMs = 5 * 60_000,
   } = options;
   const base = apiUrl.replace(/\/+$/, "");
   const abort = new AbortController();
@@ -126,9 +132,12 @@ export function startHelper(options) {
     // The API may hold this open for up to waitSec, so allow that much time, plus the usual.
     const { job } = await api(waitSec > 0 ? `/print/next?wait=${waitSec}` : "/print/next", undefined, (waitSec + 15) * 1000);
     if (!job) return false;
-    log("INFO", `Ticket ${job.id.slice(0, 8)} (attempt ${job.attempt}) to ${job.host}:${job.port}`);
+    const usb = job.connection === "USB";
+    log("INFO", `Ticket ${job.id.slice(0, 8)} (attempt ${job.attempt}) to ${usb ? `USB printer "${job.printerName ?? "?"}"` : `${job.host}:${job.port}`}`);
     try {
-      await sendImpl({ host: job.host, port: job.port, data: Buffer.from(job.dataBase64, "base64") });
+      const data = Buffer.from(job.dataBase64, "base64");
+      if (usb) await sendUsbImpl({ printerName: job.printerName, data });
+      else await sendImpl({ host: job.host, port: job.port, data });
       log("INFO", `Ticket ${job.id.slice(0, 8)} printed`);
       state.lastTicket = { at: new Date().toISOString(), ok: true, error: null };
       await report(job.id, true);
@@ -139,6 +148,20 @@ export function startHelper(options) {
     }
     return true;
   }
+
+  /** Tells the API which printers Windows has here, so the back office can offer them for a USB printer. */
+  async function reportPrinters() {
+    if (!listPrintersImpl) return;
+    try {
+      const names = await listPrintersImpl();
+      await api("/print/printers", { method: "POST", body: JSON.stringify({ names: names.slice(0, 50) }) });
+    } catch (e) {
+      log("WARN", `Could not report this computer's printers: ${e.message}`);
+    }
+  }
+  void reportPrinters();
+  const printersTimer = listPrintersImpl ? setInterval(() => void reportPrinters(), printersEveryMs) : null;
+  printersTimer?.unref?.();
 
   const loop = (async () => {
     let failures = 0;
@@ -170,6 +193,6 @@ export function startHelper(options) {
 
   return {
     state,
-    stop: async () => { abort.abort(); await loop; },
+    stop: async () => { if (printersTimer) clearInterval(printersTimer); abort.abort(); await loop; },
   };
 }

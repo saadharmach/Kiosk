@@ -972,7 +972,7 @@ model Printer {
   name             String
   kind             PrinterKind       @default(RECEIPT)
   connection       PrinterConnection @default(NETWORK)
-  /// IP, hostname or device path, depending on connection.
+  /// NETWORK: the printer's IP or host name. USB: the name of the Windows printer on the helper's computer.
   address          String?
   port             Int?
   /// Set when this is an unTill printer from GetPrintersInfo.
@@ -995,6 +995,11 @@ model Printer {
   /// (and it is gone after that, or after 15 minutes). Only one is live per printer: a new one replaces the old.
   pairingCodeHash     String?        @unique
   pairingExpiresAt    DateTime?
+
+  /// The printers installed in Windows on the helper's computer, as the helper last reported them: what the back
+  /// office offers for a USB printer.
+  helperPrinters      String[]       @default([])
+  helperPrintersAt    DateTime?
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

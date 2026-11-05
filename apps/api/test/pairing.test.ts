@@ -25,7 +25,8 @@ function setup(printers: any[], opts: { kiosks?: any[] } = {}) {
   const calls: { op: string; args: any }[] = [];
   const prisma: any = {
     printer: {
-      findFirst: async (a: any) => printers.find((p) => Object.entries(a.where).every(([k, v]) => v === undefined || p[k] === v || (v === null && p[k] == null))) ?? null,
+      findFirst: async (a: any) => printers.find((p) => Object.entries(a.where).every(([k, v]: [string, any]) =>
+        v === undefined || p[k] === v || (v === null && p[k] == null) || (v && typeof v === "object" && "in" in v && v.in.includes(p[k])))) ?? null,
       findUnique: async (a: any) => printers.find((p) => Object.entries(a.where).every(([k, v]) => p[k] === v)) ?? null,
       updateMany: async (a: any) => {
         calls.push({ op: "updateMany", args: a });

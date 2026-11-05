@@ -3,7 +3,7 @@ import { Prisma, type Printer } from "@prisma/client";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { pickLocalized } from "../common/locale.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import type { SavePrinterDto } from "./dto.js";
+import { HOST, NETWORK_ADDRESS_MESSAGE, type SavePrinterDto } from "./dto.js";
 import { readPrinterConfig, type PrinterConfig } from "./printer-config.js";
 import { buildTicket, type TicketData } from "./ticket.js";
 
@@ -68,8 +68,11 @@ export function summarizePrinter(p: Printer | null, now = Date.now()) {
   return {
     configured: true as const,
     name: p.name,
+    connection: p.connection === "USB" ? ("USB" as const) : ("NETWORK" as const),
     address: p.address,
     port: p.port,
+    /** The Windows printers on the helper's computer, for choosing a USB one; null: the helper has not said yet. */
+    helperPrinters: p.helperPrintersAt ? p.helperPrinters : null,
     isEnabled: p.isEnabled,
     config,
     helper: {
@@ -100,7 +103,7 @@ export class PrintingService {
    */
   private findPrinter(restaurantId: string, kioskId: string | null = null) {
     return this.prisma.printer.findFirst({
-      where: { restaurantId, kioskId, kind: "RECEIPT", connection: "NETWORK" },
+      where: { restaurantId, kioskId, kind: "RECEIPT", connection: { in: ["NETWORK", "USB"] } },
       orderBy: { createdAt: "asc" },
     });
   }
@@ -118,10 +121,14 @@ export class PrintingService {
       ...(dto.cut !== undefined ? { cut: dto.cut } : {}),
       ...(dto.codepage !== undefined ? { codepage: dto.codepage } : {}),
     });
+    const usb = dto.connection === "USB";
+    if (!usb && !HOST.test(dto.address.trim())) throw new BadRequestException(NETWORK_ADDRESS_MESSAGE);
     const data = {
       name: dto.name.trim(),
-      address: dto.address.trim(),
-      port: dto.port,
+      connection: usb ? ("USB" as const) : ("NETWORK" as const),
+      // A USB printer may be saved before its name is known: the helper lists the computer's printers once set up.
+      address: dto.address.trim() || null,
+      port: usb ? null : (dto.port ?? 9100),
       isEnabled: dto.isEnabled,
       config: config as unknown as Prisma.InputJsonValue,
     };
@@ -129,7 +136,7 @@ export class PrintingService {
       // Scoped by the restaurant id as well as the printer id.
       await this.prisma.printer.updateMany({ where: { id: existing.id, restaurantId }, data });
     } else {
-      await this.prisma.printer.create({ data: { ...data, restaurantId, kioskId, kind: "RECEIPT", connection: "NETWORK" } });
+      await this.prisma.printer.create({ data: { ...data, restaurantId, kioskId, kind: "RECEIPT" } });
     }
     return this.get(restaurantId, kioskId);
   }
@@ -191,8 +198,10 @@ export class PrintingService {
       token,
       printerId: printer.id,
       label: kiosk ? `${restaurant.name} - ${kiosk.name}` : restaurant.name,
-      host: printer.address,
-      port: printer.port,
+      connection: printer.connection,
+      host: printer.connection === "USB" ? null : printer.address,
+      port: printer.connection === "USB" ? null : printer.port,
+      printerName: printer.connection === "USB" ? printer.address : null,
     };
   }
 
@@ -469,13 +478,27 @@ export class PrintingService {
       SELECT id, payload, attempts FROM claimed`;
     const row = rows[0];
     if (!row) return null;
+    const usb = printer.connection === "USB";
     return {
       id: row.id,
-      host: printer.address,
-      port: printer.port ?? 9100,
+      connection: usb ? "USB" : "NETWORK",
+      host: usb ? null : printer.address,
+      port: usb ? null : (printer.port ?? 9100),
+      /** USB: the Windows printer the helper sends the ticket to. */
+      printerName: usb ? printer.address : null,
       attempt: row.attempts,
       dataBase64: Buffer.from(row.payload).toString("base64"),
     };
+  }
+
+  /** The helper tells which printers Windows has on its computer: the back office offers them for a USB printer. */
+  async setHelperPrinters(printer: Printer, names: string[]) {
+    const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    await this.prisma.printer.updateMany({
+      where: { id: printer.id, restaurantId: printer.restaurantId },
+      data: { helperPrinters: clean, helperPrintersAt: new Date() },
+    });
+    return { names: clean };
   }
 
   /** The helper says how the job went. Only a job of this printer can be answered. */

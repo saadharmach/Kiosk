@@ -14,10 +14,15 @@ export type PrinterView =
   | {
       configured: true;
       name: string;
+      /** NETWORK: reached at its IP. USB: a Windows printer on the computer that runs NEXBORN Helper. */
+      connection: PrinterConnection;
+      /** NETWORK: its IP or host name. USB: the Windows printer's name. */
       address: string | null;
       port: number | null;
       isEnabled: boolean;
       config: PrinterConfig;
+      /** The Windows printers on the Helper's computer; null until the Helper has reported them. */
+      helperPrinters: string[] | null;
       helper: { tokenIssuedAt: string | null; online: boolean; lastSeenAt: string | null; pairingPending: boolean };
       lastError: { message: string; at: string | null } | null;
     };
@@ -33,8 +38,11 @@ export interface PrintJobRow {
   order: { id: string; reference: string } | null;
 }
 
+export type PrinterConnection = "NETWORK" | "USB";
+
 export interface SavePrinterBody {
   name: string;
+  connection: PrinterConnection;
   address: string;
   port: number;
   isEnabled: boolean;
