@@ -216,7 +216,8 @@ export default function CartScreen({
   };
 
   return (
-    <main className="flex min-h-dvh flex-col">
+    // One screen tall: only the articles scroll; the suggestions, the total and the buttons stay in place.
+    <main className="flex h-dvh flex-col">
       <KioskHeader name={name} locale={locale} onLocale={onLocale} onBack={onBack} backLabel={t.back} />
 
       {cart.lines.length === 0 ? (
@@ -233,8 +234,8 @@ export default function CartScreen({
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto px-12 pt-12 pb-72">
-            <h1 className="mb-8 font-display text-8xl leading-none font-extrabold">{t.yourOrder}</h1>
+          <h1 className="shrink-0 px-12 pt-10 pb-6 font-display text-8xl leading-none font-extrabold">{t.yourOrder}</h1>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-12 pb-6">
             <ul className="flex flex-col gap-5">
               {cart.lines.map((l) => (
                 <li key={l.key} className="flex items-center gap-6 rounded-4xl bg-(--color-surface) p-6 shadow-md">
@@ -279,59 +280,58 @@ export default function CartScreen({
                 </li>
               ))}
             </ul>
+          </div>
 
-            {offered.length > 0 ? (
-              <section aria-label={t.alsoLike} className="mt-10 flex flex-col gap-4">
-                <h2 className="font-display text-5xl leading-tight font-extrabold">{t.alsoLike}</h2>
-                <ul className="-mx-12 flex gap-4 overflow-x-auto px-12 pb-2">
-                  {offered.map((p) => (
-                    <li key={p.id} className="shrink-0">
-                      <button onClick={() => takeSuggestion(p)}
-                        className="relative flex h-36 w-[26rem] overflow-hidden rounded-[1.75rem] bg-(--color-surface) text-start shadow-md">
-                        {photoSlot ? <TilePhoto src={p.imageUrl} /> : null}
-                        <span className="flex min-w-0 flex-1 flex-col justify-between gap-1 p-4">
-                          <span className="flex flex-col gap-1">
-                            {isNewToday(p) ? (
-                              <span className="w-fit rounded-full bg-(--color-brand) px-3 py-0.5 font-display text-lg font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
-                                {t.newItem}
-                              </span>
-                            ) : null}
-                            <span className="line-clamp-2 font-display text-3xl leading-tight font-bold break-words">{p.name}</span>
-                          </span>
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="font-display text-3xl font-extrabold tabular-nums">
-                              {p.sizes.length > 0
-                                ? <><span className="me-1.5 text-xl font-bold">{t.fromPrice}</span>{money(Math.min(...p.sizes.map((s) => s.price)), currency, locale)}</>
-                                : money(p.price ?? 0, currency, locale)}
+          {offered.length > 0 ? (
+            <section aria-label={t.alsoLike} className="flex shrink-0 flex-col gap-4 border-t-2 border-(--color-line) px-12 pt-6 pb-8">
+              <h2 className="font-display text-5xl leading-tight font-extrabold">{t.alsoLike}</h2>
+              <ul className="-mx-12 flex gap-4 overflow-x-auto px-12 pb-2">
+                {offered.map((p) => (
+                  <li key={p.id} className="shrink-0">
+                    <button onClick={() => takeSuggestion(p)}
+                      className="relative flex h-36 w-[26rem] overflow-hidden rounded-[1.75rem] bg-(--color-surface) text-start shadow-md">
+                      {photoSlot ? <TilePhoto src={p.imageUrl} /> : null}
+                      <span className="flex min-w-0 flex-1 flex-col justify-between gap-1 p-4">
+                        <span className="flex flex-col gap-1">
+                          {isNewToday(p) ? (
+                            <span className="w-fit rounded-full bg-(--color-brand) px-3 py-0.5 font-display text-lg font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
+                              {t.newItem}
                             </span>
-                            {needsChoices(p) ? (
-                              <span className="flex h-14 items-center gap-1 rounded-full bg-(--color-brand) ps-5 pe-3 font-display text-2xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
-                                {t.choose}
-                                <Icon name="chevron" className="size-6 rtl:-scale-x-100" strokeWidth={3} />
-                              </span>
-                            ) : (
-                              <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
-                                <Icon name="plus" className="size-7" strokeWidth={2.8} />
-                              </span>
-                            )}
-                          </span>
+                          ) : null}
+                          <span className="line-clamp-2 font-display text-3xl leading-tight font-bold break-words">{p.name}</span>
                         </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-display text-3xl font-extrabold tabular-nums">
+                            {p.sizes.length > 0
+                              ? <><span className="me-1.5 text-xl font-bold">{t.fromPrice}</span>{money(Math.min(...p.sizes.map((s) => s.price)), currency, locale)}</>
+                              : money(p.price ?? 0, currency, locale)}
+                          </span>
+                          {needsChoices(p) ? (
+                            <span className="flex h-14 items-center gap-1 rounded-full bg-(--color-brand) ps-5 pe-3 font-display text-2xl font-extrabold tracking-wide text-(--color-brand-ink) uppercase">
+                              {t.choose}
+                              <Icon name="chevron" className="size-6 rtl:-scale-x-100" strokeWidth={3} />
+                            </span>
+                          ) : (
+                            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-(--color-brand) text-(--color-brand-ink)">
+                              <Icon name="plus" className="size-7" strokeWidth={2.8} />
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
-            <div className="mt-10 flex items-baseline justify-between border-t-2 border-(--color-line) px-3 pt-8">
+          <div className="flex shrink-0 flex-col gap-5 rounded-t-[2.5rem] bg-(--color-surface) px-12 pt-7 pb-10 shadow-[0_-16px_40px_rgba(36,33,31,0.12)]">
+            <div className="flex items-baseline justify-between px-3">
               <span className="font-display text-6xl font-extrabold">{t.total}</span>
               <span className="font-display text-8xl font-extrabold tabular-nums">
                 {serverTotal === null ? "…" : money(serverTotal, currency, locale)}
               </span>
             </div>
-          </div>
-
-          <div className="fixed inset-x-0 bottom-0 flex flex-col gap-4 rounded-t-[2.5rem] bg-(--color-surface) px-12 pt-8 pb-10 shadow-[0_-16px_40px_rgba(36,33,31,0.12)]">
             {error ? <p role="alert" className="text-center text-2xl font-semibold text-(--color-danger)">{error}</p> : null}
             <div className="flex gap-5">
               <button onClick={onBack}
