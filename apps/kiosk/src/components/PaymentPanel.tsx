@@ -95,19 +95,20 @@ export default function PaymentPanel({
     );
   }
 
-  // ---- how to pay: two big cards
+  // ---- how to pay: side by side, the icon centred above the name
   const choice = (method: "CARD" | "CASH", icon: "card" | "cash", title: string, sub: string) => (
     <button key={method} onClick={() => onPick(method)} disabled={busy}
-      className="flex min-h-72 w-full flex-1 items-center gap-8 rounded-[3rem] bg-(--color-surface) p-8 text-start shadow-lg disabled:opacity-40">
-      <span className="flex size-56 shrink-0 items-center justify-center rounded-[2.25rem] bg-(--color-surface-2) text-(--color-brand-deep)">
-        <Icon name={icon} className="size-32" strokeWidth={1.2} />
+      className="flex flex-col items-center gap-6 rounded-[3rem] bg-(--color-surface) px-8 pt-12 pb-10 text-center shadow-lg disabled:opacity-40">
+      <span className="flex size-48 items-center justify-center rounded-[2.25rem] bg-(--color-surface-2) text-(--color-brand-deep)">
+        <Icon name={icon} className="size-28" strokeWidth={1.3} />
       </span>
-      <span className="flex flex-col gap-3">
-        <span className="font-display text-7xl leading-none font-extrabold tracking-wide uppercase">{title}</span>
-        {sub ? <span className="text-3xl font-medium text-(--color-ink-muted)">{sub}</span> : null}
+      <span className="flex flex-col items-center gap-2">
+        <span className="font-display text-5xl leading-none font-extrabold tracking-wide text-balance uppercase">{title}</span>
+        {sub ? <span className="text-2xl font-medium text-balance text-(--color-ink-muted)">{sub}</span> : null}
       </span>
     </button>
   );
+  const count = Number(options.card) + Number(options.cash);
 
   return (
     <div role="dialog" aria-modal="true" aria-label={t.paymentTitle} className="screen-in fixed inset-0 z-50 flex flex-col bg-(--color-page) px-14 pt-12 pb-12">
@@ -118,9 +119,11 @@ export default function PaymentPanel({
       </button>
       <h1 className="mt-8 font-display text-8xl leading-[0.95] font-extrabold">{t.howToPay}</h1>
       <p className="mt-3 text-3xl font-medium text-(--color-ink-muted)">{t.amountDue} <span className="font-display text-5xl font-extrabold text-(--color-ink)">{amount}</span></p>
-      <div className="mt-10 flex flex-1 flex-col gap-8">
-        {options.card ? choice("CARD", "card", t.payByCard, t.payByCardSub) : null}
-        {options.cash ? choice("CASH", "cash", t.payByCash, options.cashClosed ? "" : t.payByCashSub) : null}
+      <div className="flex flex-1 items-center justify-center">
+        <div className="grid w-full gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, count)}, minmax(0, 1fr))`, maxWidth: count === 1 ? "32rem" : undefined }}>
+          {options.card ? choice("CARD", "card", t.payByCard, t.payByCardSub) : null}
+          {options.cash ? choice("CASH", "cash", t.payByCash, options.cashClosed ? "" : t.payByCashSub) : null}
+        </div>
       </div>
     </div>
   );
