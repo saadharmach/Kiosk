@@ -37,3 +37,8 @@ apps/api/.media/
 apps/backoffice/public/downloads/
 apps/admin/public/downloads/
 deploy/config.resolved.sh
+
+# Local sign-in tokens and cookie jars from manual API tests (never commit)
+login.json
+jar.txt
+*.cookies

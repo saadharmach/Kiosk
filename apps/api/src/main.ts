@@ -31,7 +31,8 @@ async function bootstrap(): Promise<void> {
   );
   app.enableShutdownHooks();
 
-  await app.listen(env.PORT, "0.0.0.0");
+  // On the server API_HOST=127.0.0.1 (only nginx reaches the API); on a PC the default keeps it reachable from WSL/LAN.
+  await app.listen(env.PORT, process.env.API_HOST?.trim() || "0.0.0.0");
   new Logger("Bootstrap").log(`API listening on http://localhost:${env.PORT}/api`);
 }
 
