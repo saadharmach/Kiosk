@@ -1,5 +1,10 @@
 # Putting the kiosk platform on its server
 
+> **Deployment now goes through the NEXBORN repo** (Techkaddari/NEXBORN): a push to `develop` deploys DEV
+> (dev.nexborn.amsatech.ma), and `prod` deploys PROD once validated. `deploy.sh` no longer deploys (it stops with a
+> message). The other files here are still the server's setup: backups, health checks, alerts, nginx and services.
+
+
 Everything runs on one small server: PostgreSQL, the API, the kiosk app, and nginx in front.
 Photos live on the server's disk. Nothing is built on the server: your PC builds, the server only runs.
 

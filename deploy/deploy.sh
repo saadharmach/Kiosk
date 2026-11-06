@@ -10,6 +10,18 @@ ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 die() { echo "!! $*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 
+# Deploys now go through the NEXBORN repo (Techkaddari/NEXBORN): a push to "develop" deploys DEV, "prod" deploys PROD
+# once validated. This script would send this computer's copy straight to production, past DEV and the validation,
+# so it stops here. For an emergency agreed with the NEXBORN team only: NEXBORN_DIRECT_DEPLOY=yes ./deploy/deploy.sh
+if [ "${NEXBORN_DIRECT_DEPLOY:-}" != "yes" ]; then
+  cat >&2 <<'MSG'
+!! This script no longer deploys. Deployment goes through the NEXBORN repo:
+     git pull --ff-only nexborn develop     (start from the latest)
+     git pushall                            (deploys DEV automatically)
+   PROD is deployed when "develop" is validated into "prod".
+MSG
+  exit 1
+fi
 [[ "$DEPLOY_HOST" != *NEW_SERVER_IP* ]] || die "Set DEPLOY_HOST in deploy/config.sh (root@<server ip>) first."
 git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || die "Commit your changes first: only committed code is deployed."
 REV="$(git -C "$ROOT" rev-parse --short HEAD)"
