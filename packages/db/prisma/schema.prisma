@@ -1312,3 +1312,34 @@ model SubscriptionPeriod {
   @@index([restaurantId, endsOn])
   @@map("subscription_periods")
 }
+
+enum MailSecurity {
+  /// Plain connection (only for a server on the same machine or network).
+  NONE
+  /// TLS from the first byte (usually port 465).
+  SSL
+  /// Starts plain, then switches to TLS (usually port 587).
+  STARTTLS
+}
+
+/// The platform's email settings, set in the admin (Settings › Email): one row, id 1. While there is none, the server's
+/// own SMTP_* settings (kiosk.env) are used.
+model MailSettings {
+  id             Int          @id @default(1)
+  /// Off: no email is sent at all (invitations and password resets report it).
+  enabled        Boolean      @default(true)
+  fromEmail      String
+  fromName       String?
+  host           String
+  port           Int          @default(587)
+  security       MailSecurity @default(STARTTLS)
+  authEnabled    Boolean      @default(true)
+  username       String?
+  /// The SMTP password, sealed with AES-256-GCM like the till's credentials. Never sent back to a browser.
+  passwordSealed Json?
+  updatedById    String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("mail_settings")
+}

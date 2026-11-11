@@ -9,10 +9,11 @@ import OverviewPage from "./OverviewPage";
 import RestaurantPage from "./RestaurantPage";
 import RestaurantsPage from "./RestaurantsPage";
 import TeamPage from "./TeamPage";
+import EmailSettingsPage from "./EmailSettingsPage";
 import { AppFrame, ThemeButton, type NavGroup } from "./frame";
 import { ErrorText } from "./ui";
 
-type View = "overview" | "restaurants" | "team" | "account";
+type View = "overview" | "restaurants" | "team" | "email" | "account";
 
 const LABELS = { menu: "Menu", fold: "Fold the menu", signOut: "Sign out", theme: "Light / dark theme", close: "Close" };
 
@@ -101,6 +102,7 @@ export default function Shell() {
   const groups: NavGroup<View>[] = [
     { label: "Monitoring", items: [{ key: "overview", label: "Overview", icon: "dashboard" }] },
     { label: "Customers", items: [{ key: "restaurants", label: "Restaurants", icon: "store" }] },
+    { label: "Settings", items: [{ key: "email", label: "Email (SMTP)", icon: "mail" }] },
     {
       label: "Administration",
       items: [
@@ -125,6 +127,7 @@ export default function Shell() {
           <ChangePasswordForm onDone={() => undefined} />
         </div>
       ) : view === "team" && !open && canWrite ? <TeamPage myId={user.id} />
+      : view === "email" && !open ? <EmailSettingsPage canWrite={canWrite} myEmail={user.email} />
       : open
         ? <RestaurantPage key={`${open.id}:${open.tab ?? ""}`} id={open.id} canWrite={canWrite} initialTab={open.tab} initialFilter={open.filter} onBack={() => setOpen(null)} />
         : view === "overview"

@@ -25,11 +25,13 @@ import { RestaurantsController } from "./restaurants.controller.js";
 import { RestaurantsService } from "./restaurants.service.js";
 import { TpapiConnectionController } from "./tpapi-connection.controller.js";
 import { TpapiConnectionService } from "./tpapi-connection.service.js";
+import { MailSettingsController } from "./mail-settings.controller.js";
+import { MailSettingsService } from "./mail-settings.service.js";
 
 @Module({
   imports: [AuthModule, OrderStatusModule, OrderSubmitModule],
-  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController, AdminOrdersController, TeamController, SubscriptionsController],
-  providers: [SubscriptionsService, RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, EmailCheckService, CryptoService],
+  controllers: [RestaurantsController, TpapiConnectionController, RestaurantUsersController, ActivityController, OverviewController, ReadinessController, AdminOrdersController, TeamController, SubscriptionsController, MailSettingsController],
+  providers: [MailSettingsService, SubscriptionsService, RestaurantsService, TpapiConnectionService, RestaurantUsersService, ActivityService, OverviewService, ReadinessService, TeamService, AdminOrdersService, TillLogService, RestaurantOrdersService, AuditService, EmailCheckService, CryptoService],
   exports: [AuditService, CryptoService],
 })
 export class AdminModule {}
