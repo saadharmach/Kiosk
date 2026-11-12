@@ -16,7 +16,9 @@ const SECURITY: { value: MailSecurity; label: string; port: number }[] = [
 /** The form filled from what is saved, or from the server's own settings when nothing is saved yet. */
 function formFrom(v: MailView): MailForm {
   if (v.settings) {
-    return { ...v.settings, fromName: v.settings.fromName ?? "", username: v.settings.username ?? "", password: "" };
+    // passwordSet is for display only: the API rejects any field the form does not have.
+    const { passwordSet: _passwordSet, ...s } = v.settings;
+    return { ...s, fromName: s.fromName ?? "", username: s.username ?? "", password: "" };
   }
   // "NEXBORN <no-reply@…>" from the server's MAIL_FROM, split into name and address.
   const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(v.server?.from ?? "");
