@@ -69,6 +69,8 @@ function KioskFlow({ slug }: { slug: string }) {
   const [screen, setScreen] = useState<Screen>("WELCOME");
   const [choice, setChoice] = useState<OrderTypeOption | null>(null);
   const [table, setTable] = useState<number | null>(null);
+  // A chevalet number refused when the order was placed: the chevalet screen says so.
+  const [tableTaken, setTableTaken] = useState<number | null>(null);
   const [order, setOrder] = useState<PlacedOrder | null>(null);
 
   useEffect(() => {
@@ -176,6 +178,7 @@ function KioskFlow({ slug }: { slug: string }) {
     setScreen("WELCOME");
     setChoice(null);
     setTable(null);
+    setTableTaken(null);
     cart.clear();
     if (boot && isLocale(boot.restaurant.locale)) setLocale(boot.restaurant.locale);
   }, [boot, cart]);
@@ -305,9 +308,11 @@ function KioskFlow({ slug }: { slug: string }) {
   }
   if (screen === "TABLE" && choice) {
     return (
-      <TableScreen locale={locale} name={boot.restaurant.name} onLocale={setLocale} ranges={choice.tableRanges}
-        onBack={() => setScreen(usable.length === 1 ? "WELCOME" : "ORDER_TYPE")}
-        onConfirm={(n) => { setTable(n); setScreen("MENU"); }} />
+      <TableScreen slug={slug} locale={locale} name={boot.restaurant.name} onLocale={setLocale} ranges={choice.tableRanges}
+        taken={tableTaken}
+        onUnavailable={(e) => setError(toKioskError(e))}
+        onBack={() => { setTableTaken(null); setScreen(usable.length === 1 ? "WELCOME" : "ORDER_TYPE"); }}
+        onConfirm={(n) => { setTableTaken(null); setTable(n); setScreen("MENU"); }} />
     );
   }
   if (screen === "MENU") {
@@ -347,6 +352,7 @@ function KioskFlow({ slug }: { slug: string }) {
         onUnavailable={(e) => (isTillError(e) ? setTillOk(false) : setError(toKioskError(e)))}
         payment={boot.payment}
         onPaying={setPaying}
+        onTableTaken={(n) => { setTable(null); setTableTaken(n); setScreen("TABLE"); }}
       />
     );
   }

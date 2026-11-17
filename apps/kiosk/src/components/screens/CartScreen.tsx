@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { KIND_LABEL, STRINGS, money, type Locale } from "@/i18n";
 import { KIND_ORDER } from "@/lib/options";
 import {
-  ApiError, cancelPayment, createOrder, getOrder, isConnectionError, isNotRegisteredError, isTillError, isUnavailableError, payOrder, priceCart, simulatePayment,
+  ApiError, cancelPayment, createOrder, getOrder, isConnectionError, isNotRegisteredError, isTableTakenError, isTillError, isUnavailableError, payOrder, priceCart, simulatePayment,
   type CatalogProduct, type PaymentOptions, type PlacedOrder, type WireCartLine,
 } from "@/lib/api";
 import { useCart, type CartLine } from "@/state/cart";
@@ -39,7 +39,7 @@ const CASH_ONLY: PaymentOptions = { card: false, cash: true, cashClosed: false, 
 
 export default function CartScreen({
   slug, locale, name, currency, products, suggestions = {}, basketSuggestions, showImages = true, orderType, salesAreaId, tableNumber, borneCode, onLocale, onBack, onPlaced, onUnavailable,
-  payment = CASH_ONLY, onPaying,
+  payment = CASH_ONLY, onPaying, onTableTaken,
 }: {
   slug: string;
   locale: Locale;
@@ -67,6 +67,8 @@ export default function CartScreen({
   payment?: PaymentOptions;
   /** True while the borne's TPE is working: the kiosk must not reset itself for inactivity then. */
   onPaying?: (paying: boolean) => void;
+  /** The chevalet number was taken while the customer ordered: back to choosing another one, basket kept. */
+  onTableTaken?: (tableNumber: number) => void;
 }) {
   const t = STRINGS[locale];
   const cart = useCart();
@@ -131,6 +133,7 @@ export default function CartScreen({
   const handle = (e: unknown) => {
     const err = e as ApiError;
     if (isUnavailableError(err) || isTillError(err) || isNotRegisteredError(err)) return onUnavailable(err);
+    if (isTableTakenError(err) && tableNumber !== null && onTableTaken) return onTableTaken(tableNumber);
     setError(err.code === "PRICES_CHANGED" ? t.priceChanged : isConnectionError(err) ? t.connectionInline : err.message);
     setStage("cart");
     if (err.code === "PRICES_CHANGED") {

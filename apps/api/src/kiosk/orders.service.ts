@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireOrderable, requireSubscribed, requireTillReachable } from "./availability.js";
 import { resolveScreen } from "./screen.js";
@@ -9,6 +9,7 @@ import { resolveLocale } from "../common/locale.js";
 import { PrintingService, type LoadedOrder } from "../printing/printing.service.js";
 import { readTableRanges, tableInRanges } from "../common/table-ranges.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import { TableOccupancyService, inFlightOnTable, tableTaken } from "./table-occupancy.js";
 
 @Injectable()
 export class OrdersService {
@@ -19,6 +20,7 @@ export class OrdersService {
     private readonly pricing: PricingService,
     private readonly printing: PrintingService,
     private readonly payments: PaymentsService,
+    @Optional() private readonly tables?: TableOccupancyService,
   ) {}
 
   async create(slug: string, dto: CreateOrderDto, screen?: string) {
@@ -69,7 +71,11 @@ export class OrdersService {
       }
     }
 
-    // ---- table
+    // ---- table. A chevalet whose number already has an open bill in unTill is refused: unTill would put this
+    // order on that bill. Asked before the transaction below, so the till's answer never holds its lock.
+    if (dto.orderType === "EAT_IN" && dto.tableNumber && (restaurant.settings?.askTableForEatIn ?? true)) {
+      await this.tables?.assertFree(restaurantId, dto.tableNumber);
+    }
      const businessDate = new Date(new Date().toISOString().slice(0, 10));
     const order = await this.prisma.$transaction(async (tx) => {
       // Serialise table allocation per restaurant. Two kiosks finishing in the
@@ -301,6 +307,8 @@ export class OrdersService {
           where: { restaurantId, untillId: BigInt(salesAreaId) },
         });
         if (!tableInRanges(dto.tableNumber, readTableRanges(area?.tableRanges))) throw new BadRequestException(`Table ${dto.tableNumber} does not exist in this zone`);
+        // Two bornes taking the same number at the same moment: the lock above makes the second one see the first.
+        if (await inFlightOnTable(db as never, restaurantId, dto.tableNumber)) throw tableTaken(dto.tableNumber);
         return { tableNumber: dto.tableNumber, tablePart: mapping?.tablePart ?? "" };
       }
       // Otherwise fall through to fixedTableNumber, then range allocation.

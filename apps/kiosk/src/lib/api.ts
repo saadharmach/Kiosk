@@ -18,6 +18,9 @@ export const setScreenSecret = (s: string | null) => { screenSecret = s; };
 /** The restaurant's till does not answer: the server takes no orders until it does. */
 export const isTillError = (e: unknown): boolean => e instanceof ApiError && e.code === "TILL_UNREACHABLE";
 
+/** The chevalet number has an open bill in unTill (or an order on its way there): the customer takes another one. */
+export const isTableTakenError = (e: unknown): boolean => e instanceof ApiError && e.code === "TABLE_TAKEN";
+
 /** The request never reached the API, or an intermediary answered instead of it. */
 export const isConnectionError = (e: unknown): boolean => e instanceof ApiError && e.code === "NETWORK";
 
@@ -297,6 +300,10 @@ export const createOrder = (
     lines: WireCartLine[];
   },
 ) => request<PlacedOrder>(`/kiosk/${slug}/orders`, { method: "POST", body: JSON.stringify(body) });
+
+/** Whether a chevalet number can be taken now (not while unTill has a bill open on it). */
+export const checkTable = (slug: string, tableNumber: number) =>
+  request<{ tableNumber: number; free: boolean }>(`/kiosk/${slug}/tables/${tableNumber}`);
 
 /** Registers this screen as one of the restaurant's bornes with the one-time code from the back office. */
 export const registerScreen = (slug: string, code: string) =>

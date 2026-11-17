@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, Param, ParseIntPipe, ParseUUIDPipe, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { CatalogService } from "./catalog.service.js";
 import { CreateOrderDto, PayDto, PriceCartDto, SimulatePaymentDto } from "./dto/cart.dto.js";
@@ -6,6 +6,9 @@ import { OrdersService } from "./orders.service.js";
 import { RegisterScreenDto } from "./dto/cart.dto.js";
 import { KioskScreenService } from "./screen.service.js";
 import { SCREEN_HEADER } from "./screen.js";
+import { TableOccupancyService } from "./table-occupancy.js";
+import { requireOrderable } from "./availability.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 @Controller("kiosk/:slug")
 export class KioskController {
@@ -13,7 +16,18 @@ export class KioskController {
     private readonly catalogService: CatalogService,
     private readonly ordersService: OrdersService,
     private readonly screens: KioskScreenService,
+    private readonly tables: TableOccupancyService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /** Whether a chevalet number can be taken: not while unTill has a bill open on it. The order checks again. */
+  @Get("tables/:number")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async table(@Param("slug") slug: string, @Param("number", ParseIntPipe) tableNumber: number) {
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { slug }, select: { id: true, name: true, status: true } });
+    requireOrderable(restaurant);
+    return { tableNumber, free: await this.tables.isFree(restaurant.id, tableNumber) };
+  }
 
   /** A screen registers itself as one of the restaurant's bornes, with the one-time code from the back office. */
   @Post("register")

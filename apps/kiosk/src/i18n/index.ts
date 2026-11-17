@@ -39,7 +39,7 @@ type Dict = {
   welcome: string; tapToStart: string; loading: string;
   errorTitle: string; retry: string; menuUnavailable: string;
   orderTypeTitle: string; eatIn: string; takeAway: string; delivery: string;
-  tableTitle: string; tableHint: string; tableInvalid: string;
+  tableTitle: string; tableHint: string; tableInvalid: string; tableTaken: string; tableChecking: string;
   back: string; confirm: string; clear: string; close: string;
   table: string; chooseSize: string; add: string; viewOrder: string;
   empty: string; quantity: string; allergens: string;
@@ -77,10 +77,11 @@ export const STRINGS: Record<Locale, Dict> = {
     menuUnavailable: "Le menu n'est pas encore disponible",
     orderTypeTitle: "Comment souhaitez-vous commander ?",
     eatIn: "Sur place", takeAway: "À emporter", delivery: "Livraison",
-    tableTitle: "Numéro de table", tableHint: "Saisissez le numéro inscrit sur votre table",
-    tableInvalid: "Ce numéro de table n'existe pas",
+    tableTitle: "Numéro de chevalet", tableHint: "Saisissez le numéro inscrit sur votre chevalet",
+    tableInvalid: "Ce numéro de chevalet n'existe pas",
+    tableTaken: "Le chevalet {n} est déjà utilisé : prenez-en un autre", tableChecking: "Vérification…",
     back: "Retour", confirm: "Confirmer", clear: "Effacer", close: "Fermer",
-    table: "Table", chooseSize: "Choisissez une taille", allergens: "Allergènes",
+    table: "Chevalet", chooseSize: "Choisissez une taille", allergens: "Allergènes",
     required: "Obligatoire", optional: "Facultatif", chooseCount: "Choisissez {n}", add: "Ajouter",
     viewOrder: "Voir mon panier", empty: "Votre commande est vide", quantity: "Quantité",    yourOrder: "Mon panier", remove: "Retirer", confirmOrder: "Confirmer la commande",
     sending: "Envoi en cours…", orderNumber: "Votre numéro", 
@@ -126,10 +127,11 @@ export const STRINGS: Record<Locale, Dict> = {
     menuUnavailable: "The menu is not available yet",
     orderTypeTitle: "How would you like to order?",
     eatIn: "Eat in", takeAway: "Take away", delivery: "Delivery",
-    tableTitle: "Table number", tableHint: "Enter the number shown on your table",
-    tableInvalid: "That table number does not exist",
+    tableTitle: "Stand number", tableHint: "Enter the number shown on your table stand",
+    tableInvalid: "That stand number does not exist",
+    tableTaken: "Stand {n} is already in use: please take another one", tableChecking: "Checking…",
     back: "Back", confirm: "Confirm", clear: "Clear", close: "Close",
-    table: "Table", chooseSize: "Choose a size", allergens: "Allergens",
+    table: "Stand", chooseSize: "Choose a size", allergens: "Allergens",
     required: "Required", optional: "Optional", chooseCount: "Choose {n}", add: "Add",
     viewOrder: "View my basket", empty: "Your order is empty", quantity: "Quantity",    yourOrder: "My basket", remove: "Remove", confirmOrder: "Confirm order",
     sending: "Sending…", orderNumber: "Your number",
@@ -174,10 +176,11 @@ export const STRINGS: Record<Locale, Dict> = {
     menuUnavailable: "قائمة الطعام غير متاحة بعد",
     orderTypeTitle: "كيف تود أن تطلب؟",
     eatIn: "تناول في المطعم", takeAway: "طلب خارجي", delivery: "توصيل",
-    tableTitle: "رقم الطاولة", tableHint: "أدخل الرقم الموجود على طاولتك",
-    tableInvalid: "رقم الطاولة غير موجود",
+    tableTitle: "رقم الحامل", tableHint: "أدخل الرقم المكتوب على الحامل",
+    tableInvalid: "رقم الحامل غير موجود",
+    tableTaken: "الحامل {n} مستعمل حالياً: خذ حاملاً آخر", tableChecking: "جارٍ التحقق…",
     back: "رجوع", confirm: "تأكيد", clear: "مسح", close: "إغلاق",
-    table: "طاولة", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية",
+    table: "الحامل", chooseSize: "اختر الحجم", allergens: "مسببات الحساسية",
     required: "إلزامي", optional: "اختياري", chooseCount: "اختر {n}", add: "إضافة",
     viewOrder: "عرض سلتي", empty: "طلبك فارغ", quantity: "الكمية",    yourOrder: "سلتي", remove: "إزالة", confirmOrder: "تأكيد الطلب",
     sending: "جارٍ الإرسال…", orderNumber: "رقمك",
