@@ -5,10 +5,13 @@ import { TABLE_TAKEN, TableOccupancyService, inFlightOnTable } from "../src/kios
 import { OrdersService } from "../src/kiosk/orders.service.js";
 
 /** A till whose GetActiveOrders answers with these open orders (or fails). */
-function service({ inFlight = null as { reference: string } | null, till = [] as Record<string, unknown>[] | Error, returnCode = 0 } = {}) {
+function service({ inFlight = null as { reference: string } | null, till = [] as Record<string, unknown>[] | Error, returnCode = 0, part = null as string | null } = {}) {
   const queries: unknown[] = [];
   const calls: string[] = [];
-  const prisma = { order: { findFirst: async (q: unknown) => { queries.push(q); return inFlight; } } };
+  const prisma = {
+    order: { findFirst: async (q: unknown) => { queries.push(q); return inFlight; } },
+    orderTypeMapping: { findFirst: async () => (part === null ? null : { tablePart: part }) },
+  };
   const clients = {
     forRestaurant: async () => ({
       client: {
@@ -25,10 +28,22 @@ function service({ inFlight = null as { reference: string } | null, till = [] as
 
 describe("chevalet numbers in use", () => {
   it("is taken while unTill has a bill open on that table number", async () => {
-    const { svc, calls } = service({ till: [{ TableNumber: 12, OrderName: "K1-1117-004" }, { TableNumber: "7" }] });
+    const { svc, calls } = service({ till: [{ TableNumber: 12, TablePart: "a", OrderName: "K1-1117-004" }, { TableNumber: "7", TablePart: "A" }] });
     assert.equal(await svc.isFree("r1", 7), false);
     assert.equal(await svc.isFree("r1", 12), false);
     assert.deepEqual(calls, ["GetActiveOrders", "GetActiveOrders"]);
+  });
+
+  it("only the table part kiosk orders go to counts: the cashier's bill on 12 a leaves chevalet 12 free when the kiosk uses b", async () => {
+    const { svc } = service({ part: "b", till: [{ TableNumber: 12, TablePart: "a" }, { TableNumber: 14, TablePart: "b" }] });
+    assert.equal(await svc.isFree("r1", 12), true);
+    assert.equal(await svc.isFree("r1", 14), false);
+  });
+
+  it("no part set for Sur place means part a, as unTill uses", async () => {
+    const { svc } = service({ part: "", till: [{ TableNumber: 12, TablePart: "a" }, { TableNumber: 14, TablePart: "b" }] });
+    assert.equal(await svc.isFree("r1", 12), false);
+    assert.equal(await svc.isFree("r1", 14), true);
   });
 
   it("is free once unTill no longer has it open", async () => {
@@ -48,11 +63,11 @@ describe("chevalet numbers in use", () => {
 
   it("does not hold the customer up when unTill cannot be asked", async () => {
     assert.equal(await service({ till: new Error("timeout") }).svc.isFree("r1", 5), true);
-    assert.equal(await service({ till: [{ TableNumber: 5 }], returnCode: 1 }).svc.isFree("r1", 5), true);
+    assert.equal(await service({ till: [{ TableNumber: 5, TablePart: "a" }], returnCode: 1 }).svc.isFree("r1", 5), true);
   });
 
   it("refuses with TABLE_TAKEN", async () => {
-    const { svc } = service({ till: [{ TableNumber: 3 }] });
+    const { svc } = service({ till: [{ TableNumber: 3, TablePart: "a" }] });
     await assert.rejects(svc.assertFree("r1", 3), (e: unknown) =>
       e instanceof ConflictException && (e.getResponse() as { code: string }).code === TABLE_TAKEN);
     await svc.assertFree("r1", 4);
@@ -91,7 +106,7 @@ describe("an eat-in order on a chevalet number already in use", () => {
       restaurantSettings: { findFirst: async () => ({ askTableForEatIn: true }) },
       $transaction: async (fn: (t: unknown) => unknown) => fn(tx),
     };
-    const clients = { forRestaurant: async () => ({ client: { call: async () => ({ ReturnCode: 0, ReturnMessage: "", Orders: openInTill.map((n) => ({ TableNumber: n })) }) } }) };
+    const clients = { forRestaurant: async () => ({ client: { call: async () => ({ ReturnCode: 0, ReturnMessage: "", Orders: openInTill.map((n) => ({ TableNumber: n, TablePart: "a" })) }) } }) };
     const tables = new TableOccupancyService(prisma, clients as never);
     const pricing = { price: async () => ({ total: 10, subtotal: 9, taxTotal: 1, itemCount: 1, salesAreaId: "1", priceLevelId: "2", currency: "MAD", lines: [] }) };
     const printing = { enqueueForOrder: async () => undefined };
